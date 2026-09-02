@@ -127,6 +127,18 @@ class RuleBasedEncoder(Encoder):
         _seed_global_random(rng)
         return mutate_developmental_rules(genome, mutation_rate=self.mutation_rate)
 
+    def develop_trajectory(self, genome: DevelopmentalRuleGenome):
+        """develop_rules() is not incremental -- it always restarts from the
+        single-SOFT-seed-at-centre initial grid and re-applies the genome's
+        rules for exactly `iterations` steps (see interpreter.py). The
+        trajectory is therefore obtained by calling it once per iteration
+        count t=0..developmental_iterations, which is cheap at this grid
+        size/iteration cap and keeps the interpreter itself untouched."""
+        return [
+            np.asarray(develop_rules(genome, shape=self.grid_shape, iterations=t), dtype=int)
+            for t in range(self.developmental_iterations + 1)
+        ]
+
     def supports_crossover(self) -> bool:
         return True
 

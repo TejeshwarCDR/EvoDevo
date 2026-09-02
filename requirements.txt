@@ -6,3 +6,11 @@ pyyaml
 pytest
 pandas
 matplotlib
+# imageio-ffmpeg bundles a portable ffmpeg binary, so mp4 writing doesn't
+# depend on a system ffmpeg install. pygifsicle (gif optimization) is
+# deliberately NOT a dependency here -- it shells out to an external
+# gifsicle binary that isn't guaranteed to exist on every machine; gif
+# optimization is optional and degrades gracefully without it (see
+# evodevo/visualization/render.py).
+imageio
+imageio-ffmpeg

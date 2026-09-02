@@ -152,6 +152,12 @@ class NCAEncoder(Encoder):
         trajectory = self.develop(genome, return_trajectory=True)
         return trajectory[-1]
 
+    def develop_trajectory(self, genome: np.ndarray):
+        """The full t=0..dev_steps sequence of argmax bodies -- see
+        develop(return_trajectory=True), which decode() already uses to
+        obtain its own final result."""
+        return self.develop(genome, return_trajectory=True)
+
     def mutate(self, genome: np.ndarray, rng: np.random.Generator) -> np.ndarray:
         genome = np.asarray(genome, dtype=float).copy()
         n = genome.shape[0]

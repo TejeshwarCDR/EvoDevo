@@ -95,3 +95,14 @@ class Encoder(ABC):
     def describe(self) -> dict:
         """JSON-serialisable hyperparameters, written into every run log."""
         ...
+
+    def develop_trajectory(self, genome) -> Any:
+        """For a DEVELOPMENTAL encoder (one whose decode() runs an iterated
+        process rather than a single static transformation): return the
+        list of intermediate (5, 5) int bodies at each developmental step,
+        t=0..T, ending with decode()'s own final result. Defaults to None --
+        a non-developmental encoder (e.g. direct, whose decode() is a pure
+        reshape with no notion of "steps") has nothing meaningful to return
+        here. Callers (evodevo/visualization/development.py) must treat
+        None as "this encoder has no trajectory to show", not an error."""
+        return None
