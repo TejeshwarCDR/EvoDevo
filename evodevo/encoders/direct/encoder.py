@@ -19,8 +19,18 @@ class DirectEncoder(Encoder):
     def name(self) -> str:
         return "direct"
 
+    @property
+    def genome_dtype(self):
+        return np.int64
+
     def genome_length(self) -> int:
         return self.grid_shape[0] * self.grid_shape[1]
+
+    def serialize_genome(self, genome: np.ndarray) -> list:
+        return np.asarray(genome, dtype=int).tolist()
+
+    def deserialize_genome(self, obj: list) -> np.ndarray:
+        return np.asarray(obj, dtype=int)
 
     def random_genome(self, rng: np.random.Generator) -> np.ndarray:
         return rng.choice(N_MATERIALS, size=self.genome_length(), p=self._material_probs).astype(int)

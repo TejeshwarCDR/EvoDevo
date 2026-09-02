@@ -1,3 +1,13 @@
+"""NCAEncoder-SPECIFIC behaviour only.
+
+Generic Encoder-contract properties (decode shape/dtype/values, decode
+determinism, random_genome reproducibility/seed-sensitivity, mutate
+reproducibility, serialize/deserialize round-tripping, describe()
+completeness, the physics/RL-free module rule, and the
+does-not-resample-until-valid property) are covered once for every
+registered encoder by tests/encoders/test_contract.py -- they are
+deliberately not repeated here.
+"""
 import numpy as np
 import pytest
 
@@ -6,25 +16,6 @@ from evodevo.encoders import get_encoder
 from evodevo.encoders.nca import N_MATERIALS, NCAEncoder
 from evodevo.evaluation.ppo_runner import evaluate_body_surrogate
 from evodevo.evolution.ea import run_ea
-
-
-def test_decode_shape_dtype_and_values():
-    encoder = NCAEncoder()
-    rng = np.random.default_rng(0)
-    genome = encoder.random_genome(rng)
-    body = encoder.decode(genome)
-    assert body.shape == (5, 5)
-    assert np.issubdtype(body.dtype, np.integer)
-    assert set(np.unique(body).tolist()) <= set(range(N_MATERIALS))
-
-
-def test_decode_deterministic():
-    encoder = NCAEncoder()
-    rng = np.random.default_rng(1)
-    genome = encoder.random_genome(rng)
-    body1 = encoder.decode(genome)
-    body2 = encoder.decode(genome)
-    assert np.array_equal(body1, body2)
 
 
 def test_synchronicity_matches_synchronous_not_sequential_update():
@@ -137,24 +128,6 @@ def test_develop_returns_dev_steps_plus_one_trajectory_entries():
         assert np.issubdtype(body.dtype, np.integer)
 
 
-def test_mutate_does_not_resample_until_valid_and_is_reproducible():
-    encoder = NCAEncoder(mutation_sigma=0.2, mutation_fraction=0.5)
-    rng1 = np.random.default_rng(9)
-    rng2 = np.random.default_rng(9)
-    genome = np.zeros(encoder.genome_length())
-    mutated1 = encoder.mutate(genome, rng1)
-    mutated2 = encoder.mutate(genome, rng2)
-    np.testing.assert_array_equal(mutated1, mutated2)
-    assert not np.array_equal(mutated1, genome)
-
-
-def test_describe_json_serialisable():
-    import json
-
-    encoder = NCAEncoder()
-    json.dumps(encoder.describe())
-
-
 def test_get_encoder_nca_registry():
     encoder = get_encoder("nca")
     assert isinstance(encoder, NCAEncoder)
@@ -182,3 +155,49 @@ def test_ea_runs_unmodified_with_nca_encoder_in_surrogate_mode():
     result = run_ea(encoder, evaluate_body_surrogate, config)
     assert result.evaluations_used == 12
     assert len(result.records) == 12
+
+
+# --- Regression: pin known (seed -> body) pairs so a future refactor of
+# this file cannot silently change NCAEncoder's decode/mutate behaviour.
+# These values were captured from the encoder as it existed at the time
+# Prompt 3 (encoder plugin architecture) was applied; they must remain
+# bit-identical, since that prompt is explicitly moves/refactoring-only.
+
+
+def test_regression_decode_pinned_for_seed_5():
+    encoder = NCAEncoder()
+    rng = np.random.default_rng(5)
+    genome = encoder.random_genome(rng)
+    body = encoder.decode(genome)
+    expected = np.array(
+        [
+            [4, 1, 4, 1, 4],
+            [1, 4, 0, 4, 1],
+            [1, 1, 4, 1, 4],
+            [4, 1, 1, 2, 1],
+            [1, 4, 2, 1, 1],
+        ],
+        dtype=int,
+    )
+    np.testing.assert_array_equal(body, expected)
+
+
+def test_regression_mutate_pinned_for_seed_9():
+    encoder = NCAEncoder(mutation_sigma=0.2, mutation_fraction=0.5)
+    genome = np.zeros(encoder.genome_length())
+    rng = np.random.default_rng(9)
+    mutated = encoder.mutate(genome, rng)
+    body = encoder.decode(mutated)
+    expected_body = np.array(
+        [
+            [4, 4, 4, 4, 4],
+            [3, 3, 4, 4, 4],
+            [4, 4, 4, 4, 4],
+            [4, 4, 4, 4, 4],
+            [4, 4, 4, 4, 4],
+        ],
+        dtype=int,
+    )
+    np.testing.assert_array_equal(body, expected_body)
+    assert np.count_nonzero(mutated) == 396
+    assert mutated.sum() == pytest.approx(0.05458646500500386)

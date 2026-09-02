@@ -76,8 +76,18 @@ class NCAEncoder(Encoder):
     def name(self) -> str:
         return "nca"
 
+    @property
+    def genome_dtype(self):
+        return np.float64
+
     def genome_length(self) -> int:
         return self._genome_length
+
+    def serialize_genome(self, genome: np.ndarray) -> list:
+        return np.asarray(genome, dtype=float).tolist()
+
+    def deserialize_genome(self, obj: list) -> np.ndarray:
+        return np.asarray(obj, dtype=float)
 
     def random_genome(self, rng: np.random.Generator) -> np.ndarray:
         return rng.normal(scale=self.init_scale, size=self._genome_length)

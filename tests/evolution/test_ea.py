@@ -123,6 +123,10 @@ class AlwaysInvalidEncoder(Encoder):
     def name(self) -> str:
         return "always_invalid"
 
+    @property
+    def genome_dtype(self):
+        return np.int64
+
     def genome_length(self) -> int:
         return 25
 
@@ -134,6 +138,12 @@ class AlwaysInvalidEncoder(Encoder):
 
     def mutate(self, genome: np.ndarray, rng: np.random.Generator) -> np.ndarray:
         return genome.copy()
+
+    def serialize_genome(self, genome: np.ndarray) -> list:
+        return np.asarray(genome, dtype=int).tolist()
+
+    def deserialize_genome(self, obj: list) -> np.ndarray:
+        return np.asarray(obj, dtype=int)
 
     def describe(self) -> dict:
         return {"name": self.name}
