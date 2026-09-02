@@ -58,37 +58,62 @@ def evaluate_body(
 
     connections = get_full_connectivity(body)
 
-    env_kwargs = {"body": body, "connections": connections}
-    vec_env = make_vec_env(task, n_envs=1, seed=seed, env_kwargs=env_kwargs)
+    # A single (encoder, seed) evaluation must never abort the whole 11-hour
+    # multi-seed benchmark: an unstable simulation (e.g. NaN/inf physics
+    # state, a solver blow-up, or any other exception raised by evogym/
+    # stable_baselines3 while training or rolling out this one body) is
+    # recorded as an invalid evaluation with the standard sentinel fitness --
+    # exactly like a structurally-invalid body -- and evaluations_used still
+    # advances by one in ea.py, so no encoder can gain a silent budget
+    # advantage by crashing more or less often than another. This is
+    # deliberately scoped to only this one evaluation's PPO train+eval call;
+    # it must not be widened to catch anything outside this block.
+    vec_env = None
+    eval_env = None
+    try:
+        env_kwargs = {"body": body, "connections": connections}
+        vec_env = make_vec_env(task, n_envs=1, seed=seed, env_kwargs=env_kwargs)
 
-    model = PPO("MlpPolicy", vec_env, seed=seed, verbose=0)
-    model.learn(total_timesteps=ppo_timesteps)
+        model = PPO("MlpPolicy", vec_env, seed=seed, verbose=0)
+        model.learn(total_timesteps=ppo_timesteps)
 
-    eval_env = make_vec_env(task, n_envs=1, seed=seed, env_kwargs=env_kwargs)
-    episode_returns = []
-    for _ in range(eval_episodes):
-        obs = eval_env.reset()
-        done = False
-        total_reward = 0.0
-        while not done:
-            action, _ = model.predict(obs, deterministic=True)
-            obs, reward, dones, _infos = eval_env.step(action)
-            total_reward += float(reward[0])
-            done = bool(dones[0])
-        episode_returns.append(total_reward)
+        eval_env = make_vec_env(task, n_envs=1, seed=seed, env_kwargs=env_kwargs)
+        episode_returns = []
+        for _ in range(eval_episodes):
+            obs = eval_env.reset()
+            done = False
+            total_reward = 0.0
+            while not done:
+                action, _ = model.predict(obs, deterministic=True)
+                obs, reward, dones, _infos = eval_env.step(action)
+                total_reward += float(reward[0])
+                done = bool(dones[0])
+            episode_returns.append(total_reward)
 
-    vec_env.close()
-    eval_env.close()
+        fitness = float(np.mean(episode_returns))
 
-    fitness = float(np.mean(episode_returns))
-
-    return EvalResult(
-        fitness=fitness,
-        valid=True,
-        reason=None,
-        wall_clock_s=time.time() - start,
-        body_hash=h,
-    )
+        return EvalResult(
+            fitness=fitness,
+            valid=True,
+            reason=None,
+            wall_clock_s=time.time() - start,
+            body_hash=h,
+        )
+    except Exception as exc:  # noqa: BLE001 -- intentionally broad: any
+        # simulation/training instability for THIS body must degrade to a
+        # recorded failure, not kill the run. See comment above.
+        return EvalResult(
+            fitness=sentinel_fitness,
+            valid=False,
+            reason=f"simulation_instability: {type(exc).__name__}: {exc}",
+            wall_clock_s=time.time() - start,
+            body_hash=h,
+        )
+    finally:
+        if vec_env is not None:
+            vec_env.close()
+        if eval_env is not None:
+            eval_env.close()
 
 
 def evaluate_body_surrogate(

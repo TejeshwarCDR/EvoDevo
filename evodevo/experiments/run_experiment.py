@@ -72,7 +72,8 @@ def run_experiment(
     encoder = get_encoder(config.encoder, grid_shape=config.grid_shape, **(encoder_kwargs or {}))
     evaluator = make_evaluator("surrogate" if surrogate else "real")
 
-    logger = RunLogger(output_dir)
+    heartbeat_path = os.path.join(config.output_dir, ".heartbeat.json")
+    logger = RunLogger(output_dir, heartbeat_path=heartbeat_path, encoder=config.encoder, seed=seed)
     try:
         result = run_ea(encoder, evaluator, config, logger=logger)
     finally:

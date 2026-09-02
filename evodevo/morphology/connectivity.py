@@ -4,6 +4,38 @@ from __future__ import annotations
 import numpy as np
 
 
+def get_full_connectivity(robot: np.ndarray) -> np.ndarray:
+    """Native equivalent of ``evogym.get_full_connectivity``.
+
+    Returns a `(2, k)` array specifying `k` pairwise voxel connections
+    between orthogonally adjacent non-empty voxels. Voxels are indexed by
+    their position in the flattened (row-major) grid, matching evogym's
+    exact iteration order and edge set (right-neighbor then down-neighbor,
+    for each non-empty cell in row-major flat order).
+    """
+    out = []
+    height, width = robot.shape
+
+    for i in range(robot.size):
+        x = i % width
+        y = i // width
+
+        if robot[y][x] == 0:
+            continue
+
+        nx, ny = x + 1, y
+        if 0 <= nx < width and 0 <= ny < height and robot[ny][nx] != 0:
+            out.append([x + width * y, nx + width * ny])
+
+        nx, ny = x, y + 1
+        if 0 <= nx < width and 0 <= ny < height and robot[ny][nx] != 0:
+            out.append([x + width * y, nx + width * ny])
+
+    if len(out) == 0:
+        return np.empty((0, 2)).T
+    return np.array(out).T
+
+
 def largest_component_size(occupied: np.ndarray) -> int:
     """Largest 4-connected component among True cells in a boolean grid."""
     visited = np.zeros_like(occupied, dtype=bool)

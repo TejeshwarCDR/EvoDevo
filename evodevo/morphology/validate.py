@@ -11,6 +11,28 @@ from evodevo.morphology.connectivity import largest_component_size
 ACTUATOR_IDS = ACTUATORS
 
 
+def is_connected(body) -> bool:
+    """Native equivalent of ``evogym.is_connected``.
+
+    Returns whether every non-empty voxel of ``body`` lies in a single
+    4-connected component. An all-empty body is not connected (matches
+    evogym: no start voxel found -> False).
+    """
+    body_arr = np.asarray(body)
+    occupied = body_arr != EMPTY
+    occupied_count = int(occupied.sum())
+    if occupied_count == 0:
+        return False
+    return largest_component_size(occupied) == occupied_count
+
+
+def has_actuator(body) -> bool:
+    """Native equivalent of ``evogym.has_actuator``: whether any voxel is
+    an actuator material (H_ACT or V_ACT, see evodevo.core.materials)."""
+    body_arr = np.asarray(body)
+    return bool(np.isin(body_arr, list(ACTUATOR_IDS)).any())
+
+
 @dataclass
 class ValidationResult:
     valid: bool

@@ -21,7 +21,8 @@ superseded earlier iteration).
 import random
 from typing import List
 
-from evogym import is_connected, has_actuator, get_full_connectivity
+from evodevo.morphology.connectivity import get_full_connectivity
+from evodevo.morphology.validate import has_actuator, is_connected
 
 from evodevo.encoders.rule_based.rule_types import (
     ActionType,
