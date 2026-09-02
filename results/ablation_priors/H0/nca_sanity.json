@@ -1,0 +1,76 @@
+{
+  "direct_config": {
+    "empty_prob": 0.6,
+    "grid_shape": [
+      5,
+      5
+    ],
+    "mutation_rate": 0.1,
+    "name": "direct"
+  },
+  "direct_reference": {
+    "all_empty_fraction": 0.0,
+    "degenerate_fraction": 0.0,
+    "invalid_reason_counts": {
+      "disconnected": 492,
+      "no_actuator": 4
+    },
+    "n": 500,
+    "uniform_nonempty_fraction": 0.0,
+    "unique_body_count": 500,
+    "unique_body_fraction": 1.0,
+    "valid_rate": 0.014
+  },
+  "n": 500,
+  "nca": {
+    "all_empty_fraction": 0.002,
+    "degenerate_fraction": 0.026,
+    "invalid_reason_counts": {
+      "disconnected": 128,
+      "no_actuator": 29,
+      "too_few_voxels": 7
+    },
+    "n": 500,
+    "never_settled_fraction": 0.704,
+    "settle_step_distribution": [
+      0,
+      3,
+      4,
+      4,
+      2,
+      2,
+      5,
+      14,
+      31,
+      83,
+      352
+    ],
+    "state_magnitude_at_T": {
+      "max": 72.41932536347502,
+      "mean": 37.650911377221,
+      "median": 36.84578262883467,
+      "min": 18.141729145724103
+    },
+    "uniform_nonempty_fraction": 0.024,
+    "unique_body_count": 492,
+    "unique_body_fraction": 0.984,
+    "valid_rate": 0.694
+  },
+  "nca_config": {
+    "channels": 5,
+    "dev_steps": 10,
+    "genome_length": 501,
+    "grid_shape": [
+      5,
+      5
+    ],
+    "hidden_channels": 0,
+    "hidden_width": 16,
+    "init_scale": 0.5,
+    "mutation_fraction": 1.0,
+    "mutation_sigma": 0.1,
+    "name": "nca",
+    "neighbourhood": "von_neumann"
+  },
+  "seed": 0
+}

@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+*.so
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+results/**/controller/*.zip
+
+# Nested repos with their own git history — tracked as plain directories,
+# not submodules; their internals (including compiled build artifacts) are
+# intentionally excluded from this outer repo.
+evogym/
+evogym-rule-based-encoding/
+external/evogym/
+external/rule-based-reference/

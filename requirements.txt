@@ -1,0 +1,8 @@
+# evogym must be installed separately from source (see evogym/ in this repo).
+numpy<2.0.0
+gymnasium
+stable-baselines3
+pyyaml
+pytest
+pandas
+matplotlib

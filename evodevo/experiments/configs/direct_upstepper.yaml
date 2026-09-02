@@ -1,0 +1,10 @@
+seed: 0
+encoder: direct
+task: UpStepper-v0
+grid_shape: [5, 5]
+population_size: 15
+offspring_size: 15
+eval_budget: 300
+ppo_timesteps: 5000
+ppo_eval_episodes: 1
+output_dir: results/runs

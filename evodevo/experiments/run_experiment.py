@@ -1,0 +1,152 @@
+"""Single reproducible entry point for a single (encoder, task, seed) run.
+
+Usage:
+    python -m evodevo.experiments.run_experiment --config path.yaml --seed N [--surrogate] [--overwrite]
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+
+import numpy as np
+import yaml
+
+from evodevo.config import ExperimentConfig
+from evodevo.encoders import get_encoder
+from evodevo.evaluation.ppo_runner import make_evaluator
+from evodevo.evolution.ea import run_ea
+from evodevo.evolution.logging import RunLogger
+
+DONE_MARKER = "run_meta.json"
+
+
+def _compute_connections(body: np.ndarray):
+    """Best-effort connectivity computation. Returns None if evogym's compiled
+    simulator is not available (e.g. surrogate-mode / pipeline testing)."""
+    try:
+        from evogym import get_full_connectivity
+
+        return get_full_connectivity(body)
+    except ImportError:
+        return None
+
+
+def _run_output_dir(config: ExperimentConfig, seed: int, tag: str = None) -> str:
+    parts = [config.output_dir, config.encoder, config.task]
+    if tag:
+        parts.append(tag)
+    parts.append(f"seed_{seed}")
+    return os.path.join(*parts)
+
+
+def run_experiment(
+    config_path: str,
+    seed: int,
+    surrogate: bool,
+    overwrite: bool,
+    encoder_kwargs: dict = None,
+    tag: str = None,
+) -> str:
+    """encoder_kwargs overrides/extends the encoder's own hyperparameters
+    (e.g. {'dev_steps': 1} for the NCA encoder) without touching the encoder
+    class, the EA, or the evaluator -- used for hyperparameter ablations.
+    `tag` disambiguates the output directory when multiple ablation arms
+    share the same (encoder, task, seed)."""
+    loaded = ExperimentConfig.from_yaml(config_path)
+    # --seed overrides the config's seed; everything else comes from the YAML.
+    config_dict = loaded.to_dict()
+    config_dict["seed"] = seed
+    config_dict["grid_shape"] = tuple(config_dict["grid_shape"])
+    config = ExperimentConfig(**config_dict)
+
+    output_dir = _run_output_dir(config, seed, tag=tag)
+    done_path = os.path.join(output_dir, DONE_MARKER)
+    if os.path.exists(done_path) and not overwrite:
+        raise FileExistsError(
+            f"a completed run already exists at {output_dir} "
+            "(pass --overwrite to replace it)"
+        )
+    os.makedirs(output_dir, exist_ok=True)
+
+    encoder = get_encoder(config.encoder, grid_shape=config.grid_shape, **(encoder_kwargs or {}))
+    evaluator = make_evaluator("surrogate" if surrogate else "real")
+
+    logger = RunLogger(output_dir)
+    try:
+        result = run_ea(encoder, evaluator, config, logger=logger)
+    finally:
+        logger.close()
+
+    meta_config = config.to_dict()
+    meta_config["encoder_kwargs"] = encoder_kwargs or {}
+    meta_config["tag"] = tag
+    logger.write_meta(meta_config, encoder.describe())
+
+    if result.population:
+        best = max(result.population, key=lambda ind: ind.fitness)
+        best_body = encoder.decode(best.genome)
+        connections = _compute_connections(best_body)
+        npz_path = os.path.join(output_dir, "best_body.npz")
+        if connections is not None:
+            np.savez(npz_path, body=best_body, connections=connections)
+        else:
+            np.savez(npz_path, body=best_body)
+
+    return output_dir
+
+
+def _parse_encoder_kwargs(pairs) -> dict:
+    kwargs = {}
+    for pair in pairs or []:
+        key, _, raw_value = pair.partition("=")
+        kwargs[key] = yaml.safe_load(raw_value)
+    return kwargs
+
+
+def main(argv=None) -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", required=True, help="path to an ExperimentConfig YAML file")
+    parser.add_argument("--seed", required=True, type=int, help="seed for this run (overrides config seed)")
+    parser.add_argument(
+        "--surrogate",
+        action="store_true",
+        help="use the fast physics-free surrogate evaluator instead of real PPO",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="allow replacing an already-completed run at the target output directory",
+    )
+    parser.add_argument(
+        "--encoder-kwarg",
+        action="append",
+        dest="encoder_kwargs",
+        metavar="KEY=VALUE",
+        help="override/extend an encoder hyperparameter (e.g. --encoder-kwarg dev_steps=1); repeatable",
+    )
+    parser.add_argument(
+        "--tag",
+        default=None,
+        help="disambiguates the output directory when multiple arms share (encoder, task, seed), e.g. for ablations",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        output_dir = run_experiment(
+            args.config,
+            args.seed,
+            args.surrogate,
+            args.overwrite,
+            encoder_kwargs=_parse_encoder_kwargs(args.encoder_kwargs),
+            tag=args.tag,
+        )
+    except FileExistsError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"run complete: {output_dir}")
+
+
+if __name__ == "__main__":
+    main()
