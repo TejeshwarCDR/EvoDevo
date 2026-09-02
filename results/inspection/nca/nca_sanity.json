@@ -1,0 +1,54 @@
+{
+  "n": 2000,
+  "nca": {
+    "all_empty_fraction": 0.0035,
+    "degenerate_fraction": 0.0195,
+    "invalid_reason_counts": {
+      "disconnected": 527,
+      "no_actuator": 128,
+      "too_few_voxels": 28
+    },
+    "n": 2000,
+    "never_settled_fraction": 0.6835,
+    "settle_step_distribution": [
+      0,
+      5,
+      6,
+      8,
+      9,
+      14,
+      18,
+      53,
+      122,
+      398,
+      1367
+    ],
+    "state_magnitude_at_T": {
+      "max": 77.25514992354672,
+      "mean": 40.65450097053802,
+      "median": 39.95139458840767,
+      "min": 21.123334704243614
+    },
+    "uniform_nonempty_fraction": 0.016,
+    "unique_body_count": 1966,
+    "unique_body_fraction": 0.983,
+    "valid_rate": 0.6915
+  },
+  "nca_config": {
+    "channels": 8,
+    "dev_steps": 10,
+    "genome_length": 792,
+    "grid_shape": [
+      5,
+      5
+    ],
+    "hidden_channels": 3,
+    "hidden_width": 16,
+    "init_scale": 0.5,
+    "mutation_fraction": 1.0,
+    "mutation_sigma": 0.1,
+    "name": "nca",
+    "neighbourhood": "von_neumann"
+  },
+  "seed": 0
+}

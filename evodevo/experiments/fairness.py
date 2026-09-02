@@ -9,22 +9,19 @@ entirely -- they belong to the Encoder instance, not the run config).
 """
 from __future__ import annotations
 
-from evodevo.core.config import ExperimentConfig
+from evodevo.core.config import SHARED_BASE_KEYS, ExperimentConfig
 
 # Fields that must be identical across both arms of a comparison. Everything
 # NOT in this list (currently just `encoder` and `seed`) is allowed to differ.
-_REQUIRED_EQUAL_FIELDS = (
-    "task",
-    "eval_budget",
-    "ppo_timesteps",
-    "ppo_eval_episodes",
-    "grid_shape",
-    "population_size",
-    "offspring_size",
-    "sentinel_fitness",
-    "cache_enabled",
-    "use_crossover",
-)
+#
+# Built from evodevo.core.config.SHARED_BASE_KEYS (the same single source of
+# truth configs/shared/base.yaml and ExperimentConfig.from_base_and_override
+# use) plus `task`, which is not itself a shared-base key (different config
+# files legitimately target different tasks) but must still match for any
+# *specific* pairwise comparison to be a valid head-to-head. This makes
+# assert_comparable() a second, run-time line of defence rather than a
+# separately maintained list that could drift from the load-time mechanism.
+_REQUIRED_EQUAL_FIELDS = ("task",) + tuple(sorted(SHARED_BASE_KEYS))
 
 
 class FairnessViolation(AssertionError):

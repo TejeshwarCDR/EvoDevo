@@ -53,7 +53,7 @@ def run_experiment(
     class, the EA, or the evaluator -- used for hyperparameter ablations.
     `tag` disambiguates the output directory when multiple ablation arms
     share the same (encoder, task, seed)."""
-    loaded = ExperimentConfig.from_yaml(config_path)
+    loaded = ExperimentConfig.from_method_yaml(config_path)
     # --seed overrides the config's seed; everything else comes from the YAML.
     config_dict = loaded.to_dict()
     config_dict["seed"] = seed

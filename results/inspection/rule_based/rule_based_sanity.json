@@ -1,0 +1,45 @@
+{
+  "n": 2000,
+  "rule_based": {
+    "all_empty_fraction": 0.054,
+    "degenerate_fraction": 0.1745,
+    "invalid_reason_counts": {
+      "disconnected": 149,
+      "no_actuator": 766,
+      "too_few_voxels": 118
+    },
+    "n": 2000,
+    "uniform_nonempty_fraction": 0.1205,
+    "unique_body_count": 1096,
+    "unique_body_fraction": 0.548,
+    "valid_rate": 0.5975
+  },
+  "rule_based_config": {
+    "action_types": [
+      "set_empty",
+      "set_soft",
+      "set_hard",
+      "set_actuator_horizontal",
+      "set_actuator_vertical",
+      "grow_directional",
+      "copy_neighbor"
+    ],
+    "condition_types": [
+      "always",
+      "cell_type",
+      "neighbor_count",
+      "empty_neighbor",
+      "position"
+    ],
+    "developmental_iterations": 5,
+    "grid_shape": [
+      5,
+      5
+    ],
+    "max_rules": 12,
+    "min_rules": 2,
+    "mutation_rate": 0.2,
+    "name": "rule_based"
+  },
+  "seed": 0
+}

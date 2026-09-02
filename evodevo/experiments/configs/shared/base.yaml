@@ -1,0 +1,16 @@
+# Every field here MUST be identical across every encoding arm's config for
+# a fair comparison (see evodevo.core.config.SHARED_BASE_KEYS, the single
+# source of truth for this list). A per-method config (configs/<method>/*.yaml)
+# that redefines any of these keys fails loudly at load time -- see
+# ExperimentConfig.from_method_yaml / from_base_and_override.
+population_size: 15
+offspring_size: 15
+eval_budget: 300
+ppo_timesteps: 5000
+ppo_eval_episodes: 1
+grid_shape: [5, 5]
+sentinel_fitness: -10.0
+cache_enabled: false
+min_voxels: 3
+min_actuators: 1
+use_crossover: false

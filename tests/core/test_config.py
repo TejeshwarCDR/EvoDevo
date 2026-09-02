@@ -46,8 +46,8 @@ def test_config_yaml_roundtrip():
 
 
 def test_example_configs_differ_only_in_encoder():
-    direct = ExperimentConfig.from_yaml("evodevo/experiments/configs/direct/walker.yaml")
-    nca = ExperimentConfig.from_yaml("evodevo/experiments/configs/nca/walker.yaml")
+    direct = ExperimentConfig.from_method_yaml("evodevo/experiments/configs/direct/walker.yaml")
+    nca = ExperimentConfig.from_method_yaml("evodevo/experiments/configs/nca/walker.yaml")
     direct_dict = direct.to_dict()
     nca_dict = nca.to_dict()
     del direct_dict["encoder"]

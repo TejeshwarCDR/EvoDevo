@@ -1,0 +1,27 @@
+{
+  "direct": {
+    "all_empty_fraction": 0.0,
+    "degenerate_fraction": 0.0,
+    "invalid_reason_counts": {
+      "disconnected": 1957,
+      "no_actuator": 4,
+      "too_few_voxels": 1
+    },
+    "n": 2000,
+    "uniform_nonempty_fraction": 0.0,
+    "unique_body_count": 2000,
+    "unique_body_fraction": 1.0,
+    "valid_rate": 0.0215
+  },
+  "direct_config": {
+    "empty_prob": 0.6,
+    "grid_shape": [
+      5,
+      5
+    ],
+    "mutation_rate": 0.1,
+    "name": "direct"
+  },
+  "n": 2000,
+  "seed": 0
+}

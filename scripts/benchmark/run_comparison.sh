@@ -11,8 +11,8 @@ python3 -c "
 from evodevo.core.config import ExperimentConfig
 from evodevo.experiments.fairness import assert_comparable
 
-direct_config = ExperimentConfig.from_yaml('${DIRECT_CONFIG}')
-nca_config = ExperimentConfig.from_yaml('${NCA_CONFIG}')
+direct_config = ExperimentConfig.from_method_yaml('${DIRECT_CONFIG}')
+nca_config = ExperimentConfig.from_method_yaml('${NCA_CONFIG}')
 assert_comparable(direct_config, nca_config)
 print('fairness check passed: direct and NCA configs are comparable')
 "
