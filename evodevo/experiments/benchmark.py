@@ -28,6 +28,7 @@ import yaml
 from evodevo.core.config import SHARED_BASE_KEYS, ConfigOverrideError, ExperimentConfig
 from evodevo.encoders import get_encoder
 from evodevo.evaluation.ppo_runner import make_evaluator
+from evodevo.evolution.progress import ProgressTracker
 from evodevo.experiments.fairness import FairnessViolation, assert_comparable
 from evodevo.experiments.run_experiment import DONE_MARKER, _run_output_dir, run_experiment
 
@@ -241,6 +242,14 @@ def run_benchmark(bconfig: BenchmarkConfig, dry_run: bool = False) -> dict:
         return manifest
 
     # 3. Execute, resuming (skipping) any already-completed run.
+    # eval_budgets drives ProgressTracker's ETA math -- purely additive stdout
+    # reporting, wired in via run_experiment's optional progress_callback.
+    eval_budgets = {
+        (entry["encoder"], entry["task"], entry["seed"]): resolved_configs[(entry["encoder"], entry["task"])].eval_budget
+        for entry in manifest["run_matrix"]
+    }
+    tracker = ProgressTracker(eval_budgets)
+
     completed, skipped = [], []
     for entry in manifest["run_matrix"]:
         encoder, task, seed = entry["encoder"], entry["task"], entry["seed"]
@@ -256,7 +265,9 @@ def run_benchmark(bconfig: BenchmarkConfig, dry_run: bool = False) -> dict:
         run_config.to_yaml(resolved_path)
 
         print(f"[run]  {encoder}/{task}/seed_{seed}")
-        run_experiment(resolved_path, seed, surrogate=bconfig.surrogate, overwrite=False)
+        run_progress = tracker.for_run(encoder, task, seed)
+        run_experiment(resolved_path, seed, surrogate=bconfig.surrogate, overwrite=False,
+                        progress_callback=run_progress)
         completed.append(entry)
 
     manifest["completed_this_invocation"] = completed

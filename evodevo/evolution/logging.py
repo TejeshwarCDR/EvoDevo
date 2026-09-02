@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Callable, Optional
 
 
 def _utc_now_iso() -> str:
@@ -15,7 +15,8 @@ def _utc_now_iso() -> str:
 
 class RunLogger:
     def __init__(self, output_dir: str, heartbeat_path: Optional[str] = None,
-                 encoder: Optional[str] = None, seed: Optional[int] = None):
+                 encoder: Optional[str] = None, seed: Optional[int] = None,
+                 on_eval: Optional[Callable[[dict], None]] = None):
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
         self.log_path = os.path.join(output_dir, "run_log.jsonl")
@@ -28,12 +29,17 @@ class RunLogger:
         self._encoder = encoder
         self._seed = seed
         self._evaluations_completed = 0
+        # Optional stdout progress-reporting hook (evodevo.evolution.progress).
+        # Never affects persisted JSONL/heartbeat/meta content.
+        self._on_eval = on_eval
 
     def log(self, record: dict) -> None:
         self._fh.write(json.dumps(record, sort_keys=True) + "\n")
         self._fh.flush()
         self._evaluations_completed += 1
         self._write_heartbeat(record.get("eval_index"))
+        if self._on_eval is not None:
+            self._on_eval(record)
 
     def _write_heartbeat(self, eval_index) -> None:
         if self._heartbeat_path is None:

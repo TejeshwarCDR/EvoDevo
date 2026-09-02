@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from typing import Callable, Optional
 
 import numpy as np
 import yaml
@@ -47,12 +48,16 @@ def run_experiment(
     overwrite: bool,
     encoder_kwargs: dict = None,
     tag: str = None,
+    progress_callback: Optional[Callable[[dict], None]] = None,
 ) -> str:
     """encoder_kwargs overrides/extends the encoder's own hyperparameters
     (e.g. {'dev_steps': 1} for the NCA encoder) without touching the encoder
     class, the EA, or the evaluator -- used for hyperparameter ablations.
     `tag` disambiguates the output directory when multiple ablation arms
-    share the same (encoder, task, seed)."""
+    share the same (encoder, task, seed). `progress_callback`, if given, is
+    invoked with each evaluation's record dict for live stdout reporting
+    (evodevo.evolution.progress) -- purely additive, never affects persisted
+    output."""
     loaded = ExperimentConfig.from_method_yaml(config_path)
     # --seed overrides the config's seed; everything else comes from the YAML.
     config_dict = loaded.to_dict()
@@ -73,7 +78,8 @@ def run_experiment(
     evaluator = make_evaluator("surrogate" if surrogate else "real")
 
     heartbeat_path = os.path.join(config.output_dir, ".heartbeat.json")
-    logger = RunLogger(output_dir, heartbeat_path=heartbeat_path, encoder=config.encoder, seed=seed)
+    logger = RunLogger(output_dir, heartbeat_path=heartbeat_path, encoder=config.encoder, seed=seed,
+                       on_eval=progress_callback)
     try:
         result = run_ea(encoder, evaluator, config, logger=logger)
     finally:
