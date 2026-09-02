@@ -69,3 +69,25 @@ def plot_morphology_comparison(df: pd.DataFrame, metrics=MORPHOLOGY_METRICS, axe
         ax.set_title(metric)
 
     return axes
+
+
+def plot_validity_and_efficiency(three_way_df: pd.DataFrame, axes=None):
+    """Two-panel bar chart from evodevo.analysis.aggregate.three_way_table()'s
+    output: random-genome validity rate per encoder, and evaluations needed
+    to reach 50% of the best arm's final fitness per encoder (lower = more
+    sample-efficient search)."""
+    if axes is None:
+        _fig, axes = plt.subplots(1, 2, figsize=(9, 4))
+
+    encoders = three_way_df["encoder"].tolist()
+
+    axes[0].bar(encoders, three_way_df["validity_rate"])
+    axes[0].set_ylabel("validity rate")
+    axes[0].set_title("Random-genome validity rate")
+    axes[0].set_ylim(0, 1)
+
+    axes[1].bar(encoders, three_way_df["evaluations_to_50pct_of_best_arm_mean"])
+    axes[1].set_ylabel("evaluations to reach 50% of best arm's final fitness")
+    axes[1].set_title("Search efficiency")
+
+    return axes

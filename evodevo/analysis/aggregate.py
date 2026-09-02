@@ -1,4 +1,12 @@
-"""Load one or many run directories into a tidy per-evaluation DataFrame."""
+"""Load one or many run directories into a tidy per-evaluation DataFrame.
+
+Works identically for every registered encoder, including Rule-Based: each
+run_log.jsonl record only ever contains body-level data (fitness, validity,
+body_hash, body_metrics()) and never a raw genome, so the Rule-Based arm's
+variable-length, non-numeric genome (a DevelopmentalRuleGenome) never
+reaches this loader in the first place -- there is nothing encoder-specific
+here to crash on.
+"""
 from __future__ import annotations
 
 import json
@@ -7,6 +15,16 @@ from typing import Iterable
 
 import numpy as np
 import pandas as pd
+
+
+def _safe_nanmean(values) -> float:
+    """np.nanmean, but returns nan (quietly) instead of warning when every
+    value is nan -- an arm that never reached a fitness threshold within
+    its eval budget is an expected, reportable outcome, not a numerics bug."""
+    values = np.asarray(values, dtype=float)
+    if np.all(np.isnan(values)):
+        return float("nan")
+    return float(np.nanmean(values))
 
 
 def _load_single_run(run_dir: str) -> pd.DataFrame:
@@ -55,6 +73,68 @@ def load_all_runs(root_dir: str) -> pd.DataFrame:
     return load_runs(discover_runs(root_dir))
 
 
+def per_seed_finals(df: pd.DataFrame) -> dict:
+    """{encoder: [final best-so-far fitness per seed, ...]}. Shared by
+    three_way_table() and evodevo.analysis.statistics's pairwise
+    comparisons, so both operate on exactly the same per-seed final-fitness
+    definition."""
+    result: dict = {}
+    if df.empty:
+        return result
+    for encoder, enc_df in df.groupby("encoder"):
+        finals = []
+        for _seed, g in enc_df.groupby("seed"):
+            g = g.sort_values("eval_index")
+            finals.append(float(g["fitness"].cummax().iloc[-1]))
+        result[encoder] = finals
+    return result
+
+
+def three_way_table(df: pd.DataFrame) -> pd.DataFrame:
+    """Per-encoder summary for an N-way (not just two-way) comparison:
+    final best fitness (mean +/- std across seeds), evaluations to reach
+    50%/90% of the BEST ARM's final fitness (not a single hardcoded
+    reference encoder -- there is no a priori "baseline" among N>=2 arms),
+    validity rate, unique bodies explored, cache hit rate, and mean
+    wall-clock per evaluation.
+    """
+    if df.empty:
+        return pd.DataFrame()
+
+    finals_by_encoder = per_seed_finals(df)
+    best_arm_final = max(float(np.mean(finals)) for finals in finals_by_encoder.values())
+
+    rows = []
+    for encoder, enc_df in df.groupby("encoder"):
+        finals = finals_by_encoder[encoder]
+        evals_to_50, evals_to_90 = [], []
+
+        for _seed, g in enc_df.groupby("seed"):
+            g = g.sort_values("eval_index")
+            best_so_far = g["fitness"].cummax()
+
+            for threshold, bucket in ((0.5 * best_arm_final, evals_to_50), (0.9 * best_arm_final, evals_to_90)):
+                hit = g.loc[(best_so_far >= threshold).values, "eval_index"]
+                bucket.append(float(hit.iloc[0] + 1) if len(hit) else np.nan)
+
+        rows.append(
+            {
+                "encoder": encoder,
+                "n_seeds": int(enc_df["seed"].nunique()),
+                "final_best_fitness_mean": float(np.mean(finals)),
+                "final_best_fitness_std": float(np.std(finals)),
+                "evaluations_to_50pct_of_best_arm_mean": _safe_nanmean(evals_to_50),
+                "evaluations_to_90pct_of_best_arm_mean": _safe_nanmean(evals_to_90),
+                "validity_rate": float(enc_df["valid"].mean()),
+                "unique_bodies_explored": int(enc_df["body_hash"].nunique()),
+                "cache_hit_rate": float(enc_df["cache_hit"].mean()) if "cache_hit" in enc_df.columns else float("nan"),
+                "mean_wall_clock_s_per_eval": float(enc_df["wall_clock_s"].mean()),
+            }
+        )
+
+    return pd.DataFrame(rows).sort_values("encoder").reset_index(drop=True)
+
+
 def comparison_table(df: pd.DataFrame, reference_encoder: str = "direct") -> pd.DataFrame:
     """Per-encoder summary for the head-to-head comparison.
 
@@ -94,8 +174,8 @@ def comparison_table(df: pd.DataFrame, reference_encoder: str = "direct") -> pd.
                 "n_seeds": int(enc_df["seed"].nunique()),
                 "final_best_fitness_mean": float(np.mean(final_bests)),
                 "final_best_fitness_std": float(np.std(final_bests)),
-                "evaluations_to_50pct_of_reference_mean": float(np.nanmean(evals_to_50)),
-                "evaluations_to_90pct_of_reference_mean": float(np.nanmean(evals_to_90)),
+                "evaluations_to_50pct_of_reference_mean": _safe_nanmean(evals_to_50),
+                "evaluations_to_90pct_of_reference_mean": _safe_nanmean(evals_to_90),
                 "validity_rate": float(enc_df["valid"].mean()),
                 "cache_hit_rate": float(enc_df["cache_hit"].mean()) if "cache_hit" in enc_df.columns else float("nan"),
                 "unique_bodies_explored": int(enc_df["body_hash"].nunique()),

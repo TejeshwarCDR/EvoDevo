@@ -4,6 +4,14 @@
 
 PYTHON := python3
 
+# SURROGATE=1 runs `make benchmark` with the fast, physics-free surrogate
+# evaluator instead of real PPO (see evodevo/evaluation/ppo_runner.py).
+SURROGATE ?= 0
+BENCHMARK_FLAGS :=
+ifeq ($(SURROGATE),1)
+BENCHMARK_FLAGS := --surrogate
+endif
+
 # Runs the ENTIRE test suite -- every encoder, every shared-core module,
 # real-PPO smoke tests included (skipped automatically if the evogym
 # simulator isn't built). Run this before merging.
@@ -49,13 +57,16 @@ inspect-rule-based:
 	@echo ">> make inspect-rule-based: characterizing the Rule-Based encoder (PPO-free, no EA)"
 	bash scripts/rule_based/inspect.sh
 
-# The cross-method head-to-head comparison. Currently direct vs. nca only
-# (scripts/benchmark/run_comparison.sh); once the unified three-way
-# benchmark orchestrator exists (evodevo/experiments/benchmark.py, a later
-# step) this target will run all three arms instead.
+# The unified three-way benchmark: direct vs. nca vs. rule_based, run under
+# identical conditions (evodevo/experiments/benchmark.py), followed by
+# report generation (evodevo/analysis/report.py) into
+# results/BENCHMARK_REPORT.md. SURROGATE=1 uses the fast physics-free
+# evaluator instead of real PPO.
 benchmark:
-	@echo ">> make benchmark: running the cross-method comparison (scripts/benchmark/run_comparison.sh)"
-	bash scripts/benchmark/run_comparison.sh
+	@echo ">> make benchmark: running the three-way benchmark (SURROGATE=$(SURROGATE))"
+	$(PYTHON) -m evodevo.experiments.benchmark --config evodevo/experiments/configs/benchmark.yaml $(BENCHMARK_FLAGS)
+	@echo ">> make benchmark: generating results/BENCHMARK_REPORT.md"
+	$(PYTHON) -m evodevo.analysis.report --root results/runs --output results/BENCHMARK_REPORT.md --figures-dir results/figures
 
 # Sanity-checks that the expected documentation set exists and lists it.
 # There is no generated-docs build step in this project.

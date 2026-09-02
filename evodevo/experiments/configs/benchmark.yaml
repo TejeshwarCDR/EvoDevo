@@ -1,0 +1,10 @@
+# The primary three-way comparison: direct vs. nca vs. rule_based, on
+# Walker-v0, mutation-only (use_crossover: false in configs/shared/base.yaml),
+# identical shared config across all three arms (enforced by
+# evodevo.experiments.benchmark.check_fairness before anything runs).
+encoders: [direct, nca, rule_based]
+tasks: [Walker-v0]
+seeds: [0, 1, 2, 3, 4]
+configs_root: evodevo/experiments/configs
+output_dir: results/runs
+surrogate: false
