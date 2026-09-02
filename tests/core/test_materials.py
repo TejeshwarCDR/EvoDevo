@@ -27,17 +27,30 @@ _SUSPECT_NAME = re.compile(
 )
 
 
+def _is_int_constant(node: ast.AST) -> bool:
+    return isinstance(node, ast.Constant) and isinstance(node.value, int) and not isinstance(node.value, bool)
+
+
 def _module_defines_material_literal(path: Path) -> bool:
     tree = ast.parse(path.read_text(), filename=str(path))
     for node in ast.walk(tree):
         if not isinstance(node, ast.Assign):
             continue
         for target in node.targets:
-            if isinstance(target, ast.Name) and _SUSPECT_NAME.match(target.id):
-                # A plain re-export ("X = other_module.X" or "from ... import X")
-                # is fine; only a literal constant assignment is a redefinition.
-                if isinstance(node.value, (ast.Constant, ast.Dict, ast.Set, ast.List, ast.Tuple)):
-                    return True
+            if not (isinstance(target, ast.Name) and _SUSPECT_NAME.match(target.id)):
+                continue
+            # A plain re-export/alias ("X = other_module.X" or "X = core.materials.RIGID")
+            # is fine; only a literal redefinition of the vocabulary is a problem.
+            # Restricted to INT constants (not any ast.Constant) so that an
+            # unrelated symbolic enum sharing a name -- e.g. a string-valued
+            # VoxelState.EMPTY = "empty" in the rule-based encoder's rule
+            # language -- is not mistaken for a redefinition of the integer
+            # material vocabulary. Bare dict/tuple/set literals are still
+            # flagged (that's how MATERIALS itself would be redefined).
+            if _is_int_constant(node.value):
+                return True
+            if isinstance(node.value, (ast.Dict, ast.Set, ast.List, ast.Tuple)):
+                return True
     return False
 
 

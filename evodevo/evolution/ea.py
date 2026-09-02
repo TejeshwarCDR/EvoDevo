@@ -60,6 +60,22 @@ def run_ea(
     elif not cache_enabled:
         cache = None
 
+    # The primary three-way comparison is mutation-only for every arm: Direct
+    # and NCA have no crossover operator, so an asymmetric reproduction
+    # operator (crossover for one arm only) would confound the representation
+    # comparison. use_crossover defaults to False; when an encoding-specific
+    # ablation deliberately wants crossover (e.g. a labelled "rule_based_xover"
+    # arm), config.use_crossover=True switches every offspring's reproduction
+    # to encoder.crossover() instead of encoder.mutate() -- checked once here,
+    # at startup, rather than letting a config/encoder mismatch fail silently
+    # partway through a run.
+    use_crossover = bool(getattr(config, "use_crossover", False))
+    if use_crossover and not encoder.supports_crossover():
+        raise ValueError(
+            f"config.use_crossover=True but encoder '{encoder.name}' does not support "
+            "crossover (supports_crossover() returned False)"
+        )
+
     evaluations_used = 0
     next_genome_id = 0
     records: list = []
@@ -138,9 +154,16 @@ def run_ea(
         for _ in range(lam):
             if evaluations_used >= budget:
                 break
-            parent = survivors[rng.integers(0, len(survivors))]
-            child_genome = encoder.mutate(parent.genome, rng)
-            offspring.append(evaluate_genome(child_genome, parent_id=parent.genome_id, generation=generation))
+            if use_crossover:
+                parent_a = survivors[rng.integers(0, len(survivors))]
+                parent_b = survivors[rng.integers(0, len(survivors))]
+                child_genome = encoder.crossover(parent_a.genome, parent_b.genome, rng)
+                parent_id = parent_a.genome_id
+            else:
+                parent_a = survivors[rng.integers(0, len(survivors))]
+                child_genome = encoder.mutate(parent_a.genome, rng)
+                parent_id = parent_a.genome_id
+            offspring.append(evaluate_genome(child_genome, parent_id=parent_id, generation=generation))
 
         population = survivors + offspring
 

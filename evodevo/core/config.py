@@ -22,6 +22,7 @@ class ExperimentConfig:
     grid_shape: tuple = (5, 5)
     sentinel_fitness: float = -10.0
     cache_enabled: bool = False
+    use_crossover: bool = False
 
     @classmethod
     def from_yaml(cls, path: str) -> "ExperimentConfig":

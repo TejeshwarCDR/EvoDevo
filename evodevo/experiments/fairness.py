@@ -23,6 +23,7 @@ _REQUIRED_EQUAL_FIELDS = (
     "offspring_size",
     "sentinel_fitness",
     "cache_enabled",
+    "use_crossover",
 )
 
 
