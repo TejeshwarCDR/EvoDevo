@@ -4,7 +4,7 @@
 # until this run produces a believable fitness curve.
 set -euo pipefail
 
-CONFIG="evodevo/experiments/configs/direct_walker.yaml"
+CONFIG="evodevo/experiments/configs/direct/walker.yaml"
 
 for SEED in 0 1 2 3 4; do
     echo "=== direct encoder, Walker-v0, seed ${SEED} ==="

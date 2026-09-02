@@ -9,7 +9,7 @@ entirely -- they belong to the Encoder instance, not the run config).
 """
 from __future__ import annotations
 
-from evodevo.config import ExperimentConfig
+from evodevo.core.config import ExperimentConfig
 
 # Fields that must be identical across both arms of a comparison. Everything
 # NOT in this list (currently just `encoder` and `seed`) is allowed to differ.

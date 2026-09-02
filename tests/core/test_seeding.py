@@ -1,6 +1,6 @@
 import numpy as np
 
-from evodevo.seeding import make_rng, seed_everything
+from evodevo.core.seeding import make_rng, seed_everything
 
 
 def test_make_rng_reproducible():

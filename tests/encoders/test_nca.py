@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from evodevo.config import ExperimentConfig
+from evodevo.core.config import ExperimentConfig
 from evodevo.encoders import get_encoder
 from evodevo.encoders.nca import N_MATERIALS, NCAEncoder
 from evodevo.evaluation.ppo_runner import evaluate_body_surrogate

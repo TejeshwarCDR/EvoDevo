@@ -4,7 +4,7 @@ import tempfile
 import numpy as np
 import pytest
 
-from evodevo.config import ExperimentConfig
+from evodevo.core.config import ExperimentConfig
 from evodevo.encoders.base import Encoder
 from evodevo.encoders.direct import DirectEncoder
 from evodevo.evaluation.ppo_runner import evaluate_body_surrogate

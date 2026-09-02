@@ -1,6 +1,6 @@
 import pytest
 
-from evodevo.config import ExperimentConfig
+from evodevo.core.config import ExperimentConfig
 from evodevo.experiments.fairness import FairnessViolation, assert_comparable
 
 

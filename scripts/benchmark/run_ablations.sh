@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Minimal ablation set: A1 (dev_steps), A2 (hidden_channels), E3 (second task).
 # 3 seeds per arm, identical PPO budget/population/offspring/eval_budget as the
-# main comparison (evodevo/experiments/configs/nca_walker.yaml /
+# main comparison (evodevo/experiments/configs/nca/walker.yaml /
 # direct_walker.yaml) -- only the named hyperparameter is allowed to vary.
 #
 # A2's hidden_channels=3 cell is IDENTICAL to A1's dev_steps=10 cell (both are
@@ -9,10 +9,10 @@
 # reuses the "T10" tag's runs for that cell instead of duplicating the compute.
 set -euo pipefail
 
-NCA_WALKER_CONFIG="evodevo/experiments/configs/nca_walker.yaml"
-DIRECT_WALKER_CONFIG="evodevo/experiments/configs/direct_walker.yaml"
-DIRECT_SECOND_TASK_CONFIG="evodevo/experiments/configs/direct_upstepper.yaml"
-NCA_SECOND_TASK_CONFIG="evodevo/experiments/configs/nca_upstepper.yaml"
+NCA_WALKER_CONFIG="evodevo/experiments/configs/nca/walker.yaml"
+DIRECT_WALKER_CONFIG="evodevo/experiments/configs/direct/walker.yaml"
+DIRECT_SECOND_TASK_CONFIG="evodevo/experiments/configs/direct/upstepper.yaml"
+NCA_SECOND_TASK_CONFIG="evodevo/experiments/configs/nca/upstepper.yaml"
 SEEDS="0 1 2"
 
 echo "### A1: NCA, dev_steps in {1, 5, 10, 20} ###"

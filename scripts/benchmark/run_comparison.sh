@@ -4,11 +4,11 @@
 # asymmetry cannot silently invalidate the comparison.
 set -euo pipefail
 
-DIRECT_CONFIG="evodevo/experiments/configs/direct_walker.yaml"
-NCA_CONFIG="evodevo/experiments/configs/nca_walker.yaml"
+DIRECT_CONFIG="evodevo/experiments/configs/direct/walker.yaml"
+NCA_CONFIG="evodevo/experiments/configs/nca/walker.yaml"
 
 python3 -c "
-from evodevo.config import ExperimentConfig
+from evodevo.core.config import ExperimentConfig
 from evodevo.experiments.fairness import assert_comparable
 
 direct_config = ExperimentConfig.from_yaml('${DIRECT_CONFIG}')

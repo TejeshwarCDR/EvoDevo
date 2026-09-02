@@ -12,7 +12,7 @@ import sys
 import numpy as np
 import yaml
 
-from evodevo.config import ExperimentConfig
+from evodevo.core.config import ExperimentConfig
 from evodevo.encoders import get_encoder
 from evodevo.evaluation.ppo_runner import make_evaluator
 from evodevo.evolution.ea import run_ea

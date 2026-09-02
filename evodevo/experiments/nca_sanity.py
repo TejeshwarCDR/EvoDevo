@@ -18,7 +18,7 @@ from evodevo.encoders.direct import DirectEncoder
 from evodevo.encoders.nca import N_MATERIALS, NCAEncoder
 from evodevo.morphology.metrics import body_hash
 from evodevo.morphology.validate import validate_body
-from evodevo.seeding import make_rng
+from evodevo.core.seeding import make_rng
 
 VALIDITY_GATE = 0.10
 DEGENERACY_GATE = 0.50
