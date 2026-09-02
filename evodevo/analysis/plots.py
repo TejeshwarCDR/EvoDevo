@@ -1,8 +1,15 @@
 """Figures for the encoding comparison. Matplotlib only, no display side effects."""
 from __future__ import annotations
 
-import matplotlib.pyplot as plt
-import pandas as pd
+import matplotlib
+
+# Must be set before `matplotlib.pyplot` is imported anywhere in the process.
+# This module (not nca_sanity.py's import-time side effect) is the
+# authoritative place this is enforced for the analysis package, so plotting
+# works headlessly regardless of import order.
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
+import pandas as pd  # noqa: E402
 
 
 def _best_so_far_by_seed(df: pd.DataFrame) -> pd.DataFrame:

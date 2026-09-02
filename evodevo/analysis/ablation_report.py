@@ -13,6 +13,10 @@ from __future__ import annotations
 
 import os
 
+import matplotlib
+
+# Must be set before `matplotlib.pyplot` is imported anywhere in the process.
+matplotlib.use("Agg")
 import numpy as np
 import pandas as pd
 
@@ -109,7 +113,7 @@ def _relabelled(df: pd.DataFrame, arm_label: str) -> pd.DataFrame:
 def _save_fitness_curve_figure(dfs_by_arm: dict, path: str) -> bool:
     """dfs_by_arm: {arm_label: df}. Returns False (and writes nothing) if every
     arm is empty (no PPO results yet)."""
-    import matplotlib.pyplot as plt
+    import matplotlib.pyplot as plt  # Agg backend already set at module import time
 
     frames = [_relabelled(df, arm) for arm, df in dfs_by_arm.items() if not df.empty]
     if not frames:

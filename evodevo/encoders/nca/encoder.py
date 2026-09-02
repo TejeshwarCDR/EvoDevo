@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import numpy as np
 
+from evodevo.core.materials import N_MATERIALS
 from evodevo.encoders.base import Encoder
 
-N_MATERIALS = 5  # EMPTY, RIGID, SOFT, H_ACT, V_ACT
 NEIGHBOUR_OFFSETS = [(-1, 0), (1, 0), (0, -1), (0, 1)]  # up, down, left, right
 
 # Seeds the fixed, non-evolved initial cell state s(0). It is generated once,

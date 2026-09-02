@@ -3,9 +3,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from evodevo.core.materials import N_MATERIALS
 from evodevo.encoders.base import Encoder
-
-N_MATERIALS = 5  # EMPTY, RIGID, SOFT, H_ACT, V_ACT
 
 
 class DirectEncoder(Encoder):

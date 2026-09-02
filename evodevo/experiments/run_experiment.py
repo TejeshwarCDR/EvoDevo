@@ -81,7 +81,7 @@ def run_experiment(
     meta_config = config.to_dict()
     meta_config["encoder_kwargs"] = encoder_kwargs or {}
     meta_config["tag"] = tag
-    logger.write_meta(meta_config, encoder.describe())
+    logger.write_meta(meta_config, encoder.describe(), cache_hit_rate=result.cache_hit_rate)
 
     if result.population:
         best = max(result.population, key=lambda ind: ind.fitness)

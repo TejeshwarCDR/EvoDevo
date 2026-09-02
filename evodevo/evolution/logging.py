@@ -22,10 +22,16 @@ class RunLogger:
     def close(self) -> None:
         self._fh.close()
 
-    def write_meta(self, config_dict: dict, encoder_describe: dict) -> None:
+    def write_meta(
+        self,
+        config_dict: dict,
+        encoder_describe: dict,
+        cache_hit_rate: Optional[float] = None,
+    ) -> None:
         meta = {
             "config": config_dict,
             "encoder": encoder_describe,
+            "cache_hit_rate": cache_hit_rate,
             "git_commit": _git_commit_hash(),
             "library_versions": _library_versions(),
         }
