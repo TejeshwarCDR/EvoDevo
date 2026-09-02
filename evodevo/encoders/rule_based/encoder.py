@@ -1,9 +1,15 @@
 """RuleBasedEncoder: the Encoder-contract adapter around the ported V2
-developmental rule language (rule_types.py / rule_encoding.py /
-interpreter.py in this package).
+developmental rule language (_rules/types.py / _rules/genome.py /
+_rules/interpreter.py -- internal submodules of this package, ported
+verbatim from a standalone reference implementation; see their module
+headers and docs/decisions.md for provenance).
 
 This file is NOT itself a port -- it is new code, written to satisfy
-evodevo.encoders.base.Encoder using the ported modules unchanged.
+evodevo.encoders.base.Encoder using the ported modules unchanged. The
+ported modules' behavioral equivalence to their original reference
+implementation (its checkout has since been permanently removed -- see
+docs/decisions.md) is
+permanently proven by tests/encoders/fixtures/rule_based_port_equivalence.json.
 """
 from __future__ import annotations
 
@@ -13,8 +19,8 @@ from typing import Any, List
 import numpy as np
 
 from evodevo.encoders.base import Encoder
-from evodevo.encoders.rule_based.interpreter import DEFAULT_MAX_ITERATIONS, develop_rules
-from evodevo.encoders.rule_based.rule_encoding import (
+from evodevo.encoders.rule_based._rules.interpreter import DEFAULT_MAX_ITERATIONS, develop_rules
+from evodevo.encoders.rule_based._rules.genome import (
     MAX_RULES,
     MIN_RULES,
     DevelopmentalRuleGenome,
@@ -22,7 +28,7 @@ from evodevo.encoders.rule_based.rule_encoding import (
     mutate_developmental_rules,
     sample_developmental_rules,
 )
-from evodevo.encoders.rule_based.rule_types import (
+from evodevo.encoders.rule_based._rules.types import (
     ActionType,
     ConditionType,
     Direction,

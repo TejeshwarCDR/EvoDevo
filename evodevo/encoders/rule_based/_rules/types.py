@@ -1,5 +1,6 @@
-# Ported from external/rule-based-reference/examples/utils/developmental_rule_types.py
-# (commit 703e711, "Initial project implementation"). Original author: the
+# Ported from a standalone reference implementation's developmental_rule_types.py
+# (commit 703e711, "Initial project implementation"; that checkout has since
+# been permanently removed -- see docs/decisions.md). Original author: the
 # project's Rule-Based teammate. This is a port, not a rewrite: only the
 # module docstring below and this header were changed; the rule language
 # itself (vocabulary, enums, dataclass, validation) is unmodified.

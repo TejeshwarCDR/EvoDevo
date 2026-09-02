@@ -1,15 +1,30 @@
-"""RuleBasedEncoder-SPECIFIC tests: port-equivalence against the original
-(unported) reference checkout, numeric-vocabulary preservation, and
-adapter-level behaviour (serialization, crossover, EA integration).
+"""RuleBasedEncoder-SPECIFIC tests: port-equivalence against a frozen
+fixture (see fixtures/rule_based_port_equivalence.json), numeric-vocabulary
+preservation, and adapter-level behaviour (serialization, crossover, EA
+integration).
 
 Generic Encoder-contract properties are covered once for every registered
 encoder by tests/encoders/test_contract.py and are not repeated here.
+
+PORT-EQUIVALENCE PROVENANCE: this project originally ported the rule-based
+developmental encoder from a standalone reference implementation, checked
+out (with its own nested .git) at external/rule-based-reference/. That
+checkout has since been permanently removed (see docs/decisions.md); its
+behavioural equivalence to this port was proven ONE TIME, while both
+implementations were still on disk, by running the ORIGINAL and PORTED
+interpreters on the same 20 sampled genomes (plus 5 mutated genomes) and
+asserting identical output bodies -- modulo one deliberate, documented
+exception: SOFT/HARD are corrected to match EvoGym's real material
+vocabulary (see interpreter.py's module-level comment). That comparison's
+inputs and outputs were frozen verbatim into
+fixtures/rule_based_port_equivalence.json, which is now the PERMANENT proof
+of port equivalence: the tests below replay the ported interpreter against
+those frozen values, not against a live external checkout, and can no
+longer be regenerated or re-verified against the original source.
 """
 from __future__ import annotations
 
-import importlib
-import random
-import sys
+import json
 from pathlib import Path
 
 import numpy as np
@@ -18,20 +33,16 @@ import pytest
 from evodevo.core.config import ExperimentConfig
 from evodevo.encoders import get_encoder
 from evodevo.encoders.rule_based.encoder import RuleBasedEncoder
-from evodevo.encoders.rule_based.interpreter import (
-    DEFAULT_MAX_ITERATIONS as PORTED_DEFAULT_ITERATIONS,
+from evodevo.encoders.rule_based._rules.interpreter import (
     STATE_TO_VOXEL as PORTED_STATE_TO_VOXEL,
     develop_rules as ported_develop_rules,
 )
-from evodevo.encoders.rule_based.rule_encoding import (
+from evodevo.encoders.rule_based._rules.genome import (
     MAX_RULES,
     MIN_RULES,
     DevelopmentalRuleGenome,
-    crossover_developmental_rules,
-    mutate_developmental_rules,
-    sample_developmental_rules as ported_sample_developmental_rules,
 )
-from evodevo.encoders.rule_based.rule_types import (
+from evodevo.encoders.rule_based._rules.types import (
     ActionType,
     ConditionType,
     Direction,
@@ -42,175 +53,77 @@ from evodevo.encoders.rule_based.rule_types import (
 from evodevo.evaluation.ppo_runner import evaluate_body_surrogate
 from evodevo.evolution.ea import run_ea
 
-REFERENCE_EXAMPLES_ROOT = (
-    Path(__file__).resolve().parents[2] / "external" / "rule-based-reference" / "examples"
-)
+FIXTURE_PATH = Path(__file__).resolve().parent / "fixtures" / "rule_based_port_equivalence.json"
 
 
-def _load_original_modules():
-    """Import the ORIGINAL (unported) V2 developmental-rule modules
-    directly from external/rule-based-reference by file path, so the
-    port-equivalence test can compare against genuinely unmodified
-    reference code (not a copy that could itself have drifted).
-
-    Returns (rule_types, interpreter, rule_encoding) module objects, or
-    None if the reference checkout is missing or fails to import (e.g. its
-    own dependency chain is broken) -- in which case the equivalence test
-    is skipped with a loud, explicit reason rather than silently omitted.
-    """
-    if not REFERENCE_EXAMPLES_ROOT.is_dir():
-        return None
-
-    already_on_path = str(REFERENCE_EXAMPLES_ROOT) in sys.path
-    if not already_on_path:
-        sys.path.insert(0, str(REFERENCE_EXAMPLES_ROOT))
-    try:
-        rule_types = importlib.import_module("utils.developmental_rule_types")
-        interpreter = importlib.import_module("utils.developmental_interpreter")
-        rule_encoding = importlib.import_module("utils.developmental_rule_encoding")
-        return rule_types, interpreter, rule_encoding
-    except Exception:
-        return None
-    finally:
-        if not already_on_path and str(REFERENCE_EXAMPLES_ROOT) in sys.path:
-            sys.path.remove(str(REFERENCE_EXAMPLES_ROOT))
+def _load_fixture() -> dict:
+    with open(FIXTURE_PATH) as f:
+        return json.load(f)
 
 
-_ORIGINAL = _load_original_modules()
-
-_skip_if_no_reference = pytest.mark.skipif(
-    _ORIGINAL is None,
-    reason=(
-        "external/rule-based-reference/examples/utils/developmental_*.py could not be "
-        "imported (reference checkout missing, or its import chain failed in this "
-        "environment). SKIPPING the port-equivalence test means the port is UNVERIFIED "
-        "against the original implementation for this test run -- this is a loud, "
-        "explicit skip, not a silent pass."
-    ),
-)
+_FIXTURE = _load_fixture()
 
 
 # ---------------------------------------------------------------------------
-# The single most important test in this file: proves the port preserves
-# behaviour by running the PORTED interpreter and the ORIGINAL interpreter on
-# the same 20 seeded genomes and asserting identical bodies -- modulo one
-# deliberate, documented exception: SOFT/HARD are corrected to match
-# EvoGym's real material vocabulary (see interpreter.py's module-level
-# comment and docs/decisions.md). _correct_original_soft_hard_swap() undoes
-# exactly that one change before comparing, so this test proves the SOFT/HARD
-# fix is the *only* behavioural difference -- everything else (rule
-# matching, growth propagation, synchronous update order) is unchanged.
+# The single most important test in this file: proves the ported
+# interpreter, run TODAY, still reproduces the exact bodies frozen at the
+# time the original reference checkout was removed -- i.e. that the port's
+# behaviour has not drifted since equivalence was proven against the
+# original. See the module docstring for the full provenance chain.
 # ---------------------------------------------------------------------------
 
 
-def _correct_original_soft_hard_swap(body: np.ndarray) -> np.ndarray:
-    """Remap an ORIGINAL-interpreter body's SOFT(1)/HARD(2) codes to this
-    port's corrected RIGID(1)/SOFT(2) convention, leaving EMPTY/H_ACT/V_ACT
-    untouched. Used only to prove equivalence in these tests."""
-    corrected = np.asarray(body).copy()
-    original = np.asarray(body)
-    corrected[original == 1] = 2  # original SOFT -> corrected SOFT (core.materials.SOFT == 2)
-    corrected[original == 2] = 1  # original HARD -> corrected HARD/RIGID (core.materials.RIGID == 1)
-    return corrected
-
-
-@_skip_if_no_reference
-def test_ported_interpreter_matches_original_across_20_seeded_genomes():
-    _orig_rule_types, orig_interpreter, orig_rule_encoding = _ORIGINAL
-
-    for seed in range(20):
-        # Both the ported and original sample_developmental_rules() consume
-        # Python's global `random` module (a single process-wide singleton,
-        # shared by both modules) in exactly the same call sequence, since
-        # the port is verbatim. Reseeding identically before each call makes
-        # the two genomes structurally equivalent even though they are
-        # instances of two independent (ported vs. original) class
-        # hierarchies.
-        random.seed(seed)
-        original_genome = orig_rule_encoding.sample_developmental_rules()
-        random.seed(seed)
-        ported_genome = ported_sample_developmental_rules()
-
-        assert len(original_genome.rules) == len(ported_genome.rules), (
-            f"seed {seed}: genome rule counts diverged between original and ported sampling"
-        )
-
-        original_body = orig_interpreter.develop_rules(
-            original_genome, shape=(5, 5), iterations=orig_interpreter.DEFAULT_MAX_ITERATIONS
-        )
-        ported_body = ported_develop_rules(
-            ported_genome, shape=(5, 5), iterations=PORTED_DEFAULT_ITERATIONS
-        )
-
+def test_ported_interpreter_matches_frozen_port_equivalence_fixture():
+    encoder = RuleBasedEncoder()
+    for entry in _FIXTURE["genomes_20"]:
+        genome = encoder.deserialize_genome(entry["genome"])
+        body = encoder.decode(genome)
         np.testing.assert_array_equal(
-            _correct_original_soft_hard_swap(original_body),
-            np.asarray(ported_body),
+            np.asarray(entry["expected_body"]),
+            np.asarray(body),
             err_msg=(
-                f"seed {seed}: ported interpreter's output diverged from the original "
-                "by more than the documented SOFT/HARD fix"
+                f"seed {entry['seed']}: ported interpreter's output has drifted from "
+                "the frozen port-equivalence fixture (permanent proof of equivalence "
+                "with the removed external/rule-based-reference checkout)"
             ),
         )
 
 
-@_skip_if_no_reference
-def test_ported_mutation_matches_original_across_5_seeded_genomes():
-    _orig_rule_types, orig_interpreter, orig_rule_encoding = _ORIGINAL
-
-    for seed in range(5):
-        random.seed(seed)
-        original_parent = orig_rule_encoding.sample_developmental_rules()
-        random.seed(seed)
-        ported_parent = ported_sample_developmental_rules()
-
-        random.seed(seed + 1000)
-        original_child = orig_rule_encoding.mutate_developmental_rules(original_parent)
-        random.seed(seed + 1000)
-        ported_child = mutate_developmental_rules(ported_parent)
-
-        original_body = orig_interpreter.develop_rules(original_child, shape=(5, 5))
-        ported_body = ported_develop_rules(ported_child, shape=(5, 5))
+def test_ported_mutation_matches_frozen_port_equivalence_fixture():
+    encoder = RuleBasedEncoder()
+    for entry in _FIXTURE["mutation_5"]:
+        child = encoder.deserialize_genome(entry["child_genome"])
+        body = encoder.decode(child)
         np.testing.assert_array_equal(
-            _correct_original_soft_hard_swap(original_body), np.asarray(ported_body)
+            np.asarray(entry["expected_body"]),
+            np.asarray(body),
+            err_msg=f"seed {entry['seed']}: mutated-genome output has drifted from the frozen fixture",
         )
 
 
 # ---------------------------------------------------------------------------
-# Numeric-vocabulary preservation: does NOT require the reference checkout,
-# since the original commit's values (documented in the port's header
-# comments) are known and pinned here explicitly.
+# Numeric-vocabulary preservation: pinned explicitly, since the original
+# commit's values (documented in the port's header comments and this
+# fixture's frozen header) are known and no longer re-derivable from a live
+# checkout.
 # ---------------------------------------------------------------------------
 
 
 def test_state_to_voxel_matches_evogym_and_core_materials():
-    # Original developmental_interpreter.py (external/rule-based-reference,
-    # commit 703e711) defined EMPTY=0, SOFT=1, HARD=2, HORIZONTAL=3,
-    # VERTICAL=4 -- which did NOT match EvoGym's real material vocabulary
-    # (evogym.utils.VOXEL_TYPES: EMPTY=0, RIGID=1, SOFT=2, H_ACT=3, V_ACT=4)
-    # and was a pre-existing bug (see interpreter.py's module comment and
-    # docs/decisions.md). This port deliberately corrects SOFT/HARD to
-    # match EvoGym/core.materials; EMPTY/HORIZONTAL/VERTICAL are unchanged.
+    # Original developmental_interpreter.py (formerly
+    # external/rule-based-reference, commit 703e711 -- see
+    # fixtures/rule_based_port_equivalence.json's header) defined EMPTY=0,
+    # SOFT=1, HARD=2, HORIZONTAL=3, VERTICAL=4 -- which did NOT match
+    # EvoGym's real material vocabulary (evogym.utils.VOXEL_TYPES: EMPTY=0,
+    # RIGID=1, SOFT=2, H_ACT=3, V_ACT=4) and was a pre-existing bug (see
+    # interpreter.py's module comment and docs/decisions.md). This port
+    # deliberately corrects SOFT/HARD to match EvoGym/core.materials;
+    # EMPTY/HORIZONTAL/VERTICAL are unchanged.
     assert PORTED_STATE_TO_VOXEL[VoxelState.EMPTY] == 0
     assert PORTED_STATE_TO_VOXEL[VoxelState.SOFT] == 2
     assert PORTED_STATE_TO_VOXEL[VoxelState.HARD] == 1
     assert PORTED_STATE_TO_VOXEL[VoxelState.ACTUATOR_HORIZONTAL] == 3
     assert PORTED_STATE_TO_VOXEL[VoxelState.ACTUATOR_VERTICAL] == 4
-
-
-@_skip_if_no_reference
-def test_state_to_voxel_deliberately_fixes_soft_hard_swap_from_original():
-    _orig_rule_types, orig_interpreter, _orig_rule_encoding = _ORIGINAL
-    original_mapping = {state.value: code for state, code in orig_interpreter.STATE_TO_VOXEL.items()}
-    ported_mapping = {state.value: code for state, code in PORTED_STATE_TO_VOXEL.items()}
-
-    # EMPTY/HORIZONTAL/VERTICAL are unchanged from the original.
-    for key in ("empty", "actuator_horizontal", "actuator_vertical"):
-        assert original_mapping[key] == ported_mapping[key], key
-
-    # SOFT and HARD are DELIBERATELY swapped relative to the original, to
-    # match EvoGym's actual material vocabulary instead of preserving the
-    # original's own inverted convention.
-    assert original_mapping["soft"] == 1 and ported_mapping["soft"] == 2
-    assert original_mapping["hard"] == 2 and ported_mapping["hard"] == 1
 
 
 # ---------------------------------------------------------------------------

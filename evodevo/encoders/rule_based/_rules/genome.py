@@ -1,10 +1,13 @@
-# Ported from external/rule-based-reference/examples/utils/developmental_rule_encoding.py
-# (commit 703e711, "Initial project implementation"). Original author: the
+# Ported from a standalone reference implementation's developmental_rule_encoding.py
+# (commit 703e711, "Initial project implementation"; that checkout has since
+# been permanently removed -- see docs/decisions.md). Original author: the
 # project's Rule-Based teammate. This is a port, not a rewrite: the only
 # changes from the original are import paths (utils.* -> this project's
-# evodevo.encoders.rule_based.*). The genome representation, sampling,
+# evodevo.encoders.rule_based._rules.*). The genome representation, sampling,
 # mutation operators (rate, structural operator set), crossover, and the
-# MIN_RULES/MAX_RULES/MIN_ACTUATORS constants are all unchanged.
+# MIN_RULES/MAX_RULES/MIN_ACTUATORS constants are all unchanged. Equivalence
+# to the original is permanently proven by the frozen fixture at
+# tests/encoders/fixtures/rule_based_port_equivalence.json.
 """
 V2 developmental genome representation, mutation, crossover, and
 EvoGym integration (Step 13).
@@ -24,7 +27,7 @@ from typing import List
 from evodevo.morphology.connectivity import get_full_connectivity
 from evodevo.morphology.validate import has_actuator, is_connected
 
-from evodevo.encoders.rule_based.rule_types import (
+from evodevo.encoders.rule_based._rules.types import (
     ActionType,
     ConditionType,
     Direction,
@@ -35,7 +38,7 @@ from evodevo.encoders.rule_based.rule_types import (
     PositionType,
     VoxelState,
 )
-from evodevo.encoders.rule_based.interpreter import develop_rules, DEFAULT_MAX_ITERATIONS, HORIZONTAL, VERTICAL
+from evodevo.encoders.rule_based._rules.interpreter import develop_rules, DEFAULT_MAX_ITERATIONS, HORIZONTAL, VERTICAL
 
 # Bounds on genome size.
 MIN_RULES = 2

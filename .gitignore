@@ -8,13 +8,7 @@ dist/
 .pytest_cache/
 results/**/controller/*.zip
 
-# Nested repos with their own git history — tracked as plain directories,
-# not submodules; their internals (including compiled build artifacts) are
+# Nested repo with its own git history — tracked as a plain directory, not
+# a submodule; its internals (including compiled build artifacts) are
 # intentionally excluded from this outer repo.
 external/evogym/
-external/rule-based-reference/
-# Note: external/rule-based-reference/ARCHIVED.md exists on disk but cannot
-# be tracked by this outer repo — the directory is itself a git repository,
-# so git treats it as a submodule-like boundary and refuses to add individual
-# paths inside it. This is intentional: we preserve that nested .git intact
-# rather than merging its history (see Prompt 1 instructions).

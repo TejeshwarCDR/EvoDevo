@@ -2,6 +2,40 @@
 
 Timestamp: 2026-09-02T00:00:00Z (audit + lock session)
 Git commit (working tree base): 2844b3e1da171b5766f780598596c63f13803cc0
+
+## Lock hash v2 (current, superseding v1 below)
+
+Computed 2026-09-02 by `python -m evodevo.experiments.lock_hash --config evodevo/experiments/configs/benchmark.yaml`
+(`evodevo/experiments/lock_hash.py`, regression-tested by
+`tests/experiments/test_lock_hash.py`), tagged `pre-primary-run-lock-v2`:
+
+```
+56b3ed67ca5e74e6303e3917921be7f347c6957b44880092afe711c2377b53c8
+```
+
+**This value supersedes the original `7e93f59a...` hash below.** That
+supersession is due entirely to `7e93f59a...` having been produced by an
+undocumented, unreproducible procedure -- no script or documented recipe for
+it exists anywhere in this repository, and re-deriving it (including at the
+exact lock commit `1e46c3c` itself, in an isolated worktree, using a
+reasonable implementation of the recipe named in its own caption) reproduces
+a *different* digest (`6d6487c9...`) than the one recorded. **It is NOT due
+to any actual configuration drift**: `git diff 1e46c3c HEAD` shows zero
+changes to `evodevo/experiments/configs/`, `evodevo/core/config.py`, or any
+other module supplying config-resolution defaults between the lock commit
+and the current HEAD -- every diff in that range is additive stdout
+progress-reporting wiring (`ProgressTracker`, `RunLogger.on_eval`) that
+never touches `ExperimentConfig` or its defaults. See `docs/decisions.md`
+("Retire unreproducible lock hash", 2026-09-02) for the full investigation.
+
+From this point forward, any change to `eval_budget`, `ppo_timesteps`,
+`population_size`, `offspring_size`, `sentinel_fitness`, `min_voxels`,
+`min_actuators`, `use_crossover`, or any encoder hyperparameter invalidates
+**this v2 lock hash**, verifiable by re-running
+`python -m evodevo.experiments.lock_hash`.
+
+## Lock hash v1 (superseded, historical record only)
+
 Locked primary config hash (sha256 of the three resolved `ExperimentConfig` objects for direct/nca/rule_based, sorted-key JSON): `7e93f59a82ba780e2ea4229a3d60681d7e98c08cfc33e3479a63af56d88c24ce`
 
 **Any future change to `eval_budget`, `ppo_timesteps`, `population_size`, `offspring_size`, `sentinel_fitness`, `min_voxels`, `min_actuators`, or any NCA hyperparameter after this point invalidates the lock and requires re-running ALL THREE arms from zero — not just the changed one.**
@@ -27,7 +61,7 @@ Locked primary config hash (sha256 of the three resolved `ExperimentConfig` obje
   grep -rnE "^\s*(import|from)\s+(evogym|stable_baselines3|gym|torch)\b" evodevo/encoders/
   ```
   → empty (zero matches).
-- Port-equivalence test (`tests/encoders/test_rule_based.py::test_ported_interpreter_matches_original_across_20_seeded_genomes`, against `external/rule-based-reference`): PASSED — behavior unchanged by the import fix.
+- Port-equivalence test (`tests/encoders/test_rule_based.py::test_ported_interpreter_matches_original_across_20_seeded_genomes`, against `external/rule-based-reference`): PASSED — behavior unchanged by the import fix. **Post-lock update (2026-09-02, see `docs/RULE_BASED_MODULARIZATION.md`):** `external/rule-based-reference/` has since been removed entirely; its equivalence proof was frozen into `tests/encoders/fixtures/rule_based_port_equivalence.json` before deletion, and the test above was rewritten to replay against that fixture (`test_ported_interpreter_matches_frozen_port_equivalence_fixture`), still passing. This is a test/doc-only follow-up — it touches no config value and does not invalidate this lock.
 - `ppo_runner.py`: identical PPO construction regardless of encoder (`evaluate_body` takes no encoder parameter); grep for encoder-name conditional branching in `evaluation/` returned nothing.
 - No rendering/visualization calls inside `ea.py`'s or `ppo_runner.py`'s hot loop (grep empty).
 

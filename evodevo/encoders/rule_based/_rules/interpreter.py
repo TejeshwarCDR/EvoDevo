@@ -1,5 +1,6 @@
-# Ported from external/rule-based-reference/examples/utils/developmental_interpreter.py
-# (commit 703e711, "Initial project implementation"). Original author: the
+# Ported from a standalone reference implementation's developmental_interpreter.py
+# (commit 703e711, "Initial project implementation"; that checkout has since
+# been permanently removed -- see docs/decisions.md). Original author: the
 # project's Rule-Based teammate. This is a port, not a rewrite, with ONE
 # deliberate, documented exception: the locally redefined EMPTY/SOFT/HARD/
 # HORIZONTAL/VERTICAL numeric constants are now sourced from
@@ -10,7 +11,10 @@
 # numeric voxel codes" comment below for the full explanation. The
 # rule-matching/action-application algorithm, the two-pass synchronous
 # update order, and the single-SOFT-seed-at-centre initial condition are
-# all otherwise unchanged.
+# all otherwise unchanged. This equivalence claim's permanent proof is the
+# frozen fixture at tests/encoders/fixtures/rule_based_port_equivalence.json
+# (see tests/encoders/test_rule_based.py) -- the original reference source
+# is no longer present to re-verify against.
 """
 Deterministic, bounded-iteration interpreter for the V2 developmental rule
 language (rule_types.py).
@@ -112,7 +116,7 @@ from typing import Optional, Tuple
 import numpy as np
 
 from evodevo.core.materials import EMPTY, H_ACT, RIGID, SOFT, V_ACT
-from evodevo.encoders.rule_based.rule_types import (
+from evodevo.encoders.rule_based._rules.types import (
     ActionType,
     ConditionType,
     Direction,

@@ -1,0 +1,2496 @@
+{
+  "_header": {
+    "description": "Permanent regression proof for the rule_based encoder port. Frozen output of both the ORIGINAL (external/rule-based-reference) and PORTED (evodevo.encoders.rule_based) developmental-rule interpreters, generated while both were present on disk and verified identical (modulo the documented SOFT/HARD fix -- see docs/decisions.md). This fixture is permanent and CANNOT be regenerated once external/rule-based-reference/ is removed -- if the ported code's behavior ever drifts from these values, that is a real regression.",
+    "source_commit": "703e711902cbb347d2b3385332be2913fee9657f",
+    "source_commit_date": "2026-09-02T07:43:59+05:30",
+    "frozen_date": "2026-09-02",
+    "note": "genomes are stored via RuleBasedEncoder.serialize_genome(); expected_body arrays already reflect the port's corrected RIGID=1/SOFT=2 convention (matching evodevo.core.materials), not the original's inverted SOFT=1/HARD=2 codes."
+  },
+  "genomes_20": [
+    {
+      "seed": 0,
+      "genome": [
+        {
+          "condition_type": "neighbor_count",
+          "condition_params": {
+            "threshold": 1
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "actuator_vertical"
+          }
+        },
+        {
+          "condition_type": "position",
+          "condition_params": {
+            "position": "interior"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "hard"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "left"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "actuator_vertical"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "left"
+          },
+          "action_type": "copy_neighbor",
+          "action_params": {
+            "direction": "left"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "right",
+            "voxel_type": "soft"
+          }
+        },
+        {
+          "condition_type": "always",
+          "condition_params": {},
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "hard"
+          }
+        }
+      ],
+      "expected_body": [
+        [
+          4,
+          4,
+          4,
+          4,
+          0
+        ],
+        [
+          1,
+          4,
+          1,
+          4,
+          0
+        ],
+        [
+          4,
+          1,
+          2,
+          4,
+          0
+        ],
+        [
+          1,
+          4,
+          1,
+          4,
+          0
+        ],
+        [
+          4,
+          4,
+          4,
+          4,
+          0
+        ]
+      ]
+    },
+    {
+      "seed": 1,
+      "genome": [
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "up"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "actuator_vertical"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "actuator_horizontal"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "right"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "down",
+            "voxel_type": "soft"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "up"
+          },
+          "action_type": "copy_neighbor",
+          "action_params": {
+            "direction": "right"
+          }
+        }
+      ],
+      "expected_body": [
+        [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        [
+          4,
+          4,
+          2,
+          4,
+          4
+        ],
+        [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        [
+          0,
+          0,
+          2,
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "seed": 2,
+      "genome": [
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "soft"
+          }
+        },
+        {
+          "condition_type": "neighbor_count",
+          "condition_params": {
+            "threshold": 3
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "hard"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "left"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "hard"
+          }
+        }
+      ],
+      "expected_body": [
+        [
+          1,
+          1,
+          1,
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          0
+        ]
+      ]
+    },
+    {
+      "seed": 3,
+      "genome": [
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "down",
+            "voxel_type": "actuator_horizontal"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "right"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "right",
+            "voxel_type": "soft"
+          }
+        },
+        {
+          "condition_type": "position",
+          "condition_params": {
+            "position": "boundary"
+          },
+          "action_type": "copy_neighbor",
+          "action_params": {
+            "direction": "right"
+          }
+        },
+        {
+          "condition_type": "neighbor_count",
+          "condition_params": {
+            "threshold": 2
+          },
+          "action_type": "set_hard",
+          "action_params": {}
+        }
+      ],
+      "expected_body": [
+        [
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        [
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        [
+          2,
+          2,
+          2,
+          1,
+          2
+        ],
+        [
+          2,
+          2,
+          2,
+          2,
+          2
+        ],
+        [
+          2,
+          2,
+          2,
+          2,
+          2
+        ]
+      ]
+    },
+    {
+      "seed": 4,
+      "genome": [
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "left"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "hard"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "soft"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "right"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "right",
+            "voxel_type": "actuator_vertical"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "empty"
+          },
+          "action_type": "set_empty",
+          "action_params": {}
+        }
+      ],
+      "expected_body": [
+        [
+          0,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          0,
+          1,
+          1,
+          4,
+          1
+        ],
+        [
+          0,
+          1,
+          2,
+          1,
+          1
+        ],
+        [
+          0,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          0,
+          4,
+          0,
+          4,
+          0
+        ]
+      ]
+    },
+    {
+      "seed": 5,
+      "genome": [
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "left"
+          },
+          "action_type": "set_hard",
+          "action_params": {}
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "empty"
+          },
+          "action_type": "copy_neighbor",
+          "action_params": {
+            "direction": "up"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "actuator_horizontal"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "up"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "actuator_vertical"
+          }
+        },
+        {
+          "condition_type": "neighbor_count",
+          "condition_params": {
+            "threshold": 4
+          },
+          "action_type": "copy_neighbor",
+          "action_params": {
+            "direction": "right"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "down"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "hard"
+          }
+        },
+        {
+          "condition_type": "position",
+          "condition_params": {
+            "position": "boundary"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "hard"
+          }
+        }
+      ],
+      "expected_body": [
+        [
+          0,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          0,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          0,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          0,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          0,
+          1,
+          1,
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "seed": 6,
+      "genome": [
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "actuator_horizontal"
+          },
+          "action_type": "copy_neighbor",
+          "action_params": {
+            "direction": "up"
+          }
+        },
+        {
+          "condition_type": "neighbor_count",
+          "condition_params": {
+            "threshold": 1
+          },
+          "action_type": "set_hard",
+          "action_params": {}
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "left"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "soft"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "actuator_vertical"
+          }
+        },
+        {
+          "condition_type": "always",
+          "condition_params": {},
+          "action_type": "set_soft",
+          "action_params": {}
+        },
+        {
+          "condition_type": "position",
+          "condition_params": {
+            "position": "bottom"
+          },
+          "action_type": "copy_neighbor",
+          "action_params": {
+            "direction": "left"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "actuator_vertical"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "soft"
+          }
+        }
+      ],
+      "expected_body": [
+        [
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "seed": 7,
+      "genome": [
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "up"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "soft"
+          }
+        },
+        {
+          "condition_type": "position",
+          "condition_params": {
+            "position": "boundary"
+          },
+          "action_type": "set_actuator_vertical",
+          "action_params": {}
+        },
+        {
+          "condition_type": "always",
+          "condition_params": {},
+          "action_type": "set_empty",
+          "action_params": {}
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "down",
+            "voxel_type": "actuator_vertical"
+          }
+        },
+        {
+          "condition_type": "always",
+          "condition_params": {},
+          "action_type": "copy_neighbor",
+          "action_params": {
+            "direction": "down"
+          }
+        }
+      ],
+      "expected_body": [
+        [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        [
+          4,
+          2,
+          2,
+          2,
+          4
+        ],
+        [
+          4,
+          2,
+          2,
+          2,
+          4
+        ],
+        [
+          4,
+          2,
+          2,
+          2,
+          4
+        ],
+        [
+          4,
+          4,
+          4,
+          4,
+          4
+        ]
+      ]
+    },
+    {
+      "seed": 8,
+      "genome": [
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "actuator_vertical"
+          },
+          "action_type": "set_hard",
+          "action_params": {}
+        },
+        {
+          "condition_type": "always",
+          "condition_params": {},
+          "action_type": "set_empty",
+          "action_params": {}
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "down"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "down",
+            "voxel_type": "hard"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "actuator_vertical"
+          }
+        }
+      ],
+      "expected_body": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "seed": 9,
+      "genome": [
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "up"
+          },
+          "action_type": "set_actuator_horizontal",
+          "action_params": {}
+        },
+        {
+          "condition_type": "always",
+          "condition_params": {},
+          "action_type": "set_actuator_horizontal",
+          "action_params": {}
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "actuator_horizontal"
+          }
+        },
+        {
+          "condition_type": "position",
+          "condition_params": {
+            "position": "right"
+          },
+          "action_type": "set_empty",
+          "action_params": {}
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "down"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "right",
+            "voxel_type": "actuator_vertical"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "down"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "down",
+            "voxel_type": "hard"
+          }
+        }
+      ],
+      "expected_body": [
+        [
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        [
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        [
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        [
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        [
+          3,
+          3,
+          3,
+          3,
+          3
+        ]
+      ]
+    },
+    {
+      "seed": 10,
+      "genome": [
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "left"
+          },
+          "action_type": "copy_neighbor",
+          "action_params": {
+            "direction": "left"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "actuator_vertical"
+          },
+          "action_type": "set_actuator_horizontal",
+          "action_params": {}
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "actuator_vertical"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "hard"
+          },
+          "action_type": "set_empty",
+          "action_params": {}
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "actuator_horizontal"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "hard"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "right"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "right",
+            "voxel_type": "soft"
+          }
+        },
+        {
+          "condition_type": "always",
+          "condition_params": {},
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "soft"
+          }
+        }
+      ],
+      "expected_body": [
+        [
+          0,
+          2,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          2,
+          0,
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "seed": 11,
+      "genome": [
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "down"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "down",
+            "voxel_type": "hard"
+          }
+        },
+        {
+          "condition_type": "position",
+          "condition_params": {
+            "position": "bottom"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "down",
+            "voxel_type": "soft"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "left"
+          },
+          "action_type": "set_soft",
+          "action_params": {}
+        },
+        {
+          "condition_type": "position",
+          "condition_params": {
+            "position": "right"
+          },
+          "action_type": "set_soft",
+          "action_params": {}
+        },
+        {
+          "condition_type": "position",
+          "condition_params": {
+            "position": "right"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "right",
+            "voxel_type": "actuator_vertical"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "right",
+            "voxel_type": "actuator_vertical"
+          }
+        }
+      ],
+      "expected_body": [
+        [
+          0,
+          2,
+          2,
+          2,
+          2
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          2
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          2
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          2
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "seed": 12,
+      "genome": [
+        {
+          "condition_type": "neighbor_count",
+          "condition_params": {
+            "threshold": 4
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "down",
+            "voxel_type": "soft"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "hard"
+          },
+          "action_type": "copy_neighbor",
+          "action_params": {
+            "direction": "up"
+          }
+        },
+        {
+          "condition_type": "always",
+          "condition_params": {},
+          "action_type": "copy_neighbor",
+          "action_params": {
+            "direction": "right"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "actuator_horizontal"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "down"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "down",
+            "voxel_type": "actuator_vertical"
+          }
+        },
+        {
+          "condition_type": "position",
+          "condition_params": {
+            "position": "interior"
+          },
+          "action_type": "copy_neighbor",
+          "action_params": {
+            "direction": "left"
+          }
+        }
+      ],
+      "expected_body": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ]
+    },
+    {
+      "seed": 13,
+      "genome": [
+        {
+          "condition_type": "position",
+          "condition_params": {
+            "position": "interior"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "actuator_vertical"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "set_soft",
+          "action_params": {}
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "actuator_vertical"
+          },
+          "action_type": "copy_neighbor",
+          "action_params": {
+            "direction": "left"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "hard"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "down"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "down",
+            "voxel_type": "hard"
+          }
+        }
+      ],
+      "expected_body": [
+        [
+          0,
+          4,
+          0,
+          4,
+          0
+        ],
+        [
+          1,
+          4,
+          4,
+          4,
+          1
+        ],
+        [
+          1,
+          4,
+          2,
+          4,
+          1
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          1
+        ],
+        [
+          1,
+          0,
+          0,
+          0,
+          1
+        ]
+      ]
+    },
+    {
+      "seed": 14,
+      "genome": [
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "down",
+            "voxel_type": "actuator_horizontal"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "left"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "actuator_horizontal"
+          }
+        },
+        {
+          "condition_type": "always",
+          "condition_params": {},
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "actuator_vertical"
+          }
+        }
+      ],
+      "expected_body": [
+        [
+          3,
+          3,
+          3,
+          3,
+          0
+        ],
+        [
+          3,
+          3,
+          3,
+          3,
+          0
+        ],
+        [
+          3,
+          0,
+          2,
+          3,
+          0
+        ],
+        [
+          3,
+          3,
+          3,
+          3,
+          0
+        ],
+        [
+          3,
+          3,
+          3,
+          3,
+          0
+        ]
+      ]
+    },
+    {
+      "seed": 15,
+      "genome": [
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "soft"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "hard"
+          },
+          "action_type": "set_hard",
+          "action_params": {}
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "down"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "down",
+            "voxel_type": "hard"
+          }
+        },
+        {
+          "condition_type": "always",
+          "condition_params": {},
+          "action_type": "set_empty",
+          "action_params": {}
+        }
+      ],
+      "expected_body": [
+        [
+          0,
+          0,
+          2,
+          0,
+          0
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          0,
+          1,
+          1
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          1
+        ]
+      ]
+    },
+    {
+      "seed": 16,
+      "genome": [
+        {
+          "condition_type": "neighbor_count",
+          "condition_params": {
+            "threshold": 3
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "soft"
+          }
+        },
+        {
+          "condition_type": "neighbor_count",
+          "condition_params": {
+            "threshold": 2
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "actuator_horizontal"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "right",
+            "voxel_type": "actuator_vertical"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "actuator_horizontal"
+          },
+          "action_type": "set_empty",
+          "action_params": {}
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "left"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "actuator_vertical"
+          }
+        }
+      ],
+      "expected_body": [
+        [
+          4,
+          4,
+          4,
+          4,
+          0
+        ],
+        [
+          4,
+          4,
+          4,
+          4,
+          0
+        ],
+        [
+          4,
+          2,
+          2,
+          4,
+          0
+        ],
+        [
+          4,
+          4,
+          4,
+          4,
+          0
+        ],
+        [
+          4,
+          4,
+          4,
+          4,
+          0
+        ]
+      ]
+    },
+    {
+      "seed": 17,
+      "genome": [
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "actuator_horizontal"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "right",
+            "voxel_type": "actuator_horizontal"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "copy_neighbor",
+          "action_params": {
+            "direction": "down"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "left"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "actuator_horizontal"
+          }
+        },
+        {
+          "condition_type": "position",
+          "condition_params": {
+            "position": "boundary"
+          },
+          "action_type": "set_soft",
+          "action_params": {}
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "right",
+            "voxel_type": "actuator_horizontal"
+          }
+        },
+        {
+          "condition_type": "position",
+          "condition_params": {
+            "position": "top"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "right",
+            "voxel_type": "hard"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "actuator_vertical"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "soft"
+          }
+        }
+      ],
+      "expected_body": [
+        [
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        [
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        [
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        [
+          3,
+          3,
+          3,
+          3,
+          3
+        ],
+        [
+          3,
+          3,
+          3,
+          3,
+          3
+        ]
+      ]
+    },
+    {
+      "seed": 18,
+      "genome": [
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "left"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "hard"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "actuator_vertical"
+          }
+        },
+        {
+          "condition_type": "neighbor_count",
+          "condition_params": {
+            "threshold": 4
+          },
+          "action_type": "copy_neighbor",
+          "action_params": {
+            "direction": "down"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "actuator_horizontal"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "down",
+            "voxel_type": "actuator_vertical"
+          }
+        }
+      ],
+      "expected_body": [
+        [
+          1,
+          1,
+          1,
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          0
+        ]
+      ]
+    },
+    {
+      "seed": 19,
+      "genome": [
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "hard"
+          }
+        },
+        {
+          "condition_type": "position",
+          "condition_params": {
+            "position": "top"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "soft"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "right"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "right",
+            "voxel_type": "actuator_horizontal"
+          }
+        }
+      ],
+      "expected_body": [
+        [
+          2,
+          2,
+          2,
+          2,
+          0
+        ],
+        [
+          0,
+          3,
+          1,
+          3,
+          3
+        ],
+        [
+          0,
+          3,
+          2,
+          0,
+          3
+        ],
+        [
+          0,
+          3,
+          3,
+          3,
+          3
+        ],
+        [
+          0,
+          3,
+          3,
+          3,
+          3
+        ]
+      ]
+    }
+  ],
+  "mutation_5": [
+    {
+      "seed": 0,
+      "mutation_seed": 1000,
+      "parent_genome": [
+        {
+          "condition_type": "neighbor_count",
+          "condition_params": {
+            "threshold": 1
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "actuator_vertical"
+          }
+        },
+        {
+          "condition_type": "position",
+          "condition_params": {
+            "position": "interior"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "hard"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "left"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "actuator_vertical"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "left"
+          },
+          "action_type": "copy_neighbor",
+          "action_params": {
+            "direction": "left"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "right",
+            "voxel_type": "soft"
+          }
+        },
+        {
+          "condition_type": "always",
+          "condition_params": {},
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "hard"
+          }
+        }
+      ],
+      "child_genome": [
+        {
+          "condition_type": "neighbor_count",
+          "condition_params": {
+            "threshold": 1
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "actuator_vertical"
+          }
+        },
+        {
+          "condition_type": "always",
+          "condition_params": {},
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "hard"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "left"
+          },
+          "action_type": "set_empty",
+          "action_params": {}
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "left"
+          },
+          "action_type": "copy_neighbor",
+          "action_params": {
+            "direction": "left"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "right",
+            "voxel_type": "soft"
+          }
+        },
+        {
+          "condition_type": "position",
+          "condition_params": {
+            "position": "interior"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "hard"
+          }
+        }
+      ],
+      "expected_body": [
+        [
+          1,
+          1,
+          1,
+          1,
+          0
+        ],
+        [
+          1,
+          4,
+          1,
+          1,
+          0
+        ],
+        [
+          4,
+          1,
+          2,
+          1,
+          0
+        ],
+        [
+          1,
+          4,
+          1,
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          0
+        ]
+      ]
+    },
+    {
+      "seed": 1,
+      "mutation_seed": 1001,
+      "parent_genome": [
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "up"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "actuator_vertical"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "actuator_horizontal"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "right"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "down",
+            "voxel_type": "soft"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "up"
+          },
+          "action_type": "copy_neighbor",
+          "action_params": {
+            "direction": "right"
+          }
+        }
+      ],
+      "child_genome": [
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "up"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "actuator_vertical"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "empty"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "actuator_horizontal"
+          }
+        },
+        {
+          "condition_type": "position",
+          "condition_params": {
+            "position": "right"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "down",
+            "voxel_type": "soft"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "up"
+          },
+          "action_type": "copy_neighbor",
+          "action_params": {
+            "direction": "right"
+          }
+        }
+      ],
+      "expected_body": [
+        [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        [
+          4,
+          4,
+          2,
+          4,
+          4
+        ],
+        [
+          4,
+          4,
+          4,
+          4,
+          4
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          2
+        ]
+      ]
+    },
+    {
+      "seed": 2,
+      "mutation_seed": 1002,
+      "parent_genome": [
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "soft"
+          }
+        },
+        {
+          "condition_type": "neighbor_count",
+          "condition_params": {
+            "threshold": 3
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "hard"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "left"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "hard"
+          }
+        }
+      ],
+      "child_genome": [
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "left"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "hard"
+          }
+        },
+        {
+          "condition_type": "neighbor_count",
+          "condition_params": {
+            "threshold": 3
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "down",
+            "voxel_type": "soft"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "soft"
+          }
+        }
+      ],
+      "expected_body": [
+        [
+          1,
+          1,
+          1,
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          2,
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          0
+        ],
+        [
+          1,
+          1,
+          1,
+          1,
+          0
+        ]
+      ]
+    },
+    {
+      "seed": 3,
+      "mutation_seed": 1003,
+      "parent_genome": [
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "down",
+            "voxel_type": "actuator_horizontal"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "right"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "right",
+            "voxel_type": "soft"
+          }
+        },
+        {
+          "condition_type": "position",
+          "condition_params": {
+            "position": "boundary"
+          },
+          "action_type": "copy_neighbor",
+          "action_params": {
+            "direction": "right"
+          }
+        },
+        {
+          "condition_type": "neighbor_count",
+          "condition_params": {
+            "threshold": 2
+          },
+          "action_type": "set_hard",
+          "action_params": {}
+        }
+      ],
+      "child_genome": [
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "down",
+            "voxel_type": "actuator_horizontal"
+          }
+        },
+        {
+          "condition_type": "neighbor_count",
+          "condition_params": {
+            "threshold": 2
+          },
+          "action_type": "set_hard",
+          "action_params": {}
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "right"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "right",
+            "voxel_type": "soft"
+          }
+        }
+      ],
+      "expected_body": [
+        [
+          0,
+          2,
+          2,
+          2,
+          2
+        ],
+        [
+          0,
+          2,
+          2,
+          2,
+          2
+        ],
+        [
+          0,
+          2,
+          2,
+          1,
+          2
+        ],
+        [
+          0,
+          2,
+          2,
+          2,
+          2
+        ],
+        [
+          0,
+          2,
+          2,
+          2,
+          2
+        ]
+      ]
+    },
+    {
+      "seed": 4,
+      "mutation_seed": 1004,
+      "parent_genome": [
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "left"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "hard"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "soft"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "left",
+            "voxel_type": "soft"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "right"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "right",
+            "voxel_type": "actuator_vertical"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "empty"
+          },
+          "action_type": "set_empty",
+          "action_params": {}
+        }
+      ],
+      "child_genome": [
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "left"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "up",
+            "voxel_type": "hard"
+          }
+        },
+        {
+          "condition_type": "empty_neighbor",
+          "condition_params": {
+            "direction": "right"
+          },
+          "action_type": "grow_directional",
+          "action_params": {
+            "direction": "right",
+            "voxel_type": "actuator_vertical"
+          }
+        },
+        {
+          "condition_type": "cell_type",
+          "condition_params": {
+            "state": "empty"
+          },
+          "action_type": "set_empty",
+          "action_params": {}
+        }
+      ],
+      "expected_body": [
+        [
+          0,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          0,
+          1,
+          1,
+          4,
+          1
+        ],
+        [
+          0,
+          1,
+          2,
+          1,
+          1
+        ],
+        [
+          0,
+          1,
+          1,
+          1,
+          1
+        ],
+        [
+          0,
+          4,
+          0,
+          4,
+          0
+        ]
+      ]
+    }
+  ]
+}

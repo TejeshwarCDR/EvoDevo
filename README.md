@@ -23,7 +23,7 @@ Everything below the encoder box is written once, so that any observed differenc
 Encoders:
 - **direct** (`evodevo/encoders/direct/`): genome is the body grid itself.
 - **nca** (`evodevo/encoders/nca/`): a neural cellular automaton develops the body over a fixed number of steps from a seed genome.
-- **rule_based** (`evodevo/encoders/rule_based/`): a ported rule-based/grammar generative encoding, verified byte-for-byte equivalent to its reference implementation (`external/rule-based-reference`) across 20 seeded genomes.
+- **rule_based** (`evodevo/encoders/rule_based/`): a ported rule-based/grammar generative encoding. Its original reference implementation was ported in full during initial development; behavioral equivalence to that original was proven once, across 20 seeded genomes, and is now permanently frozen as a regression fixture (`tests/encoders/fixtures/rule_based_port_equivalence.json`) — the original checkout is no longer needed or present (see `docs/decisions.md`). The project's only remaining external dependency is EvoGym at `external/evogym/`.
 
 Every encoder implements the same ABC (`evodevo/encoders/base.py`) — `decode`, `random_genome`, `mutate`, `crossover`/`supports_crossover`, `describe` — and is exercised by a shared contract test suite (`tests/encoders/test_contract.py`) so no arm can silently diverge from the interface the EA relies on. Encoder modules are barred from importing `evogym`, `stable_baselines3`, `gym`, or `torch` directly (enforced by grep in the test/audit process) — anything they need from those packages is exposed instead through `evodevo/morphology/` shared utilities, so an encoder can be exercised end-to-end without the physics simulator.
 
