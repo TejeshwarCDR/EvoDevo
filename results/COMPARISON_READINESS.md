@@ -4,9 +4,9 @@ Verification-only pass over the P1-P7 comparison-fairness workstream. Nothing in
 
 ## Section 0 -- Provenance
 
-- Git commit: `7675f0d4ed901d24e8e23ba9dd47b5acfaba15bf`
-- Working tree clean: **False** (4 dirty path(s) -- see below)
-- Report generated (UTC): `2026-09-15T15:03:53.807138+00:00`
+- Git commit: `1fb8b565df3ed35ec229e9346200c3cceb56f6a0`
+- Working tree clean: **True**
+- Report generated (UTC): `2026-09-15T15:04:33.779866+00:00`
 - evogym commit (`external/evogym`): `f63c649c688adda1accad5f86731aad96606388a`
 - Key package versions:
   - `evogym`: `no __version__ attribute`
@@ -27,12 +27,6 @@ mutation_scale = 1.0
 neighbourhood = 'von_neumann'
 seed = 0
 ```
-
-**Dirty working-tree paths at report generation time:**
-- `docs/decisions.md`
-- `evodevo/analysis/readiness_check.py`
-- `results/COMPARISON_READINESS.md`
-- `tests/analysis/test_readiness_check.py`
 
 ## Section 1 -- Factor infrastructure (P1)
 
@@ -159,7 +153,7 @@ Result: **PASS** -- every comparison figure in report.py/ablation_report.py uses
 Identical across encoders: **True**.
 ## Section 6 -- Random-search control (P7)
 
-Contract suite (`tests/evolution/test_strategy_contract.py`, random_search against every encoder, checked unmodified against the same suite as the EA): `48 passed in 0.37s` -- **PASS**.
+Contract suite (`tests/evolution/test_strategy_contract.py`, random_search against every encoder, checked unmodified against the same suite as the EA): `48 passed in 0.34s` -- **PASS**.
 
 A six-cell ({ea, random_search} x {direct, nca, rule_based}) surrogate benchmark is committed under `results/runs/strategy_comparison/` -- cells found: [('direct', 'ea'), ('direct', 'random_search'), ('nca', 'ea'), ('nca', 'random_search'), ('rule_based', 'ea'), ('rule_based', 'random_search')].
 
