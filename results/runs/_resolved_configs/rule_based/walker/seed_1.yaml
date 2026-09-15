@@ -1,0 +1,17 @@
+seed: 1
+encoder: rule_based
+task: Walker-v0
+population_size: 15
+offspring_size: 15
+eval_budget: 300
+ppo_timesteps: 5000
+ppo_eval_episodes: 1
+output_dir: results/runs
+grid_shape:
+- 5
+- 5
+sentinel_fitness: -10.0
+cache_enabled: false
+use_crossover: false
+min_voxels: 3
+min_actuators: 1

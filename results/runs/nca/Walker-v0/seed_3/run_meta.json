@@ -1,0 +1,48 @@
+{
+  "cache_hit_rate": null,
+  "config": {
+    "cache_enabled": false,
+    "encoder": "nca",
+    "encoder_kwargs": {},
+    "eval_budget": 300,
+    "grid_shape": [
+      5,
+      5
+    ],
+    "min_actuators": 1,
+    "min_voxels": 3,
+    "offspring_size": 15,
+    "output_dir": "results/runs",
+    "population_size": 15,
+    "ppo_eval_episodes": 1,
+    "ppo_timesteps": 5000,
+    "seed": 3,
+    "sentinel_fitness": -10.0,
+    "tag": null,
+    "task": "Walker-v0",
+    "use_crossover": false
+  },
+  "encoder": {
+    "channels": 8,
+    "dev_steps": 10,
+    "genome_length": 792,
+    "grid_shape": [
+      5,
+      5
+    ],
+    "hidden_channels": 3,
+    "hidden_width": 16,
+    "init_scale": 0.5,
+    "mutation_fraction": 1.0,
+    "mutation_sigma": 0.1,
+    "name": "nca",
+    "neighbourhood": "von_neumann"
+  },
+  "git_commit": "9e5cef87f5777b7c66397fea008a53a44229b907",
+  "library_versions": {
+    "numpy": "1.26.4",
+    "pytest": "9.1.1",
+    "python": "3.10.20 (main, Mar  3 2026, 00:49:35) [Clang 21.0.0 (clang-2100.0.123.102)]",
+    "yaml": "6.0.3"
+  }
+}
