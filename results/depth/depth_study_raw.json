@@ -1,0 +1,737 @@
+{
+  "depths": [
+    1,
+    4,
+    39,
+    40
+  ],
+  "layer1": {
+    "nca": {
+      "aggregate": {
+        "mean_first_diff_step_by_distance": {
+          "1": 10.129399585921325,
+          "2": 11.918294515401954,
+          "3": 13.809998960607006,
+          "4": 15.8848
+        },
+        "n": 2000,
+        "never_reached_fraction": 0.36583333333333334,
+        "perturb_cell": [
+          2,
+          2
+        ],
+        "propagation_speed_cells_per_step": 0.019445313223530467,
+        "t_max": 40
+      },
+      "n_reached_pairs": 30440,
+      "never_reached_fraction": 0.36583333333333334,
+      "per_pair_speed_distribution": {
+        "max": 1.0,
+        "mean": 0.3087501139749393,
+        "median": 0.25,
+        "min": 0.025,
+        "p10": 0.08,
+        "p90": 0.6666666666666666,
+        "std": 0.23621785689571034
+      },
+      "step_distribution": {
+        "max": 40,
+        "mean": 12.745663600525624,
+        "median": 10.0,
+        "min": 1,
+        "p10": 3.0,
+        "p90": 28.0,
+        "std": 9.451051237851884
+      }
+    },
+    "rule_based": {
+      "aggregate": {
+        "mean_first_diff_step_by_distance": {
+          "1": 1.3314097279472383,
+          "2": 2.707272727272727,
+          "3": 4.102564102564102,
+          "4": 5.6923076923076925
+        },
+        "n": 2000,
+        "never_reached_fraction": 0.9592083333333333,
+        "perturb_cell": [
+          2,
+          2
+        ],
+        "propagation_speed_cells_per_step": 0.2547939165270073,
+        "t_max": 40
+      },
+      "n_reached_pairs": 1958,
+      "never_reached_fraction": 0.9592083333333333,
+      "per_pair_speed_distribution": {
+        "max": 1.5,
+        "mean": 0.8773276846411948,
+        "median": 1.0,
+        "min": 0.07142857142857142,
+        "p10": 0.5,
+        "p90": 1.0,
+        "std": 0.23801239380429445
+      },
+      "step_distribution": {
+        "max": 17,
+        "mean": 2.0255362614913177,
+        "median": 1.0,
+        "min": 1,
+        "p10": 1.0,
+        "p90": 4.0,
+        "std": 1.7060133965943118
+      }
+    }
+  },
+  "layer2": {
+    "nca": {
+      "idempotence_checked": 1582,
+      "idempotence_violations": 0,
+      "magnitude_analysis": {
+        "fraction_exceeding_100x": 0.0,
+        "fraction_exceeding_10x": 1.0,
+        "initial_reference_scale": 5.0,
+        "mean_final_magnitude": 185.51890068974905,
+        "median_final_magnitude": 182.15298352263898,
+        "median_step_exceeding_100x": null,
+        "median_step_exceeding_10x": 12.0
+      },
+      "mean_settle_step": 34.86725663716814,
+      "median_settle_step": 37.0,
+      "n": 2000,
+      "never_settled_count": 418,
+      "never_settled_fraction": 0.209,
+      "p95_settle_step": 39.0,
+      "settled_count": 1582,
+      "stabilize_by_step_1": 0.0012642225031605564,
+      "stabilize_by_step_2": 0.0037926675094816687,
+      "t_max": 40
+    },
+    "rule_based": {
+      "idempotence_checked": 1769,
+      "idempotence_violations": 0,
+      "mean_settle_step": 2.1995477671000567,
+      "median_settle_step": 2.0,
+      "n": 2000,
+      "never_settled_count": 231,
+      "never_settled_fraction": 0.1155,
+      "p95_settle_step": 5.0,
+      "settled_count": 1769,
+      "stabilize_by_step_1": 0.32786885245901637,
+      "stabilize_by_step_2": 0.7105709440361786,
+      "t_max": 40
+    }
+  },
+  "layer3": {
+    "nca__T1": {
+      "diversity": {
+        "material_entropy_bits": 0.820994349446415,
+        "n": 2000,
+        "unique_valid_body_count": 117,
+        "unique_valid_body_fraction": 0.0585
+      },
+      "light_cone": {
+        "mean_first_diff_step_by_distance": {
+          "1": 1.0
+        },
+        "n": 2000,
+        "never_reached_fraction": 0.9945625,
+        "perturb_cell": [
+          2,
+          2
+        ],
+        "propagation_speed_cells_per_step": null,
+        "t_max": 1
+      },
+      "perturbation_robustness": {
+        "damage_fraction": 0.2,
+        "fraction_unaffected": 0.021,
+        "mean_hamming_distance": 4.8385,
+        "median_hamming_distance": 5.0,
+        "n": 2000
+      },
+      "phenotypic_displacement": {
+        "fraction_zero_displacement": 0.0655,
+        "mean_hamming_distance": 5.4285,
+        "median_hamming_distance": 5.0,
+        "n": 2000
+      },
+      "redundancy": {
+        "genomes_per_unique_phenotype": 3.7735849056603774,
+        "largest_neutral_class_fraction": 0.5695,
+        "largest_neutral_class_size": 1139,
+        "n": 2000,
+        "unique_phenotype_count": 530
+      },
+      "settling_profile": {
+        "mean_settle_step": 0.0,
+        "n": 2000,
+        "never_settled_count": 866,
+        "never_settled_fraction": 0.433,
+        "settled_count": 1134,
+        "settled_fraction": 0.567,
+        "t_max": 1
+      },
+      "validity_rate": {
+        "degenerate_count": 50,
+        "degenerate_fraction": 0.025,
+        "failure_reason_counts": {
+          "disconnected": 510,
+          "no_actuator": 1504,
+          "too_few_voxels": 1456
+        },
+        "n": 2000,
+        "valid_rate": 0.053
+      }
+    },
+    "nca__T39": {
+      "diversity": {
+        "material_entropy_bits": 2.3148539869768125,
+        "n": 2000,
+        "unique_valid_body_count": 1314,
+        "unique_valid_body_fraction": 0.657
+      },
+      "light_cone": {
+        "mean_first_diff_step_by_distance": {
+          "1": 10.052,
+          "2": 11.80545229244114,
+          "3": 13.852097130242825,
+          "4": 15.752522825564633
+        },
+        "n": 2000,
+        "never_reached_fraction": 0.37675,
+        "perturb_cell": [
+          2,
+          2
+        ],
+        "propagation_speed_cells_per_step": 0.02020687470961552,
+        "t_max": 39
+      },
+      "perturbation_robustness": {
+        "damage_fraction": 0.2,
+        "fraction_unaffected": 0.016,
+        "mean_hamming_distance": 5.3755,
+        "median_hamming_distance": 5.0,
+        "n": 2000
+      },
+      "phenotypic_displacement": {
+        "fraction_zero_displacement": 0.0015,
+        "mean_hamming_distance": 12.276,
+        "median_hamming_distance": 12.0,
+        "n": 2000
+      },
+      "redundancy": {
+        "genomes_per_unique_phenotype": 1.0101010101010102,
+        "largest_neutral_class_fraction": 0.0065,
+        "largest_neutral_class_size": 13,
+        "n": 2000,
+        "unique_phenotype_count": 1980
+      },
+      "settling_profile": {
+        "mean_settle_step": 34.1525198938992,
+        "n": 2000,
+        "never_settled_count": 492,
+        "never_settled_fraction": 0.246,
+        "settled_count": 1508,
+        "settled_fraction": 0.754,
+        "t_max": 39
+      },
+      "validity_rate": {
+        "degenerate_count": 28,
+        "degenerate_fraction": 0.014,
+        "failure_reason_counts": {
+          "disconnected": 633,
+          "no_actuator": 117,
+          "too_few_voxels": 37
+        },
+        "n": 2000,
+        "valid_rate": 0.6505
+      }
+    },
+    "nca__T4": {
+      "diversity": {
+        "material_entropy_bits": 2.118169532000361,
+        "n": 2000,
+        "unique_valid_body_count": 905,
+        "unique_valid_body_fraction": 0.4525
+      },
+      "light_cone": {
+        "mean_first_diff_step_by_distance": {
+          "1": 2.7217782217782216,
+          "2": 3.137337253254935,
+          "3": 3.6278606965174127,
+          "4": 4.0
+        },
+        "n": 2000,
+        "never_reached_fraction": 0.8853541666666667,
+        "perturb_cell": [
+          2,
+          2
+        ],
+        "propagation_speed_cells_per_step": 0.34555935509950436,
+        "t_max": 4
+      },
+      "perturbation_robustness": {
+        "damage_fraction": 0.2,
+        "fraction_unaffected": 0.0235,
+        "mean_hamming_distance": 5.399,
+        "median_hamming_distance": 5.0,
+        "n": 2000
+      },
+      "phenotypic_displacement": {
+        "fraction_zero_displacement": 0.0135,
+        "mean_hamming_distance": 7.8895,
+        "median_hamming_distance": 8.0,
+        "n": 2000
+      },
+      "redundancy": {
+        "genomes_per_unique_phenotype": 1.0781671159029649,
+        "largest_neutral_class_fraction": 0.0385,
+        "largest_neutral_class_size": 77,
+        "n": 2000,
+        "unique_phenotype_count": 1855
+      },
+      "settling_profile": {
+        "mean_settle_step": 2.239130434782609,
+        "n": 2000,
+        "never_settled_count": 1816,
+        "never_settled_fraction": 0.908,
+        "settled_count": 184,
+        "settled_fraction": 0.092,
+        "t_max": 4
+      },
+      "validity_rate": {
+        "degenerate_count": 92,
+        "degenerate_fraction": 0.046,
+        "failure_reason_counts": {
+          "disconnected": 915,
+          "no_actuator": 421,
+          "too_few_voxels": 201
+        },
+        "n": 2000,
+        "valid_rate": 0.438
+      }
+    },
+    "nca__T40": {
+      "diversity": {
+        "material_entropy_bits": 2.315070411320602,
+        "n": 2000,
+        "unique_valid_body_count": 1333,
+        "unique_valid_body_fraction": 0.6665
+      },
+      "light_cone": {
+        "mean_first_diff_step_by_distance": {
+          "1": 10.17648077589193,
+          "2": 11.947173748103186,
+          "3": 14.062043795620438,
+          "4": 16.02897862232779
+        },
+        "n": 2000,
+        "never_reached_fraction": 0.37254166666666666,
+        "perturb_cell": [
+          2,
+          2
+        ],
+        "propagation_speed_cells_per_step": 0.019766299589457637,
+        "t_max": 40
+      },
+      "perturbation_robustness": {
+        "damage_fraction": 0.2,
+        "fraction_unaffected": 0.0135,
+        "mean_hamming_distance": 5.2575,
+        "median_hamming_distance": 5.0,
+        "n": 2000
+      },
+      "phenotypic_displacement": {
+        "fraction_zero_displacement": 0.0025,
+        "mean_hamming_distance": 12.4535,
+        "median_hamming_distance": 13.0,
+        "n": 2000
+      },
+      "redundancy": {
+        "genomes_per_unique_phenotype": 1.0065425264217414,
+        "largest_neutral_class_fraction": 0.004,
+        "largest_neutral_class_size": 8,
+        "n": 2000,
+        "unique_phenotype_count": 1987
+      },
+      "settling_profile": {
+        "mean_settle_step": 35.18493150684932,
+        "n": 2000,
+        "never_settled_count": 394,
+        "never_settled_fraction": 0.197,
+        "settled_count": 1606,
+        "settled_fraction": 0.803,
+        "t_max": 40
+      },
+      "validity_rate": {
+        "degenerate_count": 28,
+        "degenerate_fraction": 0.014,
+        "failure_reason_counts": {
+          "disconnected": 625,
+          "no_actuator": 117,
+          "too_few_voxels": 38
+        },
+        "n": 2000,
+        "valid_rate": 0.654
+      }
+    },
+    "rule_based__T1": {
+      "diversity": {
+        "material_entropy_bits": 2.2868528056737345,
+        "n": 2000,
+        "unique_valid_body_count": 597,
+        "unique_valid_body_fraction": 0.2985
+      },
+      "light_cone": {
+        "mean_first_diff_step_by_distance": {
+          "1": 1.0
+        },
+        "n": 2000,
+        "never_reached_fraction": 0.9800625,
+        "perturb_cell": [
+          2,
+          2
+        ],
+        "propagation_speed_cells_per_step": null,
+        "t_max": 1
+      },
+      "perturbation_robustness": {
+        "damage_fraction": 0.2,
+        "fraction_unaffected": 0.079,
+        "mean_hamming_distance": 4.196,
+        "median_hamming_distance": 4.0,
+        "n": 2000
+      },
+      "phenotypic_displacement": {
+        "fraction_zero_displacement": 0.584,
+        "mean_hamming_distance": 4.9385,
+        "median_hamming_distance": 0.0,
+        "n": 2000
+      },
+      "redundancy": {
+        "genomes_per_unique_phenotype": 2.070393374741201,
+        "largest_neutral_class_fraction": 0.023,
+        "largest_neutral_class_size": 46,
+        "n": 2000,
+        "unique_phenotype_count": 966
+      },
+      "settling_profile": {
+        "mean_settle_step": null,
+        "n": 2000,
+        "never_settled_count": 2000,
+        "never_settled_fraction": 1.0,
+        "settled_count": 0,
+        "settled_fraction": 0.0,
+        "t_max": 1
+      },
+      "validity_rate": {
+        "degenerate_count": 127,
+        "degenerate_fraction": 0.0635,
+        "failure_reason_counts": {
+          "disconnected": 160,
+          "no_actuator": 790,
+          "too_few_voxels": 135
+        },
+        "n": 2000,
+        "valid_rate": 0.549
+      }
+    },
+    "rule_based__T39": {
+      "diversity": {
+        "material_entropy_bits": 2.315790991674823,
+        "n": 2000,
+        "unique_valid_body_count": 832,
+        "unique_valid_body_fraction": 0.416
+      },
+      "light_cone": {
+        "mean_first_diff_step_by_distance": {
+          "1": 1.3723051409618574,
+          "2": 3.041522491349481,
+          "3": 5.094972067039106,
+          "4": 4.775
+        },
+        "n": 2000,
+        "never_reached_fraction": 0.9582708333333333,
+        "perturb_cell": [
+          2,
+          2
+        ],
+        "propagation_speed_cells_per_step": 0.12024575745607256,
+        "t_max": 39
+      },
+      "perturbation_robustness": {
+        "damage_fraction": 0.2,
+        "fraction_unaffected": 0.2195,
+        "mean_hamming_distance": 2.954,
+        "median_hamming_distance": 3.0,
+        "n": 2000
+      },
+      "phenotypic_displacement": {
+        "fraction_zero_displacement": 0.4845,
+        "mean_hamming_distance": 5.636,
+        "median_hamming_distance": 1.0,
+        "n": 2000
+      },
+      "redundancy": {
+        "genomes_per_unique_phenotype": 1.7777777777777777,
+        "largest_neutral_class_fraction": 0.0435,
+        "largest_neutral_class_size": 87,
+        "n": 2000,
+        "unique_phenotype_count": 1125
+      },
+      "settling_profile": {
+        "mean_settle_step": 2.261986301369863,
+        "n": 2000,
+        "never_settled_count": 248,
+        "never_settled_fraction": 0.124,
+        "settled_count": 1752,
+        "settled_fraction": 0.876,
+        "t_max": 39
+      },
+      "validity_rate": {
+        "degenerate_count": 360,
+        "degenerate_fraction": 0.18,
+        "failure_reason_counts": {
+          "disconnected": 157,
+          "no_actuator": 770,
+          "too_few_voxels": 118
+        },
+        "n": 2000,
+        "valid_rate": 0.593
+      }
+    },
+    "rule_based__T4": {
+      "diversity": {
+        "material_entropy_bits": 2.309648575007006,
+        "n": 2000,
+        "unique_valid_body_count": 826,
+        "unique_valid_body_fraction": 0.413
+      },
+      "light_cone": {
+        "mean_first_diff_step_by_distance": {
+          "1": 1.2508417508417509,
+          "2": 2.3870967741935485,
+          "3": 3.1023622047244093,
+          "4": 3.84
+        },
+        "n": 2000,
+        "never_reached_fraction": 0.9611041666666666,
+        "perturb_cell": [
+          2,
+          2
+        ],
+        "propagation_speed_cells_per_step": 0.5846078579232133,
+        "t_max": 4
+      },
+      "perturbation_robustness": {
+        "damage_fraction": 0.2,
+        "fraction_unaffected": 0.1855,
+        "mean_hamming_distance": 2.9135,
+        "median_hamming_distance": 3.0,
+        "n": 2000
+      },
+      "phenotypic_displacement": {
+        "fraction_zero_displacement": 0.475,
+        "mean_hamming_distance": 5.7595,
+        "median_hamming_distance": 1.0,
+        "n": 2000
+      },
+      "redundancy": {
+        "genomes_per_unique_phenotype": 1.6920473773265652,
+        "largest_neutral_class_fraction": 0.0525,
+        "largest_neutral_class_size": 105,
+        "n": 2000,
+        "unique_phenotype_count": 1182
+      },
+      "settling_profile": {
+        "mean_settle_step": 1.812624584717608,
+        "n": 2000,
+        "never_settled_count": 495,
+        "never_settled_fraction": 0.2475,
+        "settled_count": 1505,
+        "settled_fraction": 0.7525,
+        "t_max": 4
+      },
+      "validity_rate": {
+        "degenerate_count": 350,
+        "degenerate_fraction": 0.175,
+        "failure_reason_counts": {
+          "disconnected": 203,
+          "no_actuator": 796,
+          "too_few_voxels": 156
+        },
+        "n": 2000,
+        "valid_rate": 0.571
+      }
+    },
+    "rule_based__T40": {
+      "diversity": {
+        "material_entropy_bits": 2.3099817451628324,
+        "n": 2000,
+        "unique_valid_body_count": 808,
+        "unique_valid_body_fraction": 0.404
+      },
+      "light_cone": {
+        "mean_first_diff_step_by_distance": {
+          "1": 1.3723051409618574,
+          "2": 3.041522491349481,
+          "3": 5.094972067039106,
+          "4": 4.775
+        },
+        "n": 2000,
+        "never_reached_fraction": 0.9582708333333333,
+        "perturb_cell": [
+          2,
+          2
+        ],
+        "propagation_speed_cells_per_step": 0.12024575745607256,
+        "t_max": 40
+      },
+      "perturbation_robustness": {
+        "damage_fraction": 0.2,
+        "fraction_unaffected": 0.2145,
+        "mean_hamming_distance": 2.9985,
+        "median_hamming_distance": 3.0,
+        "n": 2000
+      },
+      "phenotypic_displacement": {
+        "fraction_zero_displacement": 0.4785,
+        "mean_hamming_distance": 5.769,
+        "median_hamming_distance": 1.0,
+        "n": 2000
+      },
+      "redundancy": {
+        "genomes_per_unique_phenotype": 1.7793594306049823,
+        "largest_neutral_class_fraction": 0.053,
+        "largest_neutral_class_size": 106,
+        "n": 2000,
+        "unique_phenotype_count": 1124
+      },
+      "settling_profile": {
+        "mean_settle_step": 2.261986301369863,
+        "n": 2000,
+        "never_settled_count": 248,
+        "never_settled_fraction": 0.124,
+        "settled_count": 1752,
+        "settled_fraction": 0.876,
+        "t_max": 40
+      },
+      "validity_rate": {
+        "degenerate_count": 374,
+        "degenerate_fraction": 0.187,
+        "failure_reason_counts": {
+          "disconnected": 202,
+          "no_actuator": 804,
+          "too_few_voxels": 156
+        },
+        "n": 2000,
+        "valid_rate": 0.57
+      }
+    }
+  },
+  "non_settling_diagnosis": {
+    "counts": {
+      "PLATEAUED_OSCILLATING": 2,
+      "SLOW_BUT_MONOTONE": 0,
+      "STILL_GROWING": 416
+    },
+    "examples": {
+      "PLATEAUED_OSCILLATING": [
+        {
+          "flip_steps_last5": [
+            36,
+            38,
+            39,
+            40
+          ],
+          "magnitude_last5": [
+            165.76096159831948,
+            166.49393871882995,
+            166.20718853476035,
+            165.55808956209665,
+            164.90208989082
+          ],
+          "magnitude_step35": 162.85728972393187,
+          "magnitude_step40": 164.90208989082,
+          "total_flips": 26
+        },
+        {
+          "flip_steps_last5": [
+            37,
+            40
+          ],
+          "magnitude_last5": [
+            128.05875936269072,
+            128.5435057596237,
+            129.00848367650087,
+            129.47149341309077,
+            129.93108632046318
+          ],
+          "magnitude_step35": 127.23551893175315,
+          "magnitude_step40": 129.93108632046318,
+          "total_flips": 25
+        }
+      ],
+      "SLOW_BUT_MONOTONE": [],
+      "STILL_GROWING": [
+        {
+          "flip_steps_last5": [
+            36,
+            38,
+            40
+          ],
+          "magnitude_last5": [
+            113.7000526796424,
+            117.61714560834564,
+            121.53423853704888,
+            125.45133146575212,
+            129.36842439445536
+          ],
+          "magnitude_step35": 109.78295975093916,
+          "magnitude_step40": 129.36842439445536,
+          "total_flips": 21
+        },
+        {
+          "flip_steps_last5": [
+            38,
+            40
+          ],
+          "magnitude_last5": [
+            137.5275625613787,
+            140.70224446101957,
+            143.87692636066046,
+            147.05160826030135,
+            150.22629015994224
+          ],
+          "magnitude_step35": 134.3528806617378,
+          "magnitude_step40": 150.22629015994224,
+          "total_flips": 21
+        },
+        {
+          "flip_steps_last5": [
+            40
+          ],
+          "magnitude_last5": [
+            158.50098695629694,
+            163.10583558943793,
+            167.4771837567727,
+            171.8467688201647,
+            176.21634753168263
+          ],
+          "magnitude_step35": 154.07033131746115,
+          "magnitude_step40": 176.21634753168263,
+          "total_flips": 17
+        }
+      ]
+    },
+    "fractions": {
+      "PLATEAUED_OSCILLATING": 0.004784688995215311,
+      "SLOW_BUT_MONOTONE": 0.0,
+      "STILL_GROWING": 0.9952153110047847
+    },
+    "total_never_settled": 418
+  },
+  "provisional": false,
+  "t_primary": 39
+}
