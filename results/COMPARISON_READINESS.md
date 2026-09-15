@@ -4,9 +4,9 @@ Verification-only pass over the P1-P7 comparison-fairness workstream. Nothing in
 
 ## Section 0 -- Provenance
 
-- Git commit: `1fb8b565df3ed35ec229e9346200c3cceb56f6a0`
-- Working tree clean: **True**
-- Report generated (UTC): `2026-09-15T15:04:33.779866+00:00`
+- Git commit: `55c15acd3d3166d210575f6eccac50cba544aa60`
+- Working tree clean: **False** (4 dirty path(s) -- see below)
+- Report generated (UTC): `2026-09-15T15:13:28.589984+00:00`
 - evogym commit (`external/evogym`): `f63c649c688adda1accad5f86731aad96606388a`
 - Key package versions:
   - `evogym`: `no __version__ attribute`
@@ -18,15 +18,21 @@ Verification-only pass over the P1-P7 comparison-fairness workstream. Nothing in
   - `python`: `3.10.20`
   - `yaml`: `6.0.3`
 
-**Resolved ExperimentFactors for the primary configuration** (P3 init_condition x P4 T_primary; mutation strength is calibrated per-arm in P5 via each encoder's own constructor kwarg, not via `mutation_scale` below):
+**Resolved ExperimentFactors for the primary configuration** (P3 init_condition x P4 T_primary, `dev_steps` read directly from results/depth/depth_study_raw.json's t_primary -- the SAME source Section 3 derives its T_primary from, so these two sections cannot diverge; mutation strength is calibrated per-arm in P5 via each encoder's own constructor kwarg, not via `mutation_scale` below):
 ```
-dev_steps = 20
+dev_steps = 39
 hidden_channels = 3
 init_condition = 'center_seed'
 mutation_scale = 1.0
 neighbourhood = 'von_neumann'
 seed = 0
 ```
+
+**Dirty working-tree paths at report generation time:**
+- `evodevo/analysis/readiness_check.py`
+- `results/COMPARISON_READINESS.md`
+- `results/runs/strategy_comparison/DECOMPOSITION.md`
+- `tests/analysis/test_readiness_check.py`
 
 ## Section 1 -- Factor infrastructure (P1)
 
@@ -153,7 +159,7 @@ Result: **PASS** -- every comparison figure in report.py/ablation_report.py uses
 Identical across encoders: **True**.
 ## Section 6 -- Random-search control (P7)
 
-Contract suite (`tests/evolution/test_strategy_contract.py`, random_search against every encoder, checked unmodified against the same suite as the EA): `48 passed in 0.34s` -- **PASS**.
+Contract suite (`tests/evolution/test_strategy_contract.py`, random_search against every encoder, checked unmodified against the same suite as the EA): `48 passed in 0.37s` -- **PASS**.
 
 A six-cell ({ea, random_search} x {direct, nca, rule_based}) surrogate benchmark is committed under `results/runs/strategy_comparison/` -- cells found: [('direct', 'ea'), ('direct', 'random_search'), ('nca', 'ea'), ('nca', 'random_search'), ('rule_based', 'ea'), ('rule_based', 'random_search')].
 
@@ -175,6 +181,8 @@ A six-cell ({ea, random_search} x {direct, nca, rule_based}) surrogate benchmark
 **rule_based's search-efficiency result under `evals_spent` is NOT interpretable**: its EA-minus-random advantage (0.0000) does not exceed the seed-to-seed noise floor (0.0000, from 3 EA seed(s) / 3 random_search seed(s)) -- do not report this encoding's search-efficiency claim under this counter alongside interpretable ones without this caveat.
 **rule_based's search-efficiency result under `evals_valid` is NOT interpretable**: its EA-minus-random advantage (0.0000) does not exceed the seed-to-seed noise floor (0.0000, from 3 EA seed(s) / 3 random_search seed(s)) -- do not report this encoding's search-efficiency claim under this counter alongside interpretable ones without this caveat.
 
+
+**Investigated: nca/rule_based's 26.0000 +/- 0.0000 (zero across-seed variance) is a confirmed, explained mechanism, not a budget/caching/strategy bug.** `evaluate_body_surrogate`'s fitness formula, `(h_act_count + v_act_count) + horizontal_symmetry_score`, has a hard ceiling of exactly `25 + 1.0 = 26.0` on a 5x5 grid (every cell an actuator, left-right symmetric). Both `nca` and `rule_based` reach this ceiling reliably within eval_budget=300 regardless of strategy or seed (confirmed directly against `results/runs/strategy_comparison/nca/Walker-v0/*/best_body.npz`: each is an all-actuator grid) -- rule-based's language can fill the whole grid with one `SET_ACTUATOR_*` rule, and NCA's argmax frequently saturates to one dominant channel. `direct`'s genome instead draws each cell i.i.d. with `empty_prob=0.6`, making an all-25-actuator genome astronomically unreachable in 300 evaluations, which is why it alone shows normal, non-degenerate variance. Seeds were confirmed distinct and correctly threaded (0, 1, 2); per-evaluation fitness values within each run are non-degenerate -- only the final BEST value saturates at the shared ceiling. See `results/runs/strategy_comparison/DECOMPOSITION.md` for the full investigation.
 ## Section 7 -- Outstanding risk register
 
 Written adversarially, as a reviewer trying to reject the paper. Understating a risk here is the worst possible outcome of this report.
@@ -186,13 +194,12 @@ Written adversarially, as a reviewer trying to reject the paper. Understating a 
 | 3 | Non-settling NCA genomes are dominated by STILL_GROWING, a genuine instability rather than an honest slow-settling tail | **MAJOR** | 416/418 (0.9952) of never-settled genomes classified as STILL_GROWING (see results/depth/DEPTH_STUDY.md's 'Diagnosis of non-settling genomes'). | Evidence for NCA update-rule/architecture work: a larger T_max would NOT be expected to resolve this fraction, since the dominant failure mode is active divergence, not slow convergence. |
 | 4 | NCA's argmax readout and its continuous state settle on very different timescales (median settle_step=37 vs. rule_based's 2) | **MAJOR** | nca stabilize_by_step_2=0.0038 (i.e. NOT vestigial -- development genuinely continues deciding the phenotype for most of the horizon), vs. rule_based stabilize_by_step_2=0.7106. The two arms' own natural developmental timescales differ by roughly an order of magnitude. | Any single shared T_primary necessarily overshoots one arm's natural timescale while potentially undershooting the other's -- the depth-sweep (Layer 3) results must be read alongside this, not the single-T primary comparison alone. |
 | 5 | Mutation displacement tails (IQR) do not match despite matched means | **MAJOR** | IQRs at calibration: {'direct': 2.0, 'nca': 4.0, 'rule_based': 9.0} (spread=7.0000 cells) despite all three arms targeting the same D*=4.9915. | Any claim that mutation strength is 'equalised' across arms in the P5 sense of matched phenotypic displacement is true only for the mean, not the distribution -- search-dynamics comparisons that depend on mutation's tail behaviour remain confounded. |
-| 6 | 1 row(s) in docs/decisions.md still marked OPEN | **MAJOR** | Open rows: Invalid-genome policy. Per decisions.md's own header: "No row may remain 'OPEN' in the final submission." | The project's own stated completion gate for docs/decisions.md is not met. |
-| 7 | Residual between-arm validity gap after initial-condition control | **MINOR** | At center_seed (the chosen primary condition): nca valid_rate=0.5745, rule_based valid_rate=0.5710, gap=0.0035. | Whether validity-rate differences in the primary comparison can be attributed to the encoding at all, vs. residual noise/confound not resolved by the P3 initial-condition control. |
-| 8 | D* landed outside the originally recommended 2-3 cell band | **MINOR** | D*=4.9915, driven by nca's own grid floor (mutation_sigma=0.01 already producing ~3.44 cells of displacement) rather than the 2-3 recommendation. | The mutation-strength calibration's absolute scale is higher than originally anticipated; does not by itself invalidate the calibration (it was chosen on evidence, not fitted to the recommendation) but changes the EA's effective exploration radius versus what a naive reading of the recommendation would assume. |
-| 9 | Several encoder parameters remain hardcoded/constructor-default rather than crossed factors | **MINOR** | DirectEncoder.empty_prob (default 0.6), NCAEncoder.hidden_width (default 16), RuleBasedEncoder's MIN_RULES/MAX_RULES genome-length bounds, HARD_MAX_ITERATIONS=40 -- none of these are swept or asserted identical across arms the way dev_steps/init_condition/mutation strength are. | Any future claim that 'every phenotype-affecting parameter is controlled' should be read as 'every parameter this workstream identified and promoted' -- not a literally exhaustive audit. |
-| 10 | full_uniform (perfectly symmetric initial condition) differentiates for both developmental arms, contradicting the naive locality prediction | **MINOR** | nca unique_valid_body_fraction=0.7150, rule_based=0.0390 under full_uniform -- both far from zero. Investigated and attributed to non-isotropic per-genome update rules, not a hidden implementation asymmetry (see Section 2). | The original FullUniform docstring's locality claim was corrected, not merely re-confirmed -- readers of that module's history should not assume the original claim as originally written is accurate. |
+| 6 | Residual between-arm validity gap after initial-condition control | **MINOR** | At center_seed (the chosen primary condition): nca valid_rate=0.5745, rule_based valid_rate=0.5710, gap=0.0035. | Whether validity-rate differences in the primary comparison can be attributed to the encoding at all, vs. residual noise/confound not resolved by the P3 initial-condition control. |
+| 7 | D* landed outside the originally recommended 2-3 cell band | **MINOR** | D*=4.9915, driven by nca's own grid floor (mutation_sigma=0.01 already producing ~3.44 cells of displacement) rather than the 2-3 recommendation. | The mutation-strength calibration's absolute scale is higher than originally anticipated; does not by itself invalidate the calibration (it was chosen on evidence, not fitted to the recommendation) but changes the EA's effective exploration radius versus what a naive reading of the recommendation would assume. |
+| 8 | Several encoder parameters remain hardcoded/constructor-default rather than crossed factors | **MINOR** | DirectEncoder.empty_prob (default 0.6), NCAEncoder.hidden_width (default 16), RuleBasedEncoder's MIN_RULES/MAX_RULES genome-length bounds, HARD_MAX_ITERATIONS=40 -- none of these are swept or asserted identical across arms the way dev_steps/init_condition/mutation strength are. | Any future claim that 'every phenotype-affecting parameter is controlled' should be read as 'every parameter this workstream identified and promoted' -- not a literally exhaustive audit. |
+| 9 | full_uniform (perfectly symmetric initial condition) differentiates for both developmental arms, contradicting the naive locality prediction | **MINOR** | nca unique_valid_body_fraction=0.7150, rule_based=0.0390 under full_uniform -- both far from zero. Investigated and attributed to non-isotropic per-genome update rules, not a hidden implementation asymmetry (see Section 2). | The original FullUniform docstring's locality claim was corrected, not merely re-confirmed -- readers of that module's history should not assume the original claim as originally written is accurate. |
 
-**Totals**: 1 BLOCKER, 5 MAJOR, 4 MINOR.
+**Totals**: 1 BLOCKER, 4 MAJOR, 4 MINOR.
 ## Section 8 -- Verdict
 
 ### What is now demonstrably fair across arms

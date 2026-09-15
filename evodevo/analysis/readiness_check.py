@@ -75,7 +75,7 @@ def _run(cmd, cwd=REPO_ROOT):
 # ---------------------------------------------------------------------------
 
 
-def gather_provenance() -> dict:
+def gather_provenance(t_primary: int = None) -> dict:
     commit = git_commit_hash()
     dirty_files = git_dirty_files()
 
@@ -101,12 +101,18 @@ def gather_provenance() -> dict:
         versions["evogym"] = "not installed"
 
     # The primary configuration's ExperimentFactors, per the P3/P4 decisions
-    # recorded in docs/decisions.md: init_condition=center_seed, T_primary=20.
-    # mutation_scale stays at its 1.0 default -- P5 calibrates mutation
-    # strength via each arm's OWN constructor kwarg (mutation_rate/
-    # mutation_sigma), not via ExperimentFactors.mutation_scale, so this
-    # field is not the P5 calibration's carrier and is reported as such.
-    primary_factors = ExperimentFactors(dev_steps=20, init_condition="center_seed", seed=0)
+    # recorded in docs/decisions.md: init_condition=center_seed, dev_steps=
+    # T_primary. dev_steps is NOT a second hardcoded literal here -- it is
+    # the exact `t_primary` value Section 3 derives from
+    # results/depth/depth_study_raw.json, passed in by the caller, so these
+    # two sections cannot diverge again (see test_readiness_check.py's
+    # test_section0_dev_steps_matches_section3_t_primary). If the depth
+    # study artifact is missing, t_primary is None here and that is
+    # reported explicitly rather than silently substituting a guess.
+    if t_primary is None:
+        primary_factors = None
+    else:
+        primary_factors = ExperimentFactors(dev_steps=t_primary, init_condition="center_seed", seed=0)
 
     return {
         "commit": commit,
@@ -132,13 +138,21 @@ def render_section0(prov: dict) -> str:
         lines.append(f"  - `{lib}`: `{version}`")
     lines.append("")
     lines.append("**Resolved ExperimentFactors for the primary configuration** "
-                 "(P3 init_condition x P4 T_primary; mutation strength is calibrated "
-                 "per-arm in P5 via each encoder's own constructor kwarg, not via "
-                 "`mutation_scale` below):")
-    lines.append("```")
-    for field, value in sorted(vars(prov["primary_factors"]).items()):
-        lines.append(f"{field} = {value!r}")
-    lines.append("```")
+                 "(P3 init_condition x P4 T_primary, `dev_steps` read directly from "
+                 "results/depth/depth_study_raw.json's t_primary -- the SAME source Section 3 "
+                 "derives its T_primary from, so these two sections cannot diverge; mutation "
+                 "strength is calibrated per-arm in P5 via each encoder's own constructor "
+                 "kwarg, not via `mutation_scale` below):")
+    if prov["primary_factors"] is None:
+        lines.append(
+            "**MISSING**: results/depth/depth_study_raw.json not found, so T_primary/dev_steps "
+            "cannot be resolved here -- see Section 3.\n"
+        )
+    else:
+        lines.append("```")
+        for field, value in sorted(vars(prov["primary_factors"]).items()):
+            lines.append(f"{field} = {value!r}")
+        lines.append("```")
     if not prov["clean"]:
         lines.append("\n**Dirty working-tree paths at report generation time:**")
         for f in prov["dirty_files"]:
@@ -665,6 +679,22 @@ def render_section6(p7: dict) -> str:
         )
         lines.append("### EA-minus-random decomposition (real committed data, not a unit test)\n")
         lines.append(p7["decomposition_report"] or "*(decomposition report could not be generated)*")
+        lines.append(
+            "\n**Investigated: nca/rule_based's 26.0000 +/- 0.0000 (zero across-seed variance) is a "
+            "confirmed, explained mechanism, not a budget/caching/strategy bug.** "
+            "`evaluate_body_surrogate`'s fitness formula, `(h_act_count + v_act_count) + "
+            "horizontal_symmetry_score`, has a hard ceiling of exactly `25 + 1.0 = 26.0` on a 5x5 grid "
+            "(every cell an actuator, left-right symmetric). Both `nca` and `rule_based` reach this ceiling "
+            "reliably within eval_budget=300 regardless of strategy or seed (confirmed directly against "
+            "`results/runs/strategy_comparison/nca/Walker-v0/*/best_body.npz`: each is an all-actuator "
+            "grid) -- rule-based's language can fill the whole grid with one `SET_ACTUATOR_*` rule, and "
+            "NCA's argmax frequently saturates to one dominant channel. `direct`'s genome instead draws "
+            "each cell i.i.d. with `empty_prob=0.6`, making an all-25-actuator genome astronomically "
+            "unreachable in 300 evaluations, which is why it alone shows normal, non-degenerate variance. "
+            "Seeds were confirmed distinct and correctly threaded (0, 1, 2); per-evaluation fitness values "
+            "within each run are non-degenerate -- only the final BEST value saturates at the shared "
+            "ceiling. See `results/runs/strategy_comparison/DECOMPOSITION.md` for the full investigation."
+        )
     else:
         lines.append(
             "**No six-cell ({ea, random_search} x {direct, nca, rule_based}) benchmark output is committed "
@@ -683,16 +713,38 @@ def render_section6(p7: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
+_DECISIONS_TABLE_COLUMNS = ("Date", "Decision", "Options considered", "Chosen", "Rationale")
+_CHOSEN_COLUMN_INDEX = _DECISIONS_TABLE_COLUMNS.index("Chosen")
+
+
 def scan_decisions_open_rows() -> list:
+    """A row is OPEN only if its **Chosen** column is the bare marker
+    'OPEN' -- not if the word "OPEN" merely appears anywhere in the row
+    (e.g. a resolved row's own rationale prose explaining that it *used to*
+    be OPEN, which is legitimate text and must not be misdetected as a
+    still-open row). This is a fix, not a workaround: an earlier version of
+    this function matched "OPEN" anywhere on the line and mis-flagged the
+    resolved "Invalid-genome policy" row purely because its rationale
+    discusses its own prior OPEN status."""
     if not os.path.exists(DECISIONS_MD):
         return []
     open_rows = []
     with open(DECISIONS_MD) as f:
         for line in f:
-            if line.strip().startswith("|") and "OPEN" in line:
-                cells = [c.strip() for c in line.strip().strip("|").split("|")]
-                if len(cells) >= 2:
-                    open_rows.append(cells[1])
+            stripped = line.strip()
+            if not stripped.startswith("|"):
+                continue
+            cells = [c.strip() for c in stripped.strip("|").split("|")]
+            if len(cells) <= _CHOSEN_COLUMN_INDEX:
+                continue
+            if cells[0] == "Date":
+                continue  # header row
+            if all(c != "" and set(c) <= {"-"} for c in cells):
+                continue  # markdown separator row (e.g. "|---|---|---|---|---|") --
+                # deliberately NOT matched by a blank Date cell, which real
+                # decisions.md rows legitimately have (undated decisions)
+            if cells[_CHOSEN_COLUMN_INDEX] == "OPEN":
+                open_rows.append(cells[1] if len(cells) > 1 else "(unnamed row)")
     return open_rows
 
 
@@ -1023,11 +1075,15 @@ def render_section8(p1, p6, p7, risks, depth) -> str:
 
 
 def run_readiness_check(output_path: str = OUTPUT_PATH) -> str:
-    provenance = gather_provenance()
-    p1 = run_p1_checks()
     init_study = _read_json(INIT_STUDY_RAW)
     depth = _read_json(DEPTH_STUDY_RAW)
     mutation = _read_json(MUTATION_CALIB_RAW)
+
+    # depth_study_raw.json is read FIRST so Section 0's dev_steps and
+    # Section 3's T_primary are provably the same read of the same file,
+    # not two independently maintained values.
+    provenance = gather_provenance(t_primary=depth["t_primary"] if depth else None)
+    p1 = run_p1_checks()
     p6 = run_p6_checks()
     p7 = run_p7_checks()
     decisions_open_rows = scan_decisions_open_rows()
