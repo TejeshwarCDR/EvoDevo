@@ -12,3 +12,7 @@ results/**/controller/*.zip
 # a submodule; its internals (including compiled build artifacts) are
 # intentionally excluded from this outer repo.
 external/evogym/
+
+# Agent tooling scratch state (isolated worktrees created by coding-agent
+# sessions), not project source.
+.claude/
