@@ -13,13 +13,17 @@ permanently proven by tests/encoders/fixtures/rule_based_port_equivalence.json.
 """
 from __future__ import annotations
 
+import dataclasses
+
 import random as _global_random
 from typing import Any, List
 
 import numpy as np
 
+from evodevo.core.factors import ExperimentFactors
+from evodevo.core.initial_conditions import get_initial_condition
 from evodevo.encoders.base import Encoder
-from evodevo.encoders.rule_based._rules.interpreter import DEFAULT_MAX_ITERATIONS, develop_rules
+from evodevo.encoders.rule_based._rules.interpreter import develop_rules
 from evodevo.encoders.rule_based._rules.genome import (
     MAX_RULES,
     MIN_RULES,
@@ -92,13 +96,21 @@ class RuleBasedEncoder(Encoder):
 
     def __init__(
         self,
+        factors: ExperimentFactors,
         grid_shape=(5, 5),
-        developmental_iterations: int = DEFAULT_MAX_ITERATIONS,
         mutation_rate: float = 0.2,
     ):
         self.grid_shape = tuple(grid_shape)
-        self.developmental_iterations = developmental_iterations
-        self.mutation_rate = mutation_rate
+        self.factors = factors
+        self.developmental_iterations = factors.dev_steps
+        self._initial_condition = get_initial_condition(factors.init_condition)
+        # factors.mutation_scale multiplies this arm's own mutation
+        # probability -- it does not change the mutation operator itself
+        # (still mutate_developmental_rules' per-rule Bernoulli flip).
+        self.mutation_rate = min(1.0, mutation_rate * factors.mutation_scale)
+        # factors.neighbourhood and factors.hidden_channels are NCA-specific
+        # and have no meaning for this arm's discrete rule interpreter
+        # (explicit no-op).
 
     @property
     def name(self) -> str:
@@ -126,7 +138,13 @@ class RuleBasedEncoder(Encoder):
         body and must never signal validity itself; that is the
         pipeline's job (evodevo/morphology/validate.py via
         evodevo/evaluation/ppo_runner.py)."""
-        body = develop_rules(genome, shape=self.grid_shape, iterations=self.developmental_iterations)
+        initial_grid = self._initial_condition.as_discrete_grid(self.grid_shape)
+        body = develop_rules(
+            genome,
+            shape=self.grid_shape,
+            iterations=self.developmental_iterations,
+            initial_grid=initial_grid,
+        )
         return np.asarray(body, dtype=int)
 
     def mutate(self, genome: DevelopmentalRuleGenome, rng: np.random.Generator) -> DevelopmentalRuleGenome:
@@ -140,8 +158,12 @@ class RuleBasedEncoder(Encoder):
         trajectory is therefore obtained by calling it once per iteration
         count t=0..developmental_iterations, which is cheap at this grid
         size/iteration cap and keeps the interpreter itself untouched."""
+        initial_grid = self._initial_condition.as_discrete_grid(self.grid_shape)
         return [
-            np.asarray(develop_rules(genome, shape=self.grid_shape, iterations=t), dtype=int)
+            np.asarray(
+                develop_rules(genome, shape=self.grid_shape, iterations=t, initial_grid=initial_grid),
+                dtype=int,
+            )
             for t in range(self.developmental_iterations + 1)
         ]
 
@@ -164,9 +186,12 @@ class RuleBasedEncoder(Encoder):
     def describe(self) -> dict:
         return {
             "name": self.name,
+            "factors": dataclasses.asdict(self.factors),
             "grid_shape": list(self.grid_shape),
             "developmental_iterations": self.developmental_iterations,
+            "init_condition": self.factors.init_condition,
             "mutation_rate": self.mutation_rate,
+            "mutation_scale": self.factors.mutation_scale,
             "min_rules": MIN_RULES,
             "max_rules": MAX_RULES,
             "condition_types": [c.value for c in ConditionType],

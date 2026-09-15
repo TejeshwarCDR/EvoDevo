@@ -21,6 +21,7 @@ from typing import List, Optional
 import numpy as np
 
 from evodevo.analysis.aggregate import discover_runs, load_runs
+from evodevo.core.factors import ExperimentFactors
 from evodevo.encoders import get_encoder, list_encoders
 from evodevo.visualization.development import plot_development_trajectory
 from evodevo.visualization.morphology import plot_body, plot_body_grid
@@ -132,7 +133,12 @@ def render_one_arm(
     #    development, not literally the best individual's own genome -- it
     #    demonstrates the encoder's developmental process in general.
     try:
-        encoder_instance = get_encoder(encoder, grid_shape=body.shape)
+        # This renders a fresh example trajectory, not the actual best run's
+        # own factors (genomes/factors aren't persisted per-run yet -- see
+        # docs/adding-an-encoder.md); "full_nonsymmetric"/10 reproduces this
+        # encoder's pre-factors historical default purely for illustration.
+        factors = ExperimentFactors(seed=best["seed"], dev_steps=10, init_condition="full_nonsymmetric")
+        encoder_instance = get_encoder(encoder, factors=factors, grid_shape=body.shape)
         rng = np.random.default_rng(best["seed"])
         genome = encoder_instance.random_genome(rng)
         trajectory_row = plot_development_trajectory(

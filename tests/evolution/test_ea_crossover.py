@@ -2,11 +2,17 @@ import numpy as np
 import pytest
 
 from evodevo.core.config import ExperimentConfig
+from evodevo.core.factors import ExperimentFactors
 from evodevo.encoders.direct import DirectEncoder
 from evodevo.encoders.rule_based.encoder import RuleBasedEncoder
 from evodevo.evaluation.ppo_runner import evaluate_body_surrogate
 from evodevo.evolution.ea import run_ea
 
+
+def _factors(**overrides):
+    params = dict(dev_steps=1, init_condition="center_seed", seed=0)
+    params.update(overrides)
+    return ExperimentFactors(**params)
 
 def _make_config(**overrides):
     defaults = dict(
@@ -30,7 +36,7 @@ def test_use_crossover_defaults_to_false():
 
 
 def test_use_crossover_true_with_non_supporting_encoder_raises_at_startup():
-    encoder = DirectEncoder()
+    encoder = DirectEncoder(factors=_factors())
     assert encoder.supports_crossover() is False
     config = _make_config(use_crossover=True)
     with pytest.raises(ValueError, match="does not support crossover"):
@@ -38,7 +44,7 @@ def test_use_crossover_true_with_non_supporting_encoder_raises_at_startup():
 
 
 def test_use_crossover_true_with_rule_based_runs_to_exact_budget():
-    encoder = RuleBasedEncoder()
+    encoder = RuleBasedEncoder(factors=_factors())
     config = _make_config(encoder="rule_based", use_crossover=True, eval_budget=14, population_size=4, offspring_size=4)
     result = run_ea(encoder, evaluate_body_surrogate, config)
     assert result.evaluations_used == 14
@@ -49,8 +55,8 @@ def test_use_crossover_false_is_byte_identical_to_omitting_the_flag():
     # Explicitly confirms the default path (use_crossover=False) is
     # unaffected by the flag's introduction -- a regression guard
     # complementing test_direct.py's/test_nca.py's pinned-behaviour tests.
-    encoder_a = DirectEncoder()
-    encoder_b = DirectEncoder()
+    encoder_a = DirectEncoder(factors=_factors())
+    encoder_b = DirectEncoder(factors=_factors())
     config_explicit = _make_config(use_crossover=False, seed=7)
     config_default = _make_config(seed=7)
 

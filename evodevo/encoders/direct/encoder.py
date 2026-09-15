@@ -1,16 +1,30 @@
 """Direct (non-developmental) baseline encoding: 25 categorical values, one per voxel."""
 from __future__ import annotations
 
+import dataclasses
+
 import numpy as np
 
+from evodevo.core.factors import ExperimentFactors
 from evodevo.core.materials import N_MATERIALS
 from evodevo.encoders.base import Encoder
 
 
 class DirectEncoder(Encoder):
-    def __init__(self, grid_shape=(5, 5), mutation_rate: float = 0.1, empty_prob: float = 0.6):
+    def __init__(
+        self,
+        factors: ExperimentFactors,
+        grid_shape=(5, 5),
+        mutation_rate: float = 0.1,
+        empty_prob: float = 0.6,
+    ):
         self.grid_shape = tuple(grid_shape)
-        self.mutation_rate = mutation_rate
+        self.factors = factors
+        # DirectEncoder is not developmental: factors.dev_steps,
+        # init_condition, neighbourhood and hidden_channels have no effect
+        # here (explicit no-op). Only mutation_scale applies, since mutation
+        # strength is meaningful for every arm.
+        self.mutation_rate = min(1.0, mutation_rate * factors.mutation_scale)
         self.empty_prob = empty_prob
         remaining = (1.0 - empty_prob) / (N_MATERIALS - 1)
         self._material_probs = np.array([empty_prob] + [remaining] * (N_MATERIALS - 1))
@@ -49,7 +63,9 @@ class DirectEncoder(Encoder):
     def describe(self) -> dict:
         return {
             "name": self.name,
+            "factors": dataclasses.asdict(self.factors),
             "grid_shape": list(self.grid_shape),
             "mutation_rate": self.mutation_rate,
+            "mutation_scale": self.factors.mutation_scale,
             "empty_prob": self.empty_prob,
         }

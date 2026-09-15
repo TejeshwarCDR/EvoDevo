@@ -173,7 +173,15 @@ _DIRECTION_OFFSET = {
 }
 
 DEFAULT_MAX_ITERATIONS = 5
-HARD_MAX_ITERATIONS = 10
+# Raised from 10 to 40 so this arm's `dev_steps`/`developmental_iterations`
+# can legitimately be exercised as a crossed experimental factor up to the
+# same hard cap as evodevo/analysis/structural.py's T_MAX_DEFAULT (the
+# depth-selection study's settling/light-cone probes already ran the
+# interpreter to 40 steps via repeated iterations=1 calls, which this
+# ceiling never gated -- this only affects a single from-scratch call with
+# a large `iterations` value, e.g. RuleBasedEncoder.decode() at deep T).
+# Purely a safety-ceiling value, not part of the rule language/vocabulary.
+HARD_MAX_ITERATIONS = 40
 
 
 def _in_bounds(i: int, j: int, shape: Tuple[int, int]) -> bool:
@@ -255,14 +263,24 @@ def develop_rules(
     shape: Tuple[int, int] = (5, 5),
     iterations: int = DEFAULT_MAX_ITERATIONS,
     seed_position: Optional[Tuple[int, int]] = None,
+    initial_grid: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """
     Deterministically develops a DevelopmentalRuleGenome into a final
     voxel grid, using `iterations` synchronous update steps starting from
-    a single-SOFT-cell seed (see module docstring for exact semantics).
+    an initial grid (see module docstring for exact update semantics).
 
-    iterations=0 returns the initial seeded grid unchanged (no rules are
-    ever evaluated). iterations must be in [0, HARD_MAX_ITERATIONS].
+    If `initial_grid` is given, it is used as-is (copied) as the t=0 grid --
+    this is how the crossed `init_condition` experimental factor (see
+    evodevo.core.initial_conditions) reaches this interpreter without it
+    knowing anything about named conditions. `seed_position` is ignored
+    when `initial_grid` is given. If `initial_grid` is None (the historical
+    default, still used by the frozen equivalence fixture in
+    tests/encoders/fixtures/rule_based_port_equivalence.json), the original
+    single-SOFT-cell-at-`seed_position` (default: centre) grid is built.
+
+    iterations=0 returns the initial grid unchanged (no rules are ever
+    evaluated). iterations must be in [0, HARD_MAX_ITERATIONS].
     """
 
     if not (0 <= iterations <= HARD_MAX_ITERATIONS):
@@ -271,14 +289,19 @@ def develop_rules(
         )
 
     rows, cols = shape
-    grid = np.zeros(shape, dtype=int)
 
-    if seed_position is None:
-        seed_position = (rows // 2, cols // 2)
-    si, sj = seed_position
-    if not _in_bounds(si, sj, shape):
-        raise ValueError(f"seed_position {seed_position} is outside shape {shape}")
-    grid[si][sj] = SOFT
+    if initial_grid is not None:
+        grid = np.array(initial_grid, dtype=int, copy=True)
+        if grid.shape != shape:
+            raise ValueError(f"initial_grid shape {grid.shape} does not match shape {shape}")
+    else:
+        grid = np.zeros(shape, dtype=int)
+        if seed_position is None:
+            seed_position = (rows // 2, cols // 2)
+        si, sj = seed_position
+        if not _in_bounds(si, sj, shape):
+            raise ValueError(f"seed_position {seed_position} is outside shape {shape}")
+        grid[si][sj] = SOFT
 
     for _ in range(iterations):
         # Two sub-passes are used to apply this iteration's decisions,

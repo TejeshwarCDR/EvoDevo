@@ -10,26 +10,33 @@ deliberately not repeated here.
 """
 import numpy as np
 
+from evodevo.core.factors import ExperimentFactors
 from evodevo.encoders import get_encoder
 from evodevo.encoders.direct import DirectEncoder
 
 
+def _factors(**overrides):
+    params = dict(dev_steps=1, init_condition="center_seed", seed=0)
+    params.update(overrides)
+    return ExperimentFactors(**params)
+
+
 def test_genome_length():
-    enc = DirectEncoder()
+    enc = DirectEncoder(factors=_factors())
     assert enc.genome_length() == 25
 
 
 def test_decode_is_a_pure_reshape_of_the_genome():
     # DirectEncoder-specific: unlike a developmental encoder, decode() does
     # no transformation at all -- genotype IS phenotype, just reshaped.
-    enc = DirectEncoder()
+    enc = DirectEncoder(factors=_factors())
     genome = np.arange(25) % 5
     body = enc.decode(genome)
     assert np.array_equal(body, genome.reshape(5, 5))
 
 
 def test_mutate_rate_zero_is_identity():
-    enc = DirectEncoder(mutation_rate=0.0)
+    enc = DirectEncoder(factors=_factors(), mutation_rate=0.0)
     rng = np.random.default_rng(0)
     genome = np.arange(25) % 5
     mutated = enc.mutate(genome, rng)
@@ -37,7 +44,7 @@ def test_mutate_rate_zero_is_identity():
 
 
 def test_mutate_rate_one_flips_every_voxel_and_is_reproducible():
-    enc = DirectEncoder(mutation_rate=1.0)
+    enc = DirectEncoder(factors=_factors(), mutation_rate=1.0)
     genome = np.arange(25) % 5
     rng1 = np.random.default_rng(42)
     rng2 = np.random.default_rng(42)
@@ -47,7 +54,7 @@ def test_mutate_rate_one_flips_every_voxel_and_is_reproducible():
 
 
 def test_mutate_does_not_modify_input_in_place():
-    enc = DirectEncoder(mutation_rate=1.0)
+    enc = DirectEncoder(factors=_factors(), mutation_rate=1.0)
     genome = np.arange(25) % 5
     original = genome.copy()
     rng = np.random.default_rng(1)
@@ -56,7 +63,7 @@ def test_mutate_does_not_modify_input_in_place():
 
 
 def test_get_encoder_registry():
-    enc = get_encoder("direct")
+    enc = get_encoder("direct", factors=_factors())
     assert isinstance(enc, DirectEncoder)
     assert enc.name == "direct"
 
@@ -69,7 +76,7 @@ def test_get_encoder_registry():
 
 
 def test_regression_random_genome_pinned_for_seed_0():
-    enc = DirectEncoder()
+    enc = DirectEncoder(factors=_factors())
     rng = np.random.default_rng(0)
     genome = enc.random_genome(rng)
     expected = np.array(
@@ -82,7 +89,7 @@ def test_regression_random_genome_pinned_for_seed_0():
 
 
 def test_regression_random_genome_pinned_for_seed_123():
-    enc = DirectEncoder()
+    enc = DirectEncoder(factors=_factors())
     rng = np.random.default_rng(123)
     genome = enc.random_genome(rng)
     expected = np.array(
@@ -93,7 +100,7 @@ def test_regression_random_genome_pinned_for_seed_123():
 
 
 def test_regression_mutate_pinned_for_seed_99():
-    enc = DirectEncoder(mutation_rate=1.0)
+    enc = DirectEncoder(factors=_factors(), mutation_rate=1.0)
     genome = np.arange(25) % 5
     rng = np.random.default_rng(99)
     mutated = enc.mutate(genome, rng)

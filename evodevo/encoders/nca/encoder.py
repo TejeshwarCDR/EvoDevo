@@ -1,69 +1,59 @@
 """Neural Cellular Automata developmental encoder.
 
 The genome is weights-only: a flat vector of the perception network's
-parameters. Development always starts from the same fixed initial cell
-state (see _INIT_STATE_SEED below) and runs a fixed number of synchronous,
-residual update steps; only the network's weights are evolved.
+parameters. Development starts from the ExperimentFactors-selected initial
+cell state (see evodevo.core.initial_conditions) and runs
+factors.dev_steps synchronous, residual update steps; only the network's
+weights are evolved.
 """
 from __future__ import annotations
 
+import dataclasses
+
 import numpy as np
 
+from evodevo.core.factors import ExperimentFactors
+from evodevo.core.initial_conditions import get_initial_condition
 from evodevo.core.materials import N_MATERIALS
 from evodevo.encoders.base import Encoder
 
 NEIGHBOUR_OFFSETS = [(-1, 0), (1, 0), (0, -1), (0, 1)]  # up, down, left, right
 
-# Seeds the fixed, non-evolved initial cell state s(0). It is generated once,
-# deterministically, from this seed and is identical for every individual
-# and every generation -- development only ever differs through the genome
-# (network weights), never through the starting condition. A perfectly
-# symmetric initial state (e.g. all zeros, or a mirror-symmetric pattern)
-# would keep every cell's perception identical to its mirror cell forever
-# under a deterministic, synchronous update, so left-right/up-down
-# differentiation could never emerge; drawing small non-zero, non-symmetric
-# noise avoids that failure mode.
-_INIT_STATE_SEED = 20260902
-_INIT_STATE_SCALE = 0.1
-
-
-def _make_initial_state(grid_shape: tuple, channels: int) -> np.ndarray:
-    rng = np.random.default_rng(_INIT_STATE_SEED)
-    rows, cols = grid_shape
-    return rng.normal(scale=_INIT_STATE_SCALE, size=(rows, cols, channels))
-
 
 class NCAEncoder(Encoder):
     def __init__(
         self,
+        factors: ExperimentFactors,
         grid_shape=(5, 5),
-        hidden_channels: int = 3,
         hidden_width: int = 16,
-        dev_steps: int = 10,
-        neighbourhood: str = "von_neumann",
         init_scale: float = 0.5,
         mutation_sigma: float = 0.1,
         mutation_fraction: float = 1.0,
     ):
-        if neighbourhood != "von_neumann":
+        if factors.neighbourhood != "von_neumann":
             raise ValueError(
-                f"unsupported neighbourhood '{neighbourhood}'; only 'von_neumann' "
+                f"unsupported neighbourhood '{factors.neighbourhood}'; only 'von_neumann' "
                 "(4-neighbour, cardinal) is implemented"
             )
 
         self.grid_shape = tuple(grid_shape)
-        self.hidden_channels = hidden_channels
+        self.factors = factors
+        self.hidden_channels = factors.hidden_channels
         self.hidden_width = hidden_width
-        self.dev_steps = dev_steps
-        self.neighbourhood = neighbourhood
+        self.dev_steps = factors.dev_steps
+        self.neighbourhood = factors.neighbourhood
         self.init_scale = init_scale
-        self.mutation_sigma = mutation_sigma
+        # factors.mutation_scale multiplies this arm's own perturbation
+        # sigma -- it does not change the mutation operator itself (still a
+        # per-weight additive Gaussian perturbation).
+        self.mutation_sigma = mutation_sigma * factors.mutation_scale
         self.mutation_fraction = mutation_fraction
 
-        self.channels = N_MATERIALS + hidden_channels
+        self.channels = N_MATERIALS + self.hidden_channels
         self.input_dim = 5 * self.channels  # own state + 4 cardinal neighbours
 
-        self._initial_state = _make_initial_state(self.grid_shape, self.channels)
+        self._initial_condition = get_initial_condition(factors.init_condition)
+        self._initial_state = self._initial_condition.as_state_tensor(self.grid_shape, self.channels)
 
         w1_size = self.input_dim * hidden_width
         b1_size = hidden_width
@@ -170,13 +160,16 @@ class NCAEncoder(Encoder):
     def describe(self) -> dict:
         return {
             "name": self.name,
+            "factors": dataclasses.asdict(self.factors),
             "grid_shape": list(self.grid_shape),
             "hidden_channels": self.hidden_channels,
             "hidden_width": self.hidden_width,
             "dev_steps": self.dev_steps,
             "neighbourhood": self.neighbourhood,
+            "init_condition": self.factors.init_condition,
             "init_scale": self.init_scale,
             "mutation_sigma": self.mutation_sigma,
+            "mutation_scale": self.factors.mutation_scale,
             "mutation_fraction": self.mutation_fraction,
             "channels": self.channels,
             "genome_length": self._genome_length,

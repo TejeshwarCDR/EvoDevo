@@ -1,10 +1,16 @@
 import numpy as np
 
 from evodevo.core.config import ExperimentConfig
+from evodevo.core.factors import ExperimentFactors
 from evodevo.encoders.direct import DirectEncoder
 from evodevo.evaluation.ppo_runner import evaluate_body_surrogate
 from evodevo.evolution.ea import run_ea
 
+
+def _factors(**overrides):
+    params = dict(dev_steps=1, init_condition="center_seed", seed=0)
+    params.update(overrides)
+    return ExperimentFactors(**params)
 
 def _make_config(**overrides):
     defaults = dict(
@@ -40,7 +46,7 @@ def test_cache_disabled_by_default():
 
 
 def test_cache_hit_still_consumes_budget_and_is_flagged():
-    encoder = _AlwaysSameGenomeDirectEncoder()
+    encoder = _AlwaysSameGenomeDirectEncoder(factors=_factors())
     config = _make_config(cache_enabled=True, eval_budget=10, population_size=3, offspring_size=3)
     result = run_ea(encoder, evaluate_body_surrogate, config)
 
@@ -63,8 +69,8 @@ def test_cache_enabled_and_disabled_consume_identical_evaluations_for_same_seed(
     """This is the core fairness guarantee: enabling the cache must never
     change how many evaluations a run consumes for a given seed/config,
     only whether some of those evaluations were served from cache."""
-    encoder_a = _AlwaysSameGenomeDirectEncoder()
-    encoder_b = _AlwaysSameGenomeDirectEncoder()
+    encoder_a = _AlwaysSameGenomeDirectEncoder(factors=_factors())
+    encoder_b = _AlwaysSameGenomeDirectEncoder(factors=_factors())
 
     config_cached = _make_config(seed=42, cache_enabled=True, eval_budget=13, population_size=4, offspring_size=4)
     config_uncached = _make_config(seed=42, cache_enabled=False, eval_budget=13, population_size=4, offspring_size=4)
@@ -84,7 +90,7 @@ def test_cache_enabled_and_disabled_consume_identical_evaluations_for_same_seed(
 
 
 def test_records_always_carry_cache_hit_field_even_when_disabled():
-    encoder = DirectEncoder()
+    encoder = DirectEncoder(factors=_factors())
     config = _make_config(cache_enabled=False, eval_budget=5, population_size=5, offspring_size=5)
     result = run_ea(encoder, evaluate_body_surrogate, config)
     assert all(r["cache_hit"] is False for r in result.records)

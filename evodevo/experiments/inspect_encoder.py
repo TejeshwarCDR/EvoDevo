@@ -19,6 +19,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+from evodevo.core.factors import extract_factors
 from evodevo.core.materials import N_MATERIALS
 from evodevo.core.seeding import make_rng
 from evodevo.encoders import get_encoder
@@ -39,6 +40,19 @@ _REASON_CATEGORIES = [
     ("shape", "wrong_shape"),
     ("dtype", "non_integer_dtype"),
 ]
+
+
+def _build_encoder(encoder_name: str, seed: int, kwargs: dict):
+    """Every registered encoder now requires an explicit `factors`
+    (ExperimentFactors) kwarg. This tool's callers historically passed flat
+    per-arm hyperparameter overrides (e.g. {'dev_steps': 1}) straight
+    through as encoder_kwargs -- extract_factors() pulls those factor-shaped
+    keys out and builds the ExperimentFactors from them (defaulting to
+    dev_steps=10/full_nonsymmetric, this module's historical NCA-sanity-check
+    behaviour, for anything not explicitly overridden), so existing
+    ablation-report call sites keep working unchanged."""
+    factors, remaining_kwargs = extract_factors(kwargs, seed=seed)
+    return get_encoder(encoder_name, factors=factors, **remaining_kwargs)
 
 
 def _categorize_reason(reason: str) -> str:
@@ -335,11 +349,17 @@ def inspect_encoder(
 
     Writes {output_dir}/{report_prefix or encoder_name}_sanity.{json,md} and
     a trajectories PNG, and returns the stats dict (also JSON-dumped as-is).
+
+    Every registered encoder now requires an explicit `factors`
+    (ExperimentFactors) constructor kwarg; `encoder_kwargs`/`compare_to_kwargs`
+    may include factor fields directly (e.g. {"dev_steps": 1}), which are
+    pulled out and used to build it (see _build_encoder) -- unset factor
+    fields default to dev_steps=10, init_condition="full_nonsymmetric".
     """
     os.makedirs(output_dir, exist_ok=True)
     rng = make_rng(seed)
 
-    encoder = get_encoder(encoder_name, **(encoder_kwargs or {}))
+    encoder = _build_encoder(encoder_name, seed, encoder_kwargs)
     primary_stats, example_trajectories = _characterize_encoder(
         encoder, rng, n, n_example_trajectories=n_example_trajectories
     )
@@ -352,7 +372,7 @@ def inspect_encoder(
     }
 
     if compare_to:
-        reference_encoder = get_encoder(compare_to, **(compare_to_kwargs or {}))
+        reference_encoder = _build_encoder(compare_to, seed, compare_to_kwargs)
         reference_stats, _ = _characterize_encoder(reference_encoder, rng, n, n_example_trajectories=0)
         stats[f"{compare_to}_reference"] = reference_stats
         stats[f"{compare_to}_config"] = reference_encoder.describe()

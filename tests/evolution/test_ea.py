@@ -5,12 +5,18 @@ import numpy as np
 import pytest
 
 from evodevo.core.config import ExperimentConfig
+from evodevo.core.factors import ExperimentFactors
 from evodevo.encoders.base import Encoder
 from evodevo.encoders.direct import DirectEncoder
 from evodevo.evaluation.ppo_runner import evaluate_body_surrogate
 from evodevo.evolution.ea import run_ea
 from evodevo.evolution.logging import RunLogger
 
+
+def _factors(**overrides):
+    params = dict(dev_steps=1, init_condition="center_seed", seed=0)
+    params.update(overrides)
+    return ExperimentFactors(**params)
 
 def _make_config(**overrides):
     defaults = dict(
@@ -29,7 +35,7 @@ def _make_config(**overrides):
 
 
 def test_ea_runs_to_completion():
-    encoder = DirectEncoder()
+    encoder = DirectEncoder(factors=_factors())
     config = _make_config()
     result = run_ea(encoder, evaluate_body_surrogate, config)
     assert result.evaluations_used > 0
@@ -37,14 +43,14 @@ def test_ea_runs_to_completion():
 
 
 def test_ea_stops_exactly_at_budget():
-    encoder = DirectEncoder()
+    encoder = DirectEncoder(factors=_factors())
     config = _make_config(eval_budget=17)
     result = run_ea(encoder, evaluate_body_surrogate, config)
     assert result.evaluations_used == 17
 
 
 def test_ea_stops_exactly_at_budget_smaller_than_population():
-    encoder = DirectEncoder()
+    encoder = DirectEncoder(factors=_factors())
     config = _make_config(population_size=5, offspring_size=5, eval_budget=3)
     result = run_ea(encoder, evaluate_body_surrogate, config)
     assert result.evaluations_used == 3
@@ -66,15 +72,15 @@ def test_same_seed_byte_identical_logs():
     # wall_clock_s is real elapsed time and is excluded from the comparison;
     # everything else about the run (genomes, fitnesses, order) must match exactly
     # for the same seed.
-    encoder = DirectEncoder()
+    encoder = DirectEncoder(factors=_factors())
     config = _make_config(seed=123)
     with tempfile.TemporaryDirectory() as tmp1, tempfile.TemporaryDirectory() as tmp2:
         logger1 = RunLogger(tmp1)
-        run_ea(DirectEncoder(), evaluate_body_surrogate, config, logger=logger1)
+        run_ea(DirectEncoder(factors=_factors()), evaluate_body_surrogate, config, logger=logger1)
         logger1.close()
 
         logger2 = RunLogger(tmp2)
-        run_ea(DirectEncoder(), evaluate_body_surrogate, config, logger=logger2)
+        run_ea(DirectEncoder(factors=_factors()), evaluate_body_surrogate, config, logger=logger2)
         logger2.close()
 
         records1 = _read_jsonl_without_wall_clock(os.path.join(tmp1, "run_log.jsonl"))
@@ -85,11 +91,11 @@ def test_same_seed_byte_identical_logs():
 def test_different_seeds_differ():
     with tempfile.TemporaryDirectory() as tmp1, tempfile.TemporaryDirectory() as tmp2:
         logger1 = RunLogger(tmp1)
-        run_ea(DirectEncoder(), evaluate_body_surrogate, _make_config(seed=1), logger=logger1)
+        run_ea(DirectEncoder(factors=_factors()), evaluate_body_surrogate, _make_config(seed=1), logger=logger1)
         logger1.close()
 
         logger2 = RunLogger(tmp2)
-        run_ea(DirectEncoder(), evaluate_body_surrogate, _make_config(seed=2), logger=logger2)
+        run_ea(DirectEncoder(factors=_factors()), evaluate_body_surrogate, _make_config(seed=2), logger=logger2)
         logger2.close()
 
         with open(os.path.join(tmp1, "run_log.jsonl"), "rb") as f:
@@ -100,7 +106,7 @@ def test_different_seeds_differ():
 
 
 def test_best_so_far_fitness_monotonic_nondecreasing():
-    encoder = DirectEncoder()
+    encoder = DirectEncoder(factors=_factors())
     config = _make_config(eval_budget=30, population_size=6, offspring_size=6)
     result = run_ea(encoder, evaluate_body_surrogate, config)
 

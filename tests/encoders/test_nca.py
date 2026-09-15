@@ -12,15 +12,24 @@ import numpy as np
 import pytest
 
 from evodevo.core.config import ExperimentConfig
+from evodevo.core.factors import ExperimentFactors
 from evodevo.encoders import get_encoder
 from evodevo.encoders.nca import N_MATERIALS, NCAEncoder
 from evodevo.evaluation.ppo_runner import evaluate_body_surrogate
 from evodevo.evolution.ea import run_ea
 
 
+def _factors(**overrides):
+    """Reproduces the NCA encoder's pre-factors historical default
+    (dev_steps=10, the fixed non-symmetric initial state) unless overridden."""
+    params = dict(dev_steps=10, init_condition="full_nonsymmetric", seed=0, hidden_channels=3)
+    params.update(overrides)
+    return ExperimentFactors(**params)
+
+
 def test_synchronicity_matches_synchronous_not_sequential_update():
     # hidden_channels=0 keeps C small and the network trivial to hand-design.
-    encoder = NCAEncoder(hidden_channels=0, hidden_width=1, dev_steps=1)
+    encoder = NCAEncoder(factors=_factors(hidden_channels=0, dev_steps=1), hidden_width=1)
     channels = encoder.channels  # 5
 
     rng = np.random.default_rng(42)
@@ -67,7 +76,7 @@ def test_synchronicity_matches_synchronous_not_sequential_update():
 
 
 def test_boundary_zero_padding_hand_computed():
-    encoder = NCAEncoder(grid_shape=(3, 3), hidden_channels=0)
+    encoder = NCAEncoder(factors=_factors(hidden_channels=0), grid_shape=(3, 3))
     channels = 5
     state = np.arange(3 * 3 * channels, dtype=float).reshape(3, 3, channels)
     perception = encoder._perceive(state)
@@ -102,7 +111,7 @@ def test_boundary_zero_padding_hand_computed():
     [(0, 4), (3, 16), (5, 8), (1, 1)],
 )
 def test_genome_length_matches_analytic_parameter_count(hidden_channels, hidden_width):
-    encoder = NCAEncoder(hidden_channels=hidden_channels, hidden_width=hidden_width)
+    encoder = NCAEncoder(factors=_factors(hidden_channels=hidden_channels), hidden_width=hidden_width)
     channels = N_MATERIALS + hidden_channels
     input_dim = 5 * channels
     expected = input_dim * hidden_width + hidden_width + hidden_width * channels + channels
@@ -110,7 +119,7 @@ def test_genome_length_matches_analytic_parameter_count(hidden_channels, hidden_
 
 
 def test_residual_property_zero_weights_equals_fixed_initial_state():
-    encoder = NCAEncoder(dev_steps=10)
+    encoder = NCAEncoder(factors=_factors(dev_steps=10))
     genome = np.zeros(encoder.genome_length())
     body = encoder.decode(genome)
     expected = np.argmax(encoder._initial_state[:, :, :N_MATERIALS], axis=-1).astype(int)
@@ -118,7 +127,7 @@ def test_residual_property_zero_weights_equals_fixed_initial_state():
 
 
 def test_develop_returns_dev_steps_plus_one_trajectory_entries():
-    encoder = NCAEncoder(dev_steps=7)
+    encoder = NCAEncoder(factors=_factors(dev_steps=7))
     rng = np.random.default_rng(3)
     genome = encoder.random_genome(rng)
     trajectory = encoder.develop(genome, return_trajectory=True)
@@ -129,18 +138,18 @@ def test_develop_returns_dev_steps_plus_one_trajectory_entries():
 
 
 def test_get_encoder_nca_registry():
-    encoder = get_encoder("nca")
+    encoder = get_encoder("nca", factors=_factors())
     assert isinstance(encoder, NCAEncoder)
     assert encoder.name == "nca"
 
 
 def test_unsupported_neighbourhood_raises():
     with pytest.raises(ValueError):
-        NCAEncoder(neighbourhood="moore")
+        NCAEncoder(factors=_factors(neighbourhood="moore"))
 
 
 def test_ea_runs_unmodified_with_nca_encoder_in_surrogate_mode():
-    encoder = NCAEncoder()
+    encoder = NCAEncoder(factors=_factors())
     config = ExperimentConfig(
         seed=0,
         encoder="nca",
@@ -165,17 +174,25 @@ def test_ea_runs_unmodified_with_nca_encoder_in_surrogate_mode():
 
 
 def test_regression_decode_pinned_for_seed_5():
-    encoder = NCAEncoder()
+    # Pinned values updated for the ExperimentFactors refactor: the fixed
+    # non-symmetric initial state (now evodevo.core.initial_conditions.
+    # FullNonsymmetric) draws its material logits independently of hidden
+    # channels so the material portion is channel-count-invariant (required
+    # for as_state_tensor/as_discrete_grid round-trip consistency across
+    # every caller) -- this changes the interleaving of the underlying RNG
+    # draws versus the old single (rows, cols, channels) draw, hence new
+    # pinned bodies, not a change to the update rule itself.
+    encoder = NCAEncoder(factors=_factors())
     rng = np.random.default_rng(5)
     genome = encoder.random_genome(rng)
     body = encoder.decode(genome)
     expected = np.array(
         [
-            [4, 1, 4, 1, 4],
-            [1, 4, 0, 4, 1],
-            [1, 1, 4, 1, 4],
-            [4, 1, 1, 2, 1],
-            [1, 4, 2, 1, 1],
+            [1, 3, 4, 4, 4],
+            [1, 4, 1, 1, 1],
+            [1, 4, 1, 1, 3],
+            [4, 4, 2, 1, 1],
+            [1, 1, 1, 4, 3],
         ],
         dtype=int,
     )
@@ -183,7 +200,9 @@ def test_regression_decode_pinned_for_seed_5():
 
 
 def test_regression_mutate_pinned_for_seed_9():
-    encoder = NCAEncoder(mutation_sigma=0.2, mutation_fraction=0.5)
+    # See test_regression_decode_pinned_for_seed_5: pinned values updated for
+    # the channel-count-invariant FullNonsymmetric initial state.
+    encoder = NCAEncoder(factors=_factors(), mutation_sigma=0.2, mutation_fraction=0.5)
     genome = np.zeros(encoder.genome_length())
     rng = np.random.default_rng(9)
     mutated = encoder.mutate(genome, rng)
@@ -191,10 +210,10 @@ def test_regression_mutate_pinned_for_seed_9():
     expected_body = np.array(
         [
             [4, 4, 4, 4, 4],
-            [3, 3, 4, 4, 4],
+            [3, 4, 4, 4, 4],
+            [0, 4, 4, 4, 4],
             [4, 4, 4, 4, 4],
-            [4, 4, 4, 4, 4],
-            [4, 4, 4, 4, 4],
+            [2, 2, 2, 2, 2],
         ],
         dtype=int,
     )

@@ -15,16 +15,23 @@ from __future__ import annotations
 
 import pytest
 
+from evodevo.core.factors import ExperimentFactors
 from evodevo.encoders import get_encoder, list_encoders
 from tests.encoders._contract_checks import ALL_CHECKS
 
 ENCODER_NAMES = list_encoders()
 
 
+def _factors(**overrides):
+    params = dict(dev_steps=5, init_condition="center_seed", seed=0)
+    params.update(overrides)
+    return ExperimentFactors(**params)
+
+
 @pytest.mark.parametrize("encoder_name", ENCODER_NAMES)
 @pytest.mark.parametrize("check", ALL_CHECKS, ids=lambda fn: fn.__name__)
 def test_encoder_conforms_to_contract(check, encoder_name):
-    encoder = get_encoder(encoder_name)
+    encoder = get_encoder(encoder_name, factors=_factors())
     check(encoder)
 
 

@@ -31,6 +31,7 @@ import numpy as np
 import pytest
 
 from evodevo.core.config import ExperimentConfig
+from evodevo.core.factors import ExperimentFactors
 from evodevo.encoders import get_encoder
 from evodevo.encoders.rule_based.encoder import RuleBasedEncoder
 from evodevo.encoders.rule_based._rules.interpreter import (
@@ -64,6 +65,14 @@ def _load_fixture() -> dict:
 _FIXTURE = _load_fixture()
 
 
+def _factors(**overrides):
+    """Reproduces the rule-based encoder's pre-factors historical default
+    (5 iterations, single-SOFT-seed-at-centre) unless overridden."""
+    params = dict(dev_steps=5, init_condition="center_seed", seed=0)
+    params.update(overrides)
+    return ExperimentFactors(**params)
+
+
 # ---------------------------------------------------------------------------
 # The single most important test in this file: proves the ported
 # interpreter, run TODAY, still reproduces the exact bodies frozen at the
@@ -74,7 +83,7 @@ _FIXTURE = _load_fixture()
 
 
 def test_ported_interpreter_matches_frozen_port_equivalence_fixture():
-    encoder = RuleBasedEncoder()
+    encoder = RuleBasedEncoder(factors=_factors())
     for entry in _FIXTURE["genomes_20"]:
         genome = encoder.deserialize_genome(entry["genome"])
         body = encoder.decode(genome)
@@ -90,7 +99,7 @@ def test_ported_interpreter_matches_frozen_port_equivalence_fixture():
 
 
 def test_ported_mutation_matches_frozen_port_equivalence_fixture():
-    encoder = RuleBasedEncoder()
+    encoder = RuleBasedEncoder(factors=_factors())
     for entry in _FIXTURE["mutation_5"]:
         child = encoder.deserialize_genome(entry["child_genome"])
         body = encoder.decode(child)
@@ -171,7 +180,7 @@ def _one_rule_per_type() -> DevelopmentalRuleGenome:
 
 
 def test_serialize_deserialize_roundtrip_covers_every_rule_and_action_type():
-    encoder = RuleBasedEncoder()
+    encoder = RuleBasedEncoder(factors=_factors())
     genome = _one_rule_per_type()
 
     # every ConditionType and ActionType member is exercised at least once.
@@ -200,14 +209,14 @@ def test_serialize_deserialize_roundtrip_covers_every_rule_and_action_type():
 
 
 def test_supports_crossover_and_registered_as_rule_based():
-    encoder = get_encoder("rule_based")
+    encoder = get_encoder("rule_based", factors=_factors())
     assert isinstance(encoder, RuleBasedEncoder)
     assert encoder.name == "rule_based"
     assert encoder.supports_crossover() is True
 
 
 def test_crossover_produces_a_valid_length_child_and_does_not_mutate_parents():
-    encoder = RuleBasedEncoder()
+    encoder = RuleBasedEncoder(factors=_factors())
     rng_a, rng_b, rng_c = (np.random.default_rng(s) for s in (1, 2, 3))
     parent_a = encoder.random_genome(rng_a)
     parent_b = encoder.random_genome(rng_b)
@@ -225,7 +234,7 @@ def test_crossover_without_supports_crossover_check_would_be_a_pipeline_error():
     # supports_crossover() is the flag ea.py's use_crossover gate checks;
     # crossover() itself works regardless (see the base class default for
     # encoders that don't support it, which raises instead).
-    encoder = RuleBasedEncoder()
+    encoder = RuleBasedEncoder(factors=_factors())
     assert encoder.supports_crossover() is True
     rng = np.random.default_rng(0)
     genome = encoder.random_genome(rng)
@@ -239,7 +248,7 @@ def test_decode_never_returns_none_even_for_an_invalid_body():
     # once seed is isolated -- in this case just the seed cell survives) but
     # decode() must still return an array, never None, unlike
     # generate_robot_from_developmental_rules().
-    encoder = RuleBasedEncoder()
+    encoder = RuleBasedEncoder(factors=_factors())
     genome = DevelopmentalRuleGenome(
         [
             DevelopmentalRule(ConditionType.ALWAYS, {}, ActionType.SET_EMPTY, {}),
@@ -252,7 +261,7 @@ def test_decode_never_returns_none_even_for_an_invalid_body():
 
 
 def test_ea_runs_rule_based_encoder_in_surrogate_mode_to_exact_budget():
-    encoder = RuleBasedEncoder()
+    encoder = RuleBasedEncoder(factors=_factors())
     config = ExperimentConfig(
         seed=0,
         encoder="rule_based",
