@@ -47,6 +47,9 @@ def _load_single_run(run_dir: str) -> pd.DataFrame:
     df["encoder"] = config["encoder"]
     df["task"] = config["task"]
     df["seed"] = config["seed"]
+    # Defaults to "ea" for run logs predating the P7 strategy axis (random
+    # search control) -- every such log was, in fact, an EA run.
+    df["strategy"] = config.get("strategy", "ea")
     df["run_dir"] = run_dir
     return df
 

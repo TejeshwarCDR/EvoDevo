@@ -21,6 +21,8 @@ class RunLogger:
         os.makedirs(output_dir, exist_ok=True)
         self.log_path = os.path.join(output_dir, "run_log.jsonl")
         self._fh = open(self.log_path, "w")
+        self.generation_log_path = os.path.join(output_dir, "generation_log.jsonl")
+        self._generation_fh = open(self.generation_log_path, "w")
         # heartbeat_path, if given, is a single shared file (typically
         # <benchmark output_dir>/.heartbeat.json) rewritten after every
         # completed evaluation, for an unattended multi-hour run to be
@@ -41,6 +43,15 @@ class RunLogger:
         if self._on_eval is not None:
             self._on_eval(record)
 
+    def log_generation(self, record: dict) -> None:
+        """One row per generation to generation_log.jsonl: evals_spent vs.
+        evals_valid/evals_invalid (with reason-category breakdown) vs.
+        evals_cache_hit, and best_fitness_so_far -- the budget-vs-real-
+        attempt bookkeeping evodevo.analysis.budget_curves reads to build
+        its two-panel (spent vs. valid) fitness-curve figures."""
+        self._generation_fh.write(json.dumps(record, sort_keys=True) + "\n")
+        self._generation_fh.flush()
+
     def _write_heartbeat(self, eval_index) -> None:
         if self._heartbeat_path is None:
             return
@@ -58,17 +69,25 @@ class RunLogger:
 
     def close(self) -> None:
         self._fh.close()
+        self._generation_fh.close()
 
     def write_meta(
         self,
         config_dict: dict,
         encoder_describe: dict,
         cache_hit_rate: Optional[float] = None,
+        resolved_policy: Optional[dict] = None,
     ) -> None:
         meta = {
             "config": config_dict,
             "encoder": encoder_describe,
             "cache_hit_rate": cache_hit_rate,
+            # The invalid-genome/cache-charging/budget-counter policy this
+            # run actually used (evodevo.evolution.ea.resolved_policy_for)
+            # -- identical across every arm by construction; recorded here
+            # so that claim is auditable per-run, not just asserted once at
+            # run start and forgotten.
+            "resolved_policy": resolved_policy,
             "git_commit": _git_commit_hash(),
             "library_versions": _library_versions(),
         }

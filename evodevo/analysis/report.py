@@ -17,11 +17,14 @@ import os
 import pandas as pd
 
 from evodevo.analysis.aggregate import discover_runs, load_runs, per_seed_finals, three_way_table
+from evodevo.analysis.budget_curves import plot_two_panel_comparison_with_interpretation
 from evodevo.analysis.plots import (
-    plot_fitness_curves,
+    DEFAULT_INSPECTION_DIR,
+    load_prior_validity_rates,
     plot_morphology_comparison,
     plot_validity_and_efficiency,
 )
+from evodevo.analysis.random_search_decomposition import generate_decomposition_report
 from evodevo.analysis.statistics import three_way_comparison
 from evodevo.experiments.benchmark import MANIFEST_NAME
 
@@ -90,16 +93,21 @@ def _headline(three_way_df: pd.DataFrame, comparisons: list) -> str:
     )
 
 
-def _write_figures(df: pd.DataFrame, table: pd.DataFrame, figures_dir: str) -> dict:
+def _write_figures(
+    df: pd.DataFrame, table: pd.DataFrame, figures_dir: str, inspection_dir: str = DEFAULT_INSPECTION_DIR
+) -> dict:
     os.makedirs(figures_dir, exist_ok=True)
     paths = {}
+    interpretation = None
 
     import matplotlib.pyplot as plt  # Agg backend already set by evodevo.analysis.plots
 
     if not df.empty:
-        fig, ax = plt.subplots()
-        plot_fitness_curves(df, ax=ax)
-        ax.set_title("Fitness vs. evaluations (per-seed min/max band)")
+        # DEFAULT fitness-comparison figure for this project: two panels
+        # (vs. evals_spent, vs. evals_valid), never a single-panel curve --
+        # see evodevo/analysis/budget_curves.py's module docstring for why.
+        fig, axes, interpretation = plot_two_panel_comparison_with_interpretation(df)
+        fig.suptitle("Fitness vs. evaluations spent (a) and vs. evaluations valid (b)")
         fig.tight_layout()
         path = os.path.join(figures_dir, "fitness_curves.png")
         fig.savefig(path, dpi=120)
@@ -115,21 +123,23 @@ def _write_figures(df: pd.DataFrame, table: pd.DataFrame, figures_dir: str) -> d
         paths["morphology_comparison"] = path
 
     if not table.empty:
-        fig, axes = plt.subplots(1, 2, figsize=(9, 4))
-        plot_validity_and_efficiency(table, axes=axes)
+        prior_validity = load_prior_validity_rates(table["encoder"].tolist(), inspection_dir=inspection_dir)
+        fig, axes = plt.subplots(1, 3, figsize=(13, 4))
+        plot_validity_and_efficiency(table, prior_validity, axes=axes)
         fig.tight_layout()
         path = os.path.join(figures_dir, "validity_efficiency.png")
         fig.savefig(path, dpi=120)
         plt.close(fig)
         paths["validity_efficiency"] = path
 
-    return paths
+    return paths, interpretation
 
 
 def generate_report(
     runs_root: str = DEFAULT_RUNS_ROOT,
     output_path: str = DEFAULT_OUTPUT_PATH,
     figures_dir: str = DEFAULT_FIGURES_DIR,
+    inspection_dir: str = DEFAULT_INSPECTION_DIR,
 ) -> str:
     manifest = _load_manifest(runs_root)
     df = load_runs(discover_runs(runs_root))
@@ -138,7 +148,7 @@ def generate_report(
     finals_by_encoder = per_seed_finals(df)
     comparisons = three_way_comparison(finals_by_encoder) if len(finals_by_encoder) >= 2 else []
 
-    figure_paths = _write_figures(df, table, figures_dir)
+    figure_paths, budget_interpretation = _write_figures(df, table, figures_dir, inspection_dir=inspection_dir)
     output_dir_for_relpath = os.path.dirname(output_path) or "."
 
     headline = _headline(table, comparisons)
@@ -194,11 +204,24 @@ def generate_report(
     lines.append(_df_to_markdown(table))
     lines.append("")
 
+    lines.append("## Random search control: prior vs. search decomposition")
+    lines.append("")
+    lines.append(generate_decomposition_report(df))
+    lines.append("")
+
     lines.append("## Figures")
     lines.append("")
     if "fitness_curves" in figure_paths:
         lines.append(f"![fitness curves]({os.path.relpath(figure_paths['fitness_curves'], output_dir_for_relpath)})")
         lines.append("")
+        if budget_interpretation:
+            lines.append(
+                "**Budget-vs-real-attempt interpretation** (generated automatically from the data -- "
+                "see evodevo/analysis/budget_curves.py):"
+            )
+            lines.append("")
+            lines.append(budget_interpretation)
+            lines.append("")
     if "morphology_comparison" in figure_paths:
         lines.append(
             f"![morphology comparison]({os.path.relpath(figure_paths['morphology_comparison'], output_dir_for_relpath)})"
@@ -206,7 +229,8 @@ def generate_report(
         lines.append("")
     if "validity_efficiency" in figure_paths:
         lines.append(
-            f"![validity and search efficiency]({os.path.relpath(figure_paths['validity_efficiency'], output_dir_for_relpath)})"
+            f"![random-genome validity prior, realized in-run validity rate, and search "
+            f"efficiency]({os.path.relpath(figure_paths['validity_efficiency'], output_dir_for_relpath)})"
         )
         lines.append("")
     if not figure_paths:
@@ -281,9 +305,14 @@ def main(argv=None) -> None:
     parser.add_argument("--root", default=DEFAULT_RUNS_ROOT, help="results/runs root to load completed runs from")
     parser.add_argument("--output", default=DEFAULT_OUTPUT_PATH, help="path to write the report markdown to")
     parser.add_argument("--figures-dir", default=DEFAULT_FIGURES_DIR, help="directory to write figures into")
+    parser.add_argument(
+        "--inspection-dir",
+        default=DEFAULT_INSPECTION_DIR,
+        help="directory holding each encoder's PPO-free *_sanity.json inspection output",
+    )
     args = parser.parse_args(argv)
 
-    path = generate_report(args.root, args.output, args.figures_dir)
+    path = generate_report(args.root, args.output, args.figures_dir, args.inspection_dir)
     print(f"report written to {path}")
 
 

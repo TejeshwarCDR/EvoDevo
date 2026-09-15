@@ -4,37 +4,41 @@ This module may only call methods on the Encoder interface (evodevo.encoders.bas
 and the evaluator callable it is given. It must never import the physics simulator package
 or the RL training library, nor any specific encoder class, so that it can be exercised
 end-to-end with the direct encoder and the surrogate evaluator alone.
+
+Per-evaluation bookkeeping (budget/invalid-genome/cache-charging policy, the
+P6 dual counters) lives in evodevo.evolution.eval_bookkeeping and is shared
+byte-for-byte with evodevo.evolution.random_search -- this module is
+responsible only for WHICH genome to evaluate next (selection + mutation/
+crossover), never for HOW an evaluation is scored/counted/logged.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Callable, List, Optional
 
 import numpy as np
 
 from evodevo.encoders.base import Encoder
 from evodevo.evaluation.cache import FitnessCache
+from evodevo.evolution.eval_bookkeeping import (
+    BUDGET_COUNTER_SEMANTICS,
+    CACHE_CHARGING_POLICY,
+    EvaluationTracker,
+    Individual,
+    RunResult,
+    assert_resolved_policy_unchanged,
+    resolve_cache,
+    resolved_policy_for,
+)
 from evodevo.evolution.logging import RunLogger
-from evodevo.morphology.metrics import body_hash as compute_body_hash
-from evodevo.morphology.metrics import body_metrics
 
-
-@dataclass
-class Individual:
-    genome_id: int
-    parent_id: Optional[int]
-    genome: np.ndarray
-    fitness: float
-    valid: bool
-
-
-@dataclass
-class RunResult:
-    population: List[Individual]
-    evaluations_used: int
-    best_fitness: float
-    records: list = field(default_factory=list)
-    cache_hit_rate: Optional[float] = None
+__all__ = [
+    "run_ea",
+    "RunResult",
+    "Individual",
+    "resolved_policy_for",
+    "CACHE_CHARGING_POLICY",
+    "BUDGET_COUNTER_SEMANTICS",
+]
 
 
 def run_ea(
@@ -49,16 +53,15 @@ def run_ea(
     lam = config.offspring_size
     budget = config.eval_budget
 
-    # A cache hit MUST still consume one evaluation from the budget and MUST be
-    # logged (cache_hit=True). If a hit were free, whichever encoding happens to
-    # revisit bodies more often would gain a silent budget advantage over the
-    # others -- exactly the search-efficiency confound this project exists to
-    # rule out. cache_enabled defaults to False for the primary comparison.
-    cache_enabled = bool(getattr(config, "cache_enabled", False))
-    if cache_enabled and cache is None:
-        cache = FitnessCache()
-    elif not cache_enabled:
-        cache = None
+    # Run-start assertion: the invalid-genome policy, cache-charging policy,
+    # and budget-counter semantics must be IDENTICAL for every arm (and,
+    # since P7, every strategy). See eval_bookkeeping.py for why this is a
+    # self-consistency guard, not the primary enforcement mechanism (that's
+    # evodevo.experiments.fairness.assert_comparable()/assert_identical_policy()).
+    resolved_policy = resolved_policy_for(config)
+    assert_resolved_policy_unchanged(resolved_policy)
+
+    cache = resolve_cache(config, cache)
 
     # The primary three-way comparison is mutation-only for every arm: Direct
     # and NCA have no crossover operator, so an asymmetric reproduction
@@ -76,83 +79,24 @@ def run_ea(
             "crossover (supports_crossover() returned False)"
         )
 
-    evaluations_used = 0
-    next_genome_id = 0
-    records: list = []
-    best_fitness = float("-inf")
-
-    def evaluate_genome(genome: np.ndarray, parent_id: Optional[int], generation: int) -> Individual:
-        nonlocal evaluations_used, next_genome_id, best_fitness
-
-        genome_id = next_genome_id
-        next_genome_id += 1
-
-        body = encoder.decode(genome)
-
-        cache_hit = False
-        result = None
-        if cache is not None:
-            h = compute_body_hash(body)
-            cached_result = cache.get(h)
-            if cached_result is not None:
-                result = cached_result
-                cache_hit = True
-
-        if result is None:
-            result = evaluator(
-                body,
-                task=config.task,
-                ppo_timesteps=config.ppo_timesteps,
-                eval_episodes=config.ppo_eval_episodes,
-                seed=config.seed,
-                sentinel_fitness=getattr(config, "sentinel_fitness", -10.0),
-            )
-            if cache is not None:
-                cache.put(result.body_hash, result)
-
-        evaluations_used += 1
-        best_fitness = max(best_fitness, result.fitness)
-
-        record = {
-            "eval_index": evaluations_used - 1,
-            "generation": generation,
-            "genome_id": genome_id,
-            "parent_id": parent_id,
-            "fitness": result.fitness,
-            "valid": result.valid,
-            "reason": result.reason,
-            "body_hash": result.body_hash,
-            "wall_clock_s": result.wall_clock_s,
-            "cache_hit": cache_hit,
-            **body_metrics(body),
-        }
-        records.append(record)
-        if logger is not None:
-            logger.log(record)
-
-        return Individual(
-            genome_id=genome_id,
-            parent_id=parent_id,
-            genome=genome,
-            fitness=result.fitness,
-            valid=result.valid,
-        )
+    tracker = EvaluationTracker(encoder, evaluator, config, cache, logger)
 
     population: List[Individual] = []
     generation = 0
     for _ in range(mu):
-        if evaluations_used >= budget:
+        if tracker.evaluations_used >= budget:
             break
         genome = encoder.random_genome(rng)
-        population.append(evaluate_genome(genome, parent_id=None, generation=generation))
+        population.append(tracker.evaluate(genome, parent_id=None, generation=generation))
+    tracker.record_generation_summary(generation)
 
-    while evaluations_used < budget:
+    while tracker.evaluations_used < budget:
         generation += 1
         survivors = sorted(population, key=lambda ind: ind.fitness, reverse=True)[:mu]
 
         offspring: List[Individual] = []
         for _ in range(lam):
-            if evaluations_used >= budget:
+            if tracker.evaluations_used >= budget:
                 break
             if use_crossover:
                 parent_a = survivors[rng.integers(0, len(survivors))]
@@ -163,14 +107,17 @@ def run_ea(
                 parent_a = survivors[rng.integers(0, len(survivors))]
                 child_genome = encoder.mutate(parent_a.genome, rng)
                 parent_id = parent_a.genome_id
-            offspring.append(evaluate_genome(child_genome, parent_id=parent_id, generation=generation))
+            offspring.append(tracker.evaluate(child_genome, parent_id=parent_id, generation=generation))
 
         population = survivors + offspring
+        tracker.record_generation_summary(generation)
 
     return RunResult(
         population=population,
-        evaluations_used=evaluations_used,
-        best_fitness=best_fitness,
-        records=records,
+        evaluations_used=tracker.evaluations_used,
+        best_fitness=tracker.best_fitness,
+        records=tracker.records,
         cache_hit_rate=cache.hit_rate if cache is not None else None,
+        resolved_policy=resolved_policy,
+        generation_records=tracker.generation_records,
     )

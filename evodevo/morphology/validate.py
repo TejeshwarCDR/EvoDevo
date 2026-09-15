@@ -33,6 +33,36 @@ def has_actuator(body) -> bool:
     return bool(np.isin(body_arr, list(ACTUATOR_IDS)).any())
 
 
+# Substrings of a validate_body() failure reason (or the "; "-joined reason
+# string an evaluator attaches to an invalid body) -> a stable category
+# label. Order matters: checked top-to-bottom, first match wins. Single
+# authoritative home for this categorization -- used by the EA's per-eval
+# invalid-reason breakdown (evodevo/evolution/ea.py) and by the PPO-free
+# characterization tools (evodevo/experiments/inspect_encoder.py,
+# evodevo/analysis/structural.py) that historically each defined their own
+# copy of the same substring list.
+_REASON_CATEGORIES = (
+    ("min_voxels", "too_few_voxels"),
+    ("connected component", "disconnected"),
+    ("no actuator", "no_actuator"),
+    ("0..4", "invalid_material_values"),
+    ("shape", "wrong_shape"),
+    ("dtype", "non_integer_dtype"),
+)
+
+
+def categorize_reason(reason) -> str:
+    """Maps a validate_body()/EvalResult failure reason string to a stable
+    category label. `reason` may be None/empty (valid body -- returns
+    "none")."""
+    if not reason:
+        return "none"
+    for substr, category in _REASON_CATEGORIES:
+        if substr in reason:
+            return category
+    return "other"
+
+
 @dataclass
 class ValidationResult:
     valid: bool

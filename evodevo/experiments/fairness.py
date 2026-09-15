@@ -47,3 +47,28 @@ def assert_comparable(config_a: ExperimentConfig, config_b: ExperimentConfig) ->
             "and encoder-specific hyperparameters may differ. Violations:\n  "
             + "\n  ".join(violations)
         )
+
+
+def assert_identical_policy(policies: dict) -> None:
+    """Raise FairnessViolation unless every arm's resolved invalid-genome/
+    cache-charging/budget-counter policy (evodevo.evolution.ea.
+    resolved_policy_for(), one dict per arm) is byte-identical.
+
+    `policies` is {arm_label: resolved_policy_dict}. This is the run-start
+    assertion the budget-accounting prompt asks for, made explicit and
+    testable at the benchmark level (where every arm's config is already
+    resolved and comparable) rather than only implicitly true because
+    run_ea() happens to be the same function for every arm."""
+    if len(policies) < 2:
+        return
+    items = list(policies.items())
+    reference_label, reference_policy = items[0]
+    violations = []
+    for label, policy in items[1:]:
+        if policy != reference_policy:
+            violations.append(f"{label} != {reference_label}: {policy!r} vs {reference_policy!r}")
+    if violations:
+        raise FairnessViolation(
+            "invalid-genome/cache-charging/budget-counter policy is not identical across arms "
+            "(evodevo.evolution.ea.resolved_policy_for()). Violations:\n  " + "\n  ".join(violations)
+        )

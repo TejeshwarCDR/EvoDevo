@@ -1,7 +1,8 @@
 import pytest
 
 from evodevo.core.config import ExperimentConfig
-from evodevo.experiments.fairness import FairnessViolation, assert_comparable
+from evodevo.evolution.ea import resolved_policy_for
+from evodevo.experiments.fairness import FairnessViolation, assert_comparable, assert_identical_policy
 
 
 def _make_config(**overrides):
@@ -103,3 +104,39 @@ def test_violation_message_lists_all_mismatches():
     message = str(exc_info.value)
     assert "ppo_timesteps" in message
     assert "eval_budget" in message
+
+
+def test_assert_identical_policy_passes_for_identical_configs():
+    config_a = _make_config(encoder="direct", sentinel_fitness=-10.0)
+    config_b = _make_config(encoder="nca", sentinel_fitness=-10.0)
+    policies = {
+        "direct": resolved_policy_for(config_a),
+        "nca": resolved_policy_for(config_b),
+    }
+    assert_identical_policy(policies)  # must not raise
+
+
+def test_assert_identical_policy_raises_on_sentinel_fitness_mismatch():
+    config_a = _make_config(encoder="direct", sentinel_fitness=-10.0)
+    config_b = _make_config(encoder="nca", sentinel_fitness=-5.0)
+    policies = {
+        "direct": resolved_policy_for(config_a),
+        "nca": resolved_policy_for(config_b),
+    }
+    with pytest.raises(FairnessViolation):
+        assert_identical_policy(policies)
+
+
+def test_assert_identical_policy_noop_for_a_single_arm():
+    config_a = _make_config(encoder="direct")
+    assert_identical_policy({"direct": resolved_policy_for(config_a)})  # must not raise
+
+
+def test_assert_identical_policy_detects_tampered_policy():
+    config_a = _make_config(encoder="direct")
+    config_b = _make_config(encoder="nca")
+    policy_a = resolved_policy_for(config_a)
+    policy_b = dict(resolved_policy_for(config_b))
+    policy_b["cache_charging_policy"] = "cache_hit_is_free"  # simulate drift
+    with pytest.raises(FairnessViolation):
+        assert_identical_policy({"direct": policy_a, "nca": policy_b})

@@ -15,8 +15,9 @@ def _run_tiny_benchmark(configs_root, output_dir):
         configs_root=configs_root,
         output_dir=output_dir,
         surrogate=True,
+        factors={"dev_steps": 5, "init_condition": "center_seed"},
     )
-    return run_benchmark(bconfig, dry_run=False)
+    return run_benchmark(bconfig, dry_run=False, allow_dirty=True)
 
 
 def test_report_generated_with_three_arms_and_all_figures():

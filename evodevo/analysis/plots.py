@@ -1,6 +1,10 @@
 """Figures for the encoding comparison. Matplotlib only, no display side effects."""
 from __future__ import annotations
 
+import json
+import math
+import os
+
 import matplotlib
 
 # Must be set before `matplotlib.pyplot` is imported anywhere in the process.
@@ -10,6 +14,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
+
+DEFAULT_INSPECTION_DIR = "results/inspection"
 
 
 def _best_so_far_by_seed(df: pd.DataFrame) -> pd.DataFrame:
@@ -71,23 +77,53 @@ def plot_morphology_comparison(df: pd.DataFrame, metrics=MORPHOLOGY_METRICS, axe
     return axes
 
 
-def plot_validity_and_efficiency(three_way_df: pd.DataFrame, axes=None):
-    """Two-panel bar chart from evodevo.analysis.aggregate.three_way_table()'s
-    output: random-genome validity rate per encoder, and evaluations needed
-    to reach 50% of the best arm's final fitness per encoder (lower = more
-    sample-efficient search)."""
+def load_prior_validity_rates(encoders, inspection_dir: str = DEFAULT_INSPECTION_DIR) -> dict:
+    """Read each encoder's true pre-run random-genome validity prior from its
+    PPO-free inspection output (`{inspection_dir}/{encoder}/{encoder}_sanity.json`,
+    written by evodevo.experiments.nca_sanity / inspect_encoder.py), keyed by
+    `data[encoder]["valid_rate"]`. Encoders with no inspection file on disk map
+    to NaN rather than raising, so callers can still render a figure (e.g. in
+    tests that don't run the inspection step)."""
+    rates = {}
+    for encoder in encoders:
+        path = os.path.join(inspection_dir, encoder, f"{encoder}_sanity.json")
+        try:
+            with open(path, "r") as f:
+                data = json.load(f)
+            rates[encoder] = float(data[encoder]["valid_rate"])
+        except (FileNotFoundError, KeyError, ValueError):
+            rates[encoder] = math.nan
+    return rates
+
+
+def plot_validity_and_efficiency(three_way_df: pd.DataFrame, prior_validity_by_encoder: dict, axes=None):
+    """Three-panel bar chart: the TRUE pre-run random-genome validity prior
+    per encoder (from PPO-free inspection output, via
+    `load_prior_validity_rates()` -- NOT derived from any evolutionary run),
+    the realized in-run validity rate per encoder (from
+    evodevo.analysis.aggregate.three_way_table()'s `validity_rate` column --
+    the fraction of genomes that validated DURING evolution, which is
+    typically much higher than the random-genome prior because search finds
+    valid regions of genome space), and evaluations needed to reach 50% of
+    the best arm's final fitness per encoder (lower = more sample-efficient
+    search)."""
     if axes is None:
-        _fig, axes = plt.subplots(1, 2, figsize=(9, 4))
+        _fig, axes = plt.subplots(1, 3, figsize=(13, 4))
 
     encoders = three_way_df["encoder"].tolist()
 
-    axes[0].bar(encoders, three_way_df["validity_rate"])
+    axes[0].bar(encoders, [prior_validity_by_encoder.get(e, math.nan) for e in encoders])
     axes[0].set_ylabel("validity rate")
-    axes[0].set_title("Random-genome validity rate")
+    axes[0].set_title("Random-genome validity prior (pre-run)")
     axes[0].set_ylim(0, 1)
 
-    axes[1].bar(encoders, three_way_df["evaluations_to_50pct_of_best_arm_mean"])
-    axes[1].set_ylabel("evaluations to reach 50% of best arm's final fitness")
-    axes[1].set_title("Search efficiency")
+    axes[1].bar(encoders, three_way_df["validity_rate"])
+    axes[1].set_ylabel("validity rate")
+    axes[1].set_title("Realized validity rate (during evolution)")
+    axes[1].set_ylim(0, 1)
+
+    axes[2].bar(encoders, three_way_df["evaluations_to_50pct_of_best_arm_mean"])
+    axes[2].set_ylabel("evaluations to reach 50% of best arm's final fitness")
+    axes[2].set_title("Search efficiency")
 
     return axes

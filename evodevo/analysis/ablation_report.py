@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 
 from evodevo.analysis.aggregate import discover_runs, load_runs
-from evodevo.analysis.plots import plot_fitness_curves
+from evodevo.analysis.budget_curves import plot_two_panel_comparison_with_interpretation
 from evodevo.experiments.nca_sanity import run_sanity
 
 A1_DEV_STEPS = [1, 5, 10, 20]
@@ -101,8 +101,8 @@ def _rows_to_markdown_table(rows, columns) -> list:
 
 def _relabelled(df: pd.DataFrame, arm_label: str) -> pd.DataFrame:
     """Copy df with its `encoder` column overwritten by arm_label, so
-    plot_fitness_curves (which groups by `encoder`) can be reused to plot
-    per-ablation-arm curves instead of per-encoder curves."""
+    plot_two_panel_comparison (which groups by `encoder`) can be reused to
+    plot per-ablation-arm curves instead of per-encoder curves."""
     if df.empty:
         return df
     out = df.copy()
@@ -110,22 +110,24 @@ def _relabelled(df: pd.DataFrame, arm_label: str) -> pd.DataFrame:
     return out
 
 
-def _save_fitness_curve_figure(dfs_by_arm: dict, path: str) -> bool:
-    """dfs_by_arm: {arm_label: df}. Returns False (and writes nothing) if every
-    arm is empty (no PPO results yet)."""
+def _save_fitness_curve_figure(dfs_by_arm: dict, path: str):
+    """dfs_by_arm: {arm_label: df}. Returns (True, interpretation) or
+    (False, None) if every arm is empty (no PPO results yet). Always the
+    two-panel (vs. evals_spent, vs. evals_valid) figure -- see
+    evodevo/analysis/budget_curves.py; a single-panel fitness curve is not
+    acceptable output from this project."""
     import matplotlib.pyplot as plt  # Agg backend already set at module import time
 
     frames = [_relabelled(df, arm) for arm, df in dfs_by_arm.items() if not df.empty]
     if not frames:
-        return False
+        return False, None
 
     combined = pd.concat(frames, ignore_index=True)
-    fig, ax = plt.subplots()
-    plot_fitness_curves(combined, ax=ax)
+    fig, axes, interpretation = plot_two_panel_comparison_with_interpretation(combined)
     fig.tight_layout()
     fig.savefig(path, dpi=120)
     plt.close(fig)
-    return True
+    return True, interpretation
 
 
 def run_ablation_report(root_dir: str = "results/runs", output_dir: str = "results", prior_seed: int = 0) -> dict:
@@ -144,7 +146,7 @@ def run_ablation_report(root_dir: str = "results/runs", output_dir: str = "resul
         )
         a1_rows.append(_merge(fitness_row, prior_row))
     a1_figure = "ablation_a1_dev_steps_fitness.png"
-    a1_has_figure = _save_fitness_curve_figure(a1_dfs, os.path.join(output_dir, a1_figure))
+    a1_has_figure, a1_interpretation = _save_fitness_curve_figure(a1_dfs, os.path.join(output_dir, a1_figure))
 
     # --- A2: hidden_channels ---
     a2_rows = []
@@ -164,7 +166,7 @@ def run_ablation_report(root_dir: str = "results/runs", output_dir: str = "resul
         )
         a2_rows.append(_merge(fitness_row, prior_row))
     a2_figure = "ablation_a2_hidden_channels_fitness.png"
-    a2_has_figure = _save_fitness_curve_figure(a2_dfs, os.path.join(output_dir, a2_figure))
+    a2_has_figure, a2_interpretation = _save_fitness_curve_figure(a2_dfs, os.path.join(output_dir, a2_figure))
 
     # --- E3: second task, both encoders ---
     e3_rows = []
@@ -184,7 +186,7 @@ def run_ablation_report(root_dir: str = "results/runs", output_dir: str = "resul
         else:
             e3_rows.append(fitness_row)
     e3_figure = "ablation_e3_second_task_fitness.png"
-    e3_has_figure = _save_fitness_curve_figure(e3_dfs, os.path.join(output_dir, e3_figure))
+    e3_has_figure, e3_interpretation = _save_fitness_curve_figure(e3_dfs, os.path.join(output_dir, e3_figure))
 
     columns_nca = [
         "arm",
@@ -231,7 +233,7 @@ def run_ablation_report(root_dir: str = "results/runs", output_dir: str = "resul
     ]
     lines += _rows_to_markdown_table(a1_rows, columns_nca)
     if a1_has_figure:
-        lines += ["", f"![A1 fitness curves]({a1_figure})"]
+        lines += ["", f"![A1 fitness curves]({a1_figure})", "", a1_interpretation]
     else:
         lines += ["", "*(figure omitted: no A1 arm has completed PPO results yet)*"]
     lines += [
@@ -244,7 +246,7 @@ def run_ablation_report(root_dir: str = "results/runs", output_dir: str = "resul
     ]
     lines += _rows_to_markdown_table(a2_rows, columns_nca)
     if a2_has_figure:
-        lines += ["", f"![A2 fitness curves]({a2_figure})"]
+        lines += ["", f"![A2 fitness curves]({a2_figure})", "", a2_interpretation]
     else:
         lines += ["", "*(figure omitted: no A2 arm has completed PPO results yet)*"]
     lines += [
@@ -256,7 +258,7 @@ def run_ablation_report(root_dir: str = "results/runs", output_dir: str = "resul
     ]
     lines += _rows_to_markdown_table(e3_rows, columns_direct + [c for c in columns_nca if c not in columns_direct])
     if e3_has_figure:
-        lines += ["", f"![E3 fitness curves]({e3_figure})"]
+        lines += ["", f"![E3 fitness curves]({e3_figure})", "", e3_interpretation]
     else:
         lines += ["", "*(figure omitted: no E3 arm has completed PPO results yet)*"]
     lines += [
