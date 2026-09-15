@@ -14,12 +14,23 @@ import numpy as np
 import yaml
 
 from evodevo.core.config import ExperimentConfig
+from evodevo.core.factors import extract_factors
+from evodevo.core.provenance import DirtyTreeError, check_git_state, write_factors_json
 from evodevo.encoders import get_encoder
 from evodevo.evaluation.ppo_runner import make_evaluator
 from evodevo.evolution.ea import run_ea
 from evodevo.evolution.logging import RunLogger
+from evodevo.evolution.random_search import run_random_search
 
 DONE_MARKER = "run_meta.json"
+
+# The strategy axis (P7): {ea, random_search} crossed with every encoder.
+# random_search is the control that separates the encoding's representational
+# PRIOR (what it achieves) from the EA's SEARCH contribution (what selection
+# and mutation add on top) -- see evodevo/analysis/budget_curves.py's
+# decomposition and evodevo/evolution/random_search.py's module docstring.
+STRATEGIES = {"ea": run_ea, "random_search": run_random_search}
+DEFAULT_STRATEGY = "ea"
 
 
 def _compute_connections(body: np.ndarray):
@@ -49,6 +60,8 @@ def run_experiment(
     encoder_kwargs: dict = None,
     tag: str = None,
     progress_callback: Optional[Callable[[dict], None]] = None,
+    allow_dirty: bool = False,
+    strategy: str = DEFAULT_STRATEGY,
 ) -> str:
     """encoder_kwargs overrides/extends the encoder's own hyperparameters
     (e.g. {'dev_steps': 1} for the NCA encoder) without touching the encoder
@@ -57,7 +70,24 @@ def run_experiment(
     share the same (encoder, task, seed). `progress_callback`, if given, is
     invoked with each evaluation's record dict for live stdout reporting
     (evodevo.evolution.progress) -- purely additive, never affects persisted
-    output."""
+    output. `strategy` selects which search strategy consumes the budget
+    (see STRATEGIES above); both strategies share the exact same
+    evaluation pipeline (evodevo.evolution.eval_bookkeeping), so switching
+    strategy never changes budget semantics, invalid-genome policy, or the
+    P6 dual counters -- only which genome gets evaluated next.
+
+    `allow_dirty` gates the provenance check below (see
+    evodevo.core.provenance): a dirty working tree raises DirtyTreeError
+    unless explicitly overridden -- for local iteration only, never for a
+    run whose output is cited in a report or a docs/decisions.md row. This
+    is a standalone provenance wrapper: it does not touch ExperimentConfig's
+    shape, SHARED_BASE_KEYS, or the lock hash in evodevo.experiments.lock_hash."""
+    if strategy not in STRATEGIES:
+        raise ValueError(f"unknown strategy '{strategy}'; available: {sorted(STRATEGIES)}")
+    run_strategy = STRATEGIES[strategy]
+
+    commit_hash, dirty_files = check_git_state(allow_dirty)
+
     loaded = ExperimentConfig.from_method_yaml(config_path)
     # --seed overrides the config's seed; everything else comes from the YAML.
     config_dict = loaded.to_dict()
@@ -65,7 +95,15 @@ def run_experiment(
     config_dict["grid_shape"] = tuple(config_dict["grid_shape"])
     config = ExperimentConfig(**config_dict)
 
-    output_dir = _run_output_dir(config, seed, tag=tag)
+    # Fold strategy into the output-dir tag so the default (strategy="ea")
+    # keeps its exact pre-existing output path -- only a non-default
+    # strategy (random_search) disambiguates the path, keeping this a
+    # backward-compatible addition rather than a breaking rename.
+    if strategy == DEFAULT_STRATEGY:
+        effective_tag = tag
+    else:
+        effective_tag = strategy if tag is None else f"{tag}_{strategy}"
+    output_dir = _run_output_dir(config, seed, tag=effective_tag)
     done_path = os.path.join(output_dir, DONE_MARKER)
     if os.path.exists(done_path) and not overwrite:
         raise FileExistsError(
@@ -74,21 +112,25 @@ def run_experiment(
         )
     os.makedirs(output_dir, exist_ok=True)
 
-    encoder = get_encoder(config.encoder, grid_shape=config.grid_shape, **(encoder_kwargs or {}))
+    factors, remaining_kwargs = extract_factors(encoder_kwargs, seed=config.seed)
+    write_factors_json(output_dir, factors, commit_hash, dirty_files)
+    encoder = get_encoder(config.encoder, factors=factors, grid_shape=config.grid_shape, **remaining_kwargs)
     evaluator = make_evaluator("surrogate" if surrogate else "real")
 
     heartbeat_path = os.path.join(config.output_dir, ".heartbeat.json")
     logger = RunLogger(output_dir, heartbeat_path=heartbeat_path, encoder=config.encoder, seed=seed,
                        on_eval=progress_callback)
     try:
-        result = run_ea(encoder, evaluator, config, logger=logger)
+        result = run_strategy(encoder, evaluator, config, logger=logger)
     finally:
         logger.close()
 
     meta_config = config.to_dict()
     meta_config["encoder_kwargs"] = encoder_kwargs or {}
     meta_config["tag"] = tag
-    logger.write_meta(meta_config, encoder.describe(), cache_hit_rate=result.cache_hit_rate)
+    meta_config["strategy"] = strategy
+    logger.write_meta(meta_config, encoder.describe(), cache_hit_rate=result.cache_hit_rate,
+                       resolved_policy=result.resolved_policy)
 
     if result.population:
         best = max(result.population, key=lambda ind: ind.fitness)
@@ -137,6 +179,19 @@ def main(argv=None) -> None:
         default=None,
         help="disambiguates the output directory when multiple arms share (encoder, task, seed), e.g. for ablations",
     )
+    parser.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        help="allow running with an uncommitted working tree (local iteration only -- "
+        "never for a run whose output is cited in a report or a docs/decisions.md row)",
+    )
+    parser.add_argument(
+        "--strategy",
+        default=DEFAULT_STRATEGY,
+        choices=sorted(STRATEGIES),
+        help="search strategy consuming the eval budget (default: %(default)s); "
+        "'random_search' is the no-selection/no-mutation control (see evodevo/evolution/random_search.py)",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -147,9 +202,13 @@ def main(argv=None) -> None:
             args.overwrite,
             encoder_kwargs=_parse_encoder_kwargs(args.encoder_kwargs),
             tag=args.tag,
+            allow_dirty=args.allow_dirty,
+            strategy=args.strategy,
         )
     except FileExistsError as e:
         print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except DirtyTreeError:
         sys.exit(1)
 
     print(f"run complete: {output_dir}")

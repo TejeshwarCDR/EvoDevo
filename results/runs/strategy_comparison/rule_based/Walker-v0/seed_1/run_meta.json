@@ -1,0 +1,78 @@
+{
+  "cache_hit_rate": null,
+  "config": {
+    "cache_enabled": false,
+    "encoder": "rule_based",
+    "encoder_kwargs": {
+      "dev_steps": 39,
+      "init_condition": "center_seed"
+    },
+    "eval_budget": 300,
+    "grid_shape": [
+      5,
+      5
+    ],
+    "min_actuators": 1,
+    "min_voxels": 3,
+    "offspring_size": 15,
+    "output_dir": "results/runs/strategy_comparison",
+    "population_size": 15,
+    "ppo_eval_episodes": 1,
+    "ppo_timesteps": 5000,
+    "seed": 1,
+    "sentinel_fitness": -10.0,
+    "strategy": "ea",
+    "tag": null,
+    "task": "Walker-v0",
+    "use_crossover": false
+  },
+  "encoder": {
+    "action_types": [
+      "set_empty",
+      "set_soft",
+      "set_hard",
+      "set_actuator_horizontal",
+      "set_actuator_vertical",
+      "grow_directional",
+      "copy_neighbor"
+    ],
+    "condition_types": [
+      "always",
+      "cell_type",
+      "neighbor_count",
+      "empty_neighbor",
+      "position"
+    ],
+    "developmental_iterations": 39,
+    "factors": {
+      "dev_steps": 39,
+      "hidden_channels": 3,
+      "init_condition": "center_seed",
+      "mutation_scale": 1.0,
+      "neighbourhood": "von_neumann",
+      "seed": 1
+    },
+    "grid_shape": [
+      5,
+      5
+    ],
+    "init_condition": "center_seed",
+    "max_rules": 12,
+    "min_rules": 2,
+    "mutation_rate": 0.2,
+    "mutation_scale": 1.0,
+    "name": "rule_based"
+  },
+  "git_commit": "9e5cef87f5777b7c66397fea008a53a44229b907",
+  "library_versions": {
+    "numpy": "1.26.4",
+    "pytest": "9.1.1",
+    "python": "3.10.20 (main, Mar  3 2026, 00:49:35) [Clang 21.0.0 (clang-2100.0.123.102)]",
+    "yaml": "6.0.3"
+  },
+  "resolved_policy": {
+    "budget_counter_semantics": "evals_spent (== eval_index+1) is the sole budget-governing counter; evals_valid_cumulative tracks real (decoded-and-validated) search attempts separately and is NEVER used to gate the eval_budget loop",
+    "cache_charging_policy": "cache_hit_still_consumes_one_evaluation_slot",
+    "invalid_genome_policy": "an invalid genome consumes one evaluation slot and is scored sentinel_fitness=-10.0 -- never resampled, never free"
+  }
+}

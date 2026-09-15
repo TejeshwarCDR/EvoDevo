@@ -26,11 +26,14 @@ import numpy as np
 import yaml
 
 from evodevo.core.config import SHARED_BASE_KEYS, ConfigOverrideError, ExperimentConfig
+from evodevo.core.factors import ExperimentFactors
+from evodevo.core.provenance import DirtyTreeError, check_git_state, write_factors_json
 from evodevo.encoders import get_encoder
 from evodevo.evaluation.ppo_runner import make_evaluator
 from evodevo.evolution.progress import ProgressTracker
-from evodevo.experiments.fairness import FairnessViolation, assert_comparable
-from evodevo.experiments.run_experiment import DONE_MARKER, _run_output_dir, run_experiment
+from evodevo.evolution.ea import resolved_policy_for
+from evodevo.experiments.fairness import FairnessViolation, assert_comparable, assert_identical_policy
+from evodevo.experiments.run_experiment import DEFAULT_STRATEGY, DONE_MARKER, STRATEGIES, _run_output_dir, run_experiment
 
 DEFAULT_CONFIGS_ROOT = "evodevo/experiments/configs"
 DEFAULT_OUTPUT_DIR = "results/runs"
@@ -52,6 +55,27 @@ class BenchmarkConfig:
     configs_root: str = DEFAULT_CONFIGS_ROOT
     output_dir: str = DEFAULT_OUTPUT_DIR
     surrogate: bool = False
+    # dev_steps/init_condition are required, fairness-critical experimental
+    # factors (see evodevo.core.factors.ExperimentFactors) applied
+    # identically to every encoder in this benchmark -- there is
+    # deliberately no default here; a benchmark.yaml that omits them fails
+    # to construct ExperimentFactors below rather than silently reusing a
+    # per-arm default.
+    factors: dict = dataclasses.field(default_factory=dict)
+    # The strategy axis (P7): {ea, random_search} crossed with every encoder
+    # -- random_search is the no-selection/no-mutation control that
+    # separates the encoding's representational prior from the EA's search
+    # contribution (see evodevo/evolution/random_search.py). Defaults to
+    # ["ea"] only, so every pre-existing benchmark.yaml keeps its exact
+    # current behaviour and output paths unless it opts in.
+    strategies: List[str] = dataclasses.field(default_factory=lambda: [DEFAULT_STRATEGY])
+    # Per-(strategy, task) seed count override: {strategy: {task: [seeds]}}.
+    # Falls back to `seeds` when a strategy/task isn't listed here. Lets
+    # random_search (the cheapest arm to run) match the primary comparison's
+    # seed count on the primary task while using a reduced seed count
+    # elsewhere, per this prompt's compute-note recommendation, WITHOUT
+    # ever dropping random_search entirely.
+    strategy_seeds: dict = dataclasses.field(default_factory=dict)
 
     @classmethod
     def from_yaml(cls, path: str) -> "BenchmarkConfig":
@@ -61,6 +85,13 @@ class BenchmarkConfig:
 
     def config_path(self, encoder: str, task: str) -> str:
         return os.path.join(self.configs_root, encoder, f"{_task_to_config_stem(task)}.yaml")
+
+    def seeds_for(self, strategy: str, task: str) -> List[int]:
+        per_strategy = self.strategy_seeds.get(strategy)
+        if not per_strategy:
+            return self.seeds
+        per_task = per_strategy.get(task)
+        return per_task if per_task else self.seeds
 
 
 def _git_commit_hash() -> Optional[str]:
@@ -103,10 +134,23 @@ def check_fairness(bconfig: BenchmarkConfig) -> dict:
     """Resolve every (encoder, task) config and assert pairwise
     comparability within each task, BEFORE anything is run. Raises
     FairnessViolation on any mismatch. Returns the resolved configs dict."""
+    unknown_strategies = [s for s in bconfig.strategies if s not in STRATEGIES]
+    if unknown_strategies:
+        raise ValueError(f"unknown strategy(ies) {unknown_strategies}; available: {sorted(STRATEGIES)}")
+
     resolved = resolve_configs(bconfig)
     for task in bconfig.tasks:
         for enc_a, enc_b in itertools.combinations(bconfig.encoders, 2):
             assert_comparable(resolved[(enc_a, task)], resolved[(enc_b, task)])
+
+    # Run-start assertion (see evodevo.evolution.ea.resolved_policy_for):
+    # the invalid-genome/cache-charging/budget-counter policy every arm will
+    # actually run under must be identical, checked here before any run
+    # starts, not just implicitly true because run_ea() is shared code.
+    for task in bconfig.tasks:
+        policies = {encoder: resolved_policy_for(resolved[(encoder, task)]) for encoder in bconfig.encoders}
+        assert_identical_policy(policies)
+
     return resolved
 
 
@@ -125,6 +169,17 @@ def _run_config_for(bconfig: BenchmarkConfig, resolved_configs: dict, encoder: s
     that config is run directly via run_experiment.py outside a
     benchmark)."""
     return dataclasses.replace(resolved_configs[(encoder, task)], seed=seed, output_dir=bconfig.output_dir)
+
+
+def _output_dir_for(bconfig: BenchmarkConfig, resolved_configs: dict, encoder: str, task: str, seed: int,
+                     strategy: str) -> str:
+    """Mirrors run_experiment.py's own tag-folding rule exactly (strategy
+    only disambiguates the path when it isn't the default "ea"), so a
+    benchmark-orchestrated run and a directly-invoked run_experiment.py call
+    with the same (encoder, task, seed, strategy) land at the same path."""
+    tag = None if strategy == DEFAULT_STRATEGY else strategy
+    run_config = _run_config_for(bconfig, resolved_configs, encoder, task, seed)
+    return _run_output_dir(run_config, seed, tag=tag)
 
 
 def _resolved_config_path(bconfig: BenchmarkConfig, encoder: str, task: str, seed: int) -> str:
@@ -148,18 +203,23 @@ def build_manifest(bconfig: BenchmarkConfig, resolved_configs: dict) -> dict:
     encoder_describe = {}
     for encoder in bconfig.encoders:
         any_encoder_config = next(cfg for (enc, _task), cfg in resolved_configs.items() if enc == encoder)
-        encoder_describe[encoder] = get_encoder(encoder, grid_shape=any_encoder_config.grid_shape).describe()
+        factors = ExperimentFactors(seed=any_encoder_config.seed, **bconfig.factors)
+        encoder_describe[encoder] = get_encoder(
+            encoder, factors=factors, grid_shape=any_encoder_config.grid_shape
+        ).describe()
 
     run_matrix = [
         {
             "encoder": encoder,
             "task": task,
             "seed": seed,
-            "output_dir": _run_output_dir(_run_config_for(bconfig, resolved_configs, encoder, task, seed), seed),
+            "strategy": strategy,
+            "output_dir": _output_dir_for(bconfig, resolved_configs, encoder, task, seed, strategy),
         }
         for encoder in bconfig.encoders
         for task in bconfig.tasks
-        for seed in bconfig.seeds
+        for strategy in bconfig.strategies
+        for seed in bconfig.seeds_for(strategy, task)
     ]
 
     return {
@@ -186,7 +246,8 @@ def estimate_wall_clock(bconfig: BenchmarkConfig, resolved_configs: dict) -> dic
     for encoder in bconfig.encoders:
         any_task = bconfig.tasks[0]
         config = resolved_configs[(encoder, any_task)]
-        encoder_instance = get_encoder(encoder, grid_shape=config.grid_shape)
+        factors = ExperimentFactors(seed=config.seed, **bconfig.factors)
+        encoder_instance = get_encoder(encoder, factors=factors, grid_shape=config.grid_shape)
         rng = np.random.default_rng(config.seed)
         genome = encoder_instance.random_genome(rng)
         body = encoder_instance.decode(genome)
@@ -222,9 +283,16 @@ def _write_manifest(bconfig: BenchmarkConfig, manifest: dict) -> str:
     return path
 
 
-def run_benchmark(bconfig: BenchmarkConfig, dry_run: bool = False) -> dict:
+def run_benchmark(bconfig: BenchmarkConfig, dry_run: bool = False, allow_dirty: bool = False) -> dict:
+    # 0. Provenance gate FIRST, before anything else -- a standalone check
+    # (evodevo.core.provenance), independent of ExperimentConfig/lock_hash.
+    commit_hash, dirty_files = check_git_state(allow_dirty)
+
     # 1. Fairness check FIRST, before anything is run or written.
     resolved_configs = check_fairness(bconfig)
+
+    factors = ExperimentFactors(seed=0, **bconfig.factors)
+    write_factors_json(bconfig.output_dir, factors, commit_hash, dirty_files)
 
     # 2. Manifest written before any run starts.
     manifest = build_manifest(bconfig, resolved_configs)
@@ -253,10 +321,12 @@ def run_benchmark(bconfig: BenchmarkConfig, dry_run: bool = False) -> dict:
     completed, skipped = [], []
     for entry in manifest["run_matrix"]:
         encoder, task, seed = entry["encoder"], entry["task"], entry["seed"]
+        strategy = entry["strategy"]
         output_dir = entry["output_dir"]
+        label = f"{encoder}/{task}/{strategy}/seed_{seed}"
 
         if _is_run_complete(output_dir):
-            print(f"[skip] {encoder}/{task}/seed_{seed} already complete at {output_dir} -- resuming")
+            print(f"[skip] {label} already complete at {output_dir} -- resuming")
             skipped.append(entry)
             continue
 
@@ -264,10 +334,13 @@ def run_benchmark(bconfig: BenchmarkConfig, dry_run: bool = False) -> dict:
         resolved_path = _resolved_config_path(bconfig, encoder, task, seed)
         run_config.to_yaml(resolved_path)
 
-        print(f"[run]  {encoder}/{task}/seed_{seed}")
+        print(f"[run]  {label}")
         run_progress = tracker.for_run(encoder, task, seed)
         run_experiment(resolved_path, seed, surrogate=bconfig.surrogate, overwrite=False,
-                        progress_callback=run_progress)
+                        encoder_kwargs=dict(bconfig.factors),
+                        progress_callback=run_progress,
+                        allow_dirty=allow_dirty,
+                        strategy=strategy)
         completed.append(entry)
 
     manifest["completed_this_invocation"] = completed
@@ -284,6 +357,12 @@ def main(argv=None) -> None:
     parser.add_argument("--config", required=True, help="path to a benchmark YAML config")
     parser.add_argument("--dry-run", action="store_true", help="print the run matrix and a wall-clock estimate; run nothing")
     parser.add_argument("--surrogate", action="store_true", help="override the config's surrogate flag to True")
+    parser.add_argument(
+        "--allow-dirty",
+        action="store_true",
+        help="allow running with an uncommitted working tree (local iteration only -- "
+        "never for a run whose output is cited in a report or a docs/decisions.md row)",
+    )
     args = parser.parse_args(argv)
 
     bconfig = BenchmarkConfig.from_yaml(args.config)
@@ -291,7 +370,7 @@ def main(argv=None) -> None:
         bconfig = dataclasses.replace(bconfig, surrogate=True)
 
     try:
-        run_benchmark(bconfig, dry_run=args.dry_run)
+        run_benchmark(bconfig, dry_run=args.dry_run, allow_dirty=args.allow_dirty)
     except (FairnessViolation, ConfigOverrideError) as e:
         # Both are "abort before anything runs" outcomes: ConfigOverrideError
         # fires earlier (at config-load time, if a per-method config tries to
@@ -299,6 +378,8 @@ def main(argv=None) -> None:
         # two already-loaded configs still disagree on a required-equal
         # field). Either way, nothing has been written to output_dir yet.
         print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except DirtyTreeError:
         sys.exit(1)
 
 

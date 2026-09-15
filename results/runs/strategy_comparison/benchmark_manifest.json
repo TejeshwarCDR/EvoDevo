@@ -1,0 +1,368 @@
+{
+  "completed_this_invocation": [
+    {
+      "encoder": "direct",
+      "output_dir": "results/runs/strategy_comparison/direct/Walker-v0/seed_0",
+      "seed": 0,
+      "strategy": "ea",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "direct",
+      "output_dir": "results/runs/strategy_comparison/direct/Walker-v0/seed_1",
+      "seed": 1,
+      "strategy": "ea",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "direct",
+      "output_dir": "results/runs/strategy_comparison/direct/Walker-v0/seed_2",
+      "seed": 2,
+      "strategy": "ea",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "direct",
+      "output_dir": "results/runs/strategy_comparison/direct/Walker-v0/random_search/seed_0",
+      "seed": 0,
+      "strategy": "random_search",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "direct",
+      "output_dir": "results/runs/strategy_comparison/direct/Walker-v0/random_search/seed_1",
+      "seed": 1,
+      "strategy": "random_search",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "direct",
+      "output_dir": "results/runs/strategy_comparison/direct/Walker-v0/random_search/seed_2",
+      "seed": 2,
+      "strategy": "random_search",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "nca",
+      "output_dir": "results/runs/strategy_comparison/nca/Walker-v0/seed_0",
+      "seed": 0,
+      "strategy": "ea",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "nca",
+      "output_dir": "results/runs/strategy_comparison/nca/Walker-v0/seed_1",
+      "seed": 1,
+      "strategy": "ea",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "nca",
+      "output_dir": "results/runs/strategy_comparison/nca/Walker-v0/seed_2",
+      "seed": 2,
+      "strategy": "ea",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "nca",
+      "output_dir": "results/runs/strategy_comparison/nca/Walker-v0/random_search/seed_0",
+      "seed": 0,
+      "strategy": "random_search",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "nca",
+      "output_dir": "results/runs/strategy_comparison/nca/Walker-v0/random_search/seed_1",
+      "seed": 1,
+      "strategy": "random_search",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "nca",
+      "output_dir": "results/runs/strategy_comparison/nca/Walker-v0/random_search/seed_2",
+      "seed": 2,
+      "strategy": "random_search",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "rule_based",
+      "output_dir": "results/runs/strategy_comparison/rule_based/Walker-v0/seed_0",
+      "seed": 0,
+      "strategy": "ea",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "rule_based",
+      "output_dir": "results/runs/strategy_comparison/rule_based/Walker-v0/seed_1",
+      "seed": 1,
+      "strategy": "ea",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "rule_based",
+      "output_dir": "results/runs/strategy_comparison/rule_based/Walker-v0/seed_2",
+      "seed": 2,
+      "strategy": "ea",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "rule_based",
+      "output_dir": "results/runs/strategy_comparison/rule_based/Walker-v0/random_search/seed_0",
+      "seed": 0,
+      "strategy": "random_search",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "rule_based",
+      "output_dir": "results/runs/strategy_comparison/rule_based/Walker-v0/random_search/seed_1",
+      "seed": 1,
+      "strategy": "random_search",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "rule_based",
+      "output_dir": "results/runs/strategy_comparison/rule_based/Walker-v0/random_search/seed_2",
+      "seed": 2,
+      "strategy": "random_search",
+      "task": "Walker-v0"
+    }
+  ],
+  "encoders": {
+    "direct": {
+      "empty_prob": 0.6,
+      "factors": {
+        "dev_steps": 39,
+        "hidden_channels": 3,
+        "init_condition": "center_seed",
+        "mutation_scale": 1.0,
+        "neighbourhood": "von_neumann",
+        "seed": 0
+      },
+      "grid_shape": [
+        5,
+        5
+      ],
+      "mutation_rate": 0.1,
+      "mutation_scale": 1.0,
+      "name": "direct"
+    },
+    "nca": {
+      "channels": 8,
+      "dev_steps": 39,
+      "factors": {
+        "dev_steps": 39,
+        "hidden_channels": 3,
+        "init_condition": "center_seed",
+        "mutation_scale": 1.0,
+        "neighbourhood": "von_neumann",
+        "seed": 0
+      },
+      "genome_length": 792,
+      "grid_shape": [
+        5,
+        5
+      ],
+      "hidden_channels": 3,
+      "hidden_width": 16,
+      "init_condition": "center_seed",
+      "init_scale": 0.5,
+      "mutation_fraction": 1.0,
+      "mutation_scale": 1.0,
+      "mutation_sigma": 0.1,
+      "name": "nca",
+      "neighbourhood": "von_neumann"
+    },
+    "rule_based": {
+      "action_types": [
+        "set_empty",
+        "set_soft",
+        "set_hard",
+        "set_actuator_horizontal",
+        "set_actuator_vertical",
+        "grow_directional",
+        "copy_neighbor"
+      ],
+      "condition_types": [
+        "always",
+        "cell_type",
+        "neighbor_count",
+        "empty_neighbor",
+        "position"
+      ],
+      "developmental_iterations": 39,
+      "factors": {
+        "dev_steps": 39,
+        "hidden_channels": 3,
+        "init_condition": "center_seed",
+        "mutation_scale": 1.0,
+        "neighbourhood": "von_neumann",
+        "seed": 0
+      },
+      "grid_shape": [
+        5,
+        5
+      ],
+      "init_condition": "center_seed",
+      "max_rules": 12,
+      "min_rules": 2,
+      "mutation_rate": 0.2,
+      "mutation_scale": 1.0,
+      "name": "rule_based"
+    }
+  },
+  "git_commit": "9e5cef87f5777b7c66397fea008a53a44229b907",
+  "library_versions": {
+    "matplotlib": "3.10.9",
+    "numpy": "1.26.4",
+    "pandas": "2.3.3",
+    "pytest": "9.1.1",
+    "python": "3.10.20 (main, Mar  3 2026, 00:49:35) [Clang 21.0.0 (clang-2100.0.123.102)]",
+    "yaml": "6.0.3"
+  },
+  "run_matrix": [
+    {
+      "encoder": "direct",
+      "output_dir": "results/runs/strategy_comparison/direct/Walker-v0/seed_0",
+      "seed": 0,
+      "strategy": "ea",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "direct",
+      "output_dir": "results/runs/strategy_comparison/direct/Walker-v0/seed_1",
+      "seed": 1,
+      "strategy": "ea",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "direct",
+      "output_dir": "results/runs/strategy_comparison/direct/Walker-v0/seed_2",
+      "seed": 2,
+      "strategy": "ea",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "direct",
+      "output_dir": "results/runs/strategy_comparison/direct/Walker-v0/random_search/seed_0",
+      "seed": 0,
+      "strategy": "random_search",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "direct",
+      "output_dir": "results/runs/strategy_comparison/direct/Walker-v0/random_search/seed_1",
+      "seed": 1,
+      "strategy": "random_search",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "direct",
+      "output_dir": "results/runs/strategy_comparison/direct/Walker-v0/random_search/seed_2",
+      "seed": 2,
+      "strategy": "random_search",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "nca",
+      "output_dir": "results/runs/strategy_comparison/nca/Walker-v0/seed_0",
+      "seed": 0,
+      "strategy": "ea",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "nca",
+      "output_dir": "results/runs/strategy_comparison/nca/Walker-v0/seed_1",
+      "seed": 1,
+      "strategy": "ea",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "nca",
+      "output_dir": "results/runs/strategy_comparison/nca/Walker-v0/seed_2",
+      "seed": 2,
+      "strategy": "ea",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "nca",
+      "output_dir": "results/runs/strategy_comparison/nca/Walker-v0/random_search/seed_0",
+      "seed": 0,
+      "strategy": "random_search",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "nca",
+      "output_dir": "results/runs/strategy_comparison/nca/Walker-v0/random_search/seed_1",
+      "seed": 1,
+      "strategy": "random_search",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "nca",
+      "output_dir": "results/runs/strategy_comparison/nca/Walker-v0/random_search/seed_2",
+      "seed": 2,
+      "strategy": "random_search",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "rule_based",
+      "output_dir": "results/runs/strategy_comparison/rule_based/Walker-v0/seed_0",
+      "seed": 0,
+      "strategy": "ea",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "rule_based",
+      "output_dir": "results/runs/strategy_comparison/rule_based/Walker-v0/seed_1",
+      "seed": 1,
+      "strategy": "ea",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "rule_based",
+      "output_dir": "results/runs/strategy_comparison/rule_based/Walker-v0/seed_2",
+      "seed": 2,
+      "strategy": "ea",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "rule_based",
+      "output_dir": "results/runs/strategy_comparison/rule_based/Walker-v0/random_search/seed_0",
+      "seed": 0,
+      "strategy": "random_search",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "rule_based",
+      "output_dir": "results/runs/strategy_comparison/rule_based/Walker-v0/random_search/seed_1",
+      "seed": 1,
+      "strategy": "random_search",
+      "task": "Walker-v0"
+    },
+    {
+      "encoder": "rule_based",
+      "output_dir": "results/runs/strategy_comparison/rule_based/Walker-v0/random_search/seed_2",
+      "seed": 2,
+      "strategy": "random_search",
+      "task": "Walker-v0"
+    }
+  ],
+  "shared_config": {
+    "cache_enabled": false,
+    "eval_budget": 300,
+    "grid_shape": [
+      5,
+      5
+    ],
+    "min_actuators": 1,
+    "min_voxels": 3,
+    "offspring_size": 15,
+    "population_size": 15,
+    "ppo_eval_episodes": 1,
+    "ppo_timesteps": 5000,
+    "sentinel_fitness": -10.0,
+    "use_crossover": false
+  },
+  "skipped_already_done": [],
+  "surrogate": true
+}

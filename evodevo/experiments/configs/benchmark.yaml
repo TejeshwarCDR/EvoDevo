@@ -2,9 +2,24 @@
 # Walker-v0, mutation-only (use_crossover: false in configs/shared/base.yaml),
 # identical shared config across all three arms (enforced by
 # evodevo.experiments.benchmark.check_fairness before anything runs).
+#
+# `factors` is the P1-P7 fairness-corrected primary configuration, applied
+# identically to every arm (required -- ExperimentFactors raises if
+# dev_steps/init_condition are omitted, so this file cannot silently run
+# under a per-arm-default instead):
+#   - init_condition: center_seed -- the P3 decision (docs/decisions.md,
+#     smallest between-arm validity gap at non-degenerate diversity; see
+#     results/initial_condition/INIT_STUDY.md).
+#   - dev_steps: 39 -- the P4 T_primary, CORRECTED 2026-09-16 (was
+#     erroneously clipped to 20 by an unjustified ceiling; see
+#     docs/decisions.md's "Developmental steps (T)" row and
+#     results/depth/DEPTH_STUDY.md for the full derivation).
 encoders: [direct, nca, rule_based]
 tasks: [Walker-v0]
 seeds: [0, 1, 2, 3, 4]
 configs_root: evodevo/experiments/configs
 output_dir: results/runs
 surrogate: false
+factors:
+  dev_steps: 39
+  init_condition: center_seed

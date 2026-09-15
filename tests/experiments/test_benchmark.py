@@ -67,9 +67,10 @@ def test_end_to_end_surrogate_benchmark_identical_evaluation_counts_and_manifest
             configs_root=configs_root,
             output_dir=output_dir,
             surrogate=True,
+            factors={"dev_steps": 5, "init_condition": "center_seed"},
         )
 
-        manifest = run_benchmark(bconfig, dry_run=False)
+        manifest = run_benchmark(bconfig, dry_run=False, allow_dirty=True)
 
         # manifest written
         manifest_path = os.path.join(output_dir, MANIFEST_NAME)
@@ -104,13 +105,14 @@ def test_resume_skips_completed_runs():
             configs_root=configs_root,
             output_dir=output_dir,
             surrogate=True,
+            factors={"dev_steps": 5, "init_condition": "center_seed"},
         )
 
-        first = run_benchmark(bconfig, dry_run=False)
+        first = run_benchmark(bconfig, dry_run=False, allow_dirty=True)
         assert len(first["completed_this_invocation"]) == 3
         assert first["skipped_already_done"] == []
 
-        second = run_benchmark(bconfig, dry_run=False)
+        second = run_benchmark(bconfig, dry_run=False, allow_dirty=True)
         assert second["completed_this_invocation"] == []
         assert len(second["skipped_already_done"]) == 3
 
@@ -125,9 +127,10 @@ def test_dry_run_writes_manifest_and_timing_but_runs_nothing():
             configs_root=configs_root,
             output_dir=output_dir,
             surrogate=True,
+            factors={"dev_steps": 5, "init_condition": "center_seed"},
         )
 
-        manifest = run_benchmark(bconfig, dry_run=True)
+        manifest = run_benchmark(bconfig, dry_run=True, allow_dirty=True)
         assert "dry_run_timing_estimate" in manifest
         assert set(manifest["dry_run_timing_estimate"]["per_encoder_measured_cost_s"]) == {
             "direct",
@@ -154,10 +157,11 @@ def test_mismatched_config_aborts_before_any_run_starts_via_config_override_erro
             configs_root=configs_root,
             output_dir=output_dir,
             surrogate=True,
+            factors={"dev_steps": 5, "init_condition": "center_seed"},
         )
 
         with pytest.raises(ConfigOverrideError, match="eval_budget"):
-            run_benchmark(bconfig, dry_run=False)
+            run_benchmark(bconfig, dry_run=False, allow_dirty=True)
 
         # nothing was written -- not even the manifest.
         assert not os.path.exists(os.path.join(output_dir, MANIFEST_NAME))
@@ -197,6 +201,7 @@ def test_mismatched_config_aborts_via_assert_comparable_when_bypassing_override_
             configs_root=configs_root,
             output_dir=output_dir,
             surrogate=True,
+            factors={"dev_steps": 5, "init_condition": "center_seed"},
         )
 
         with pytest.raises(FairnessViolation, match="eval_budget"):

@@ -32,7 +32,7 @@ def test_end_to_end_surrogate_run_produces_expected_outputs():
         output_root = os.path.join(tmp, "results")
         _write_tiny_config(config_path, output_root, eval_budget=12)
 
-        output_dir = run_experiment(config_path, seed=0, surrogate=True, overwrite=False)
+        output_dir = run_experiment(config_path, seed=0, surrogate=True, overwrite=False, allow_dirty=True)
 
         assert output_dir == os.path.join(output_root, "direct", "dummy-task", "seed_0")
         assert os.path.exists(os.path.join(output_dir, "run_meta.json"))
@@ -54,7 +54,7 @@ def test_aggregate_loads_run():
         output_root = os.path.join(tmp, "results")
         _write_tiny_config(config_path, output_root, eval_budget=8)
 
-        output_dir = run_experiment(config_path, seed=0, surrogate=True, overwrite=False)
+        output_dir = run_experiment(config_path, seed=0, surrogate=True, overwrite=False, allow_dirty=True)
         df = load_runs([output_dir])
 
         assert len(df) == 8
@@ -69,10 +69,10 @@ def test_rerun_without_overwrite_raises():
         output_root = os.path.join(tmp, "results")
         _write_tiny_config(config_path, output_root, eval_budget=8)
 
-        run_experiment(config_path, seed=0, surrogate=True, overwrite=False)
+        run_experiment(config_path, seed=0, surrogate=True, overwrite=False, allow_dirty=True)
 
         with pytest.raises(FileExistsError):
-            run_experiment(config_path, seed=0, surrogate=True, overwrite=False)
+            run_experiment(config_path, seed=0, surrogate=True, overwrite=False, allow_dirty=True)
 
 
 def test_rerun_with_overwrite_succeeds():
@@ -81,9 +81,9 @@ def test_rerun_with_overwrite_succeeds():
         output_root = os.path.join(tmp, "results")
         _write_tiny_config(config_path, output_root, eval_budget=8)
 
-        run_experiment(config_path, seed=0, surrogate=True, overwrite=False)
+        run_experiment(config_path, seed=0, surrogate=True, overwrite=False, allow_dirty=True)
         # Should not raise.
-        output_dir = run_experiment(config_path, seed=0, surrogate=True, overwrite=True)
+        output_dir = run_experiment(config_path, seed=0, surrogate=True, overwrite=True, allow_dirty=True)
         assert os.path.exists(os.path.join(output_dir, "run_meta.json"))
 
 
@@ -95,11 +95,11 @@ def test_encoder_kwargs_and_tag_disambiguate_output_and_reach_the_encoder():
 
         output_dir_a = run_experiment(
             config_path, seed=0, surrogate=True, overwrite=False,
-            encoder_kwargs={"dev_steps": 1}, tag="T1",
+            encoder_kwargs={"dev_steps": 1}, tag="T1", allow_dirty=True,
         )
         output_dir_b = run_experiment(
             config_path, seed=0, surrogate=True, overwrite=False,
-            encoder_kwargs={"dev_steps": 20}, tag="T20",
+            encoder_kwargs={"dev_steps": 20}, tag="T20", allow_dirty=True,
         )
 
         assert output_dir_a != output_dir_b
