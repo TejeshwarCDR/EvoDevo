@@ -110,6 +110,13 @@ class EvaluationTracker:
         self.generation_records: list = []
         self.best_fitness = float("-inf")
 
+        # Per-generation-only (non-cumulative) buffer, reset by
+        # record_generation_summary() below -- backs the per-generation
+        # diversity/validity-breakdown fields in that summary. Task-agnostic
+        # and encoding-agnostic: only ever reads body_hash/valid/reason_category
+        # off each evaluation's own record, nothing encoder- or task-specific.
+        self._current_generation_records: list = []
+
     def evaluate(self, genome: np.ndarray, parent_id: Optional[int], generation: int) -> Individual:
         genome_id = self.next_genome_id
         self.next_genome_id += 1
@@ -180,6 +187,7 @@ class EvaluationTracker:
             **body_metrics(body),
         }
         self.records.append(record)
+        self._current_generation_records.append(record)
         if self.logger is not None:
             self.logger.log(record)
 
@@ -192,6 +200,15 @@ class EvaluationTracker:
         )
 
     def record_generation_summary(self, generation: int) -> None:
+        gen_records = self._current_generation_records
+        gen_invalid_reason_counts: dict = {}
+        gen_valid_body_hashes = set()
+        for r in gen_records:
+            if r["valid"]:
+                gen_valid_body_hashes.add(r["body_hash"])
+            else:
+                gen_invalid_reason_counts[r["reason_category"]] = gen_invalid_reason_counts.get(r["reason_category"], 0) + 1
+
         summary = {
             "generation": generation,
             "evals_spent": self.evaluations_used,
@@ -200,10 +217,19 @@ class EvaluationTracker:
             "evals_invalid_reason_counts": dict(self.invalid_reason_counts),
             "evals_cache_hit": self.evals_cache_hit_cumulative,
             "best_fitness_so_far": self.best_fitness,
+            # Per-GENERATION-only (non-cumulative) fields, covering just this
+            # generation's own batch of evaluations -- see docs/paper-manifest.md's
+            # logging-schema appendix for why these were added (the
+            # cumulative fields above cannot answer "how did diversity/
+            # validity change generation to generation", only "as of now").
+            "generation_size": len(gen_records),
+            "generation_unique_valid_bodies": len(gen_valid_body_hashes),
+            "generation_invalid_reason_counts": gen_invalid_reason_counts,
         }
         self.generation_records.append(summary)
         if self.logger is not None:
             self.logger.log_generation(summary)
+        self._current_generation_records = []
 
 
 def resolve_cache(config, cache: Optional[FitnessCache]) -> Optional[FitnessCache]:

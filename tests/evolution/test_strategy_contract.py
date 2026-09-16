@@ -117,7 +117,45 @@ def test_generation_records_present(strategy_name, encoder_name):
         assert set(gen_record) >= {
             "generation", "evals_spent", "evals_valid", "evals_invalid",
             "evals_invalid_reason_counts", "evals_cache_hit", "best_fitness_so_far",
+            "generation_size", "generation_unique_valid_bodies", "generation_invalid_reason_counts",
         }
+
+
+@pytest.mark.parametrize("encoder_name", sorted(ENCODER_CLASSES))
+@pytest.mark.parametrize("strategy_name", sorted(STRATEGIES))
+def test_generation_only_fields_are_non_cumulative_per_generation(strategy_name, encoder_name):
+    """The new per-generation fields (docs/paper-manifest.md's logging-schema
+    appendix) must cover ONLY that generation's own batch, not the whole
+    run-so-far -- unlike evals_invalid_reason_counts (cumulative), which
+    these are explicitly NOT a copy of."""
+    result, _encoder, _config = _run(strategy_name, encoder_name, eval_budget=20, population_size=4, offspring_size=4)
+    records_by_generation: dict = {}
+    for r in result.records:
+        records_by_generation.setdefault(r["generation"], []).append(r)
+
+    for gen_record in result.generation_records:
+        gen = gen_record["generation"]
+        this_gen_evals = records_by_generation.get(gen, [])
+        assert gen_record["generation_size"] == len(this_gen_evals)
+
+        expected_valid_bodies = {r["body_hash"] for r in this_gen_evals if r["valid"]}
+        assert gen_record["generation_unique_valid_bodies"] == len(expected_valid_bodies)
+        # Never exceeds the number of individuals actually evaluated this
+        # generation, and never exceeds the CUMULATIVE unique-body notion
+        # either -- a sanity bound, not a claim about the exact number.
+        assert gen_record["generation_unique_valid_bodies"] <= gen_record["generation_size"]
+
+        expected_invalid_reasons: dict = {}
+        for r in this_gen_evals:
+            if not r["valid"]:
+                expected_invalid_reasons[r["reason_category"]] = expected_invalid_reasons.get(r["reason_category"], 0) + 1
+        assert gen_record["generation_invalid_reason_counts"] == expected_invalid_reasons
+        # Per-generation invalid counts must sum to at most the cumulative
+        # count recorded in the SAME summary row (equality only holds for
+        # generation 0; the cumulative field also includes prior generations).
+        assert sum(gen_record["generation_invalid_reason_counts"].values()) <= sum(
+            gen_record["evals_invalid_reason_counts"].values()
+        )
 
 
 @pytest.mark.parametrize("encoder_name", sorted(ENCODER_CLASSES))
