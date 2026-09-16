@@ -10,16 +10,63 @@
 #   - init_condition: center_seed -- the P3 decision (docs/decisions.md,
 #     smallest between-arm validity gap at non-degenerate diversity; see
 #     results/initial_condition/INIT_STUDY.md).
-#   - dev_steps: 39 -- the P4 T_primary, CORRECTED 2026-09-16 (was
-#     erroneously clipped to 20 by an unjustified ceiling; see
-#     docs/decisions.md's "Developmental steps (T)" row and
-#     results/depth/DEPTH_STUDY.md for the full derivation).
-encoders: [direct, nca, rule_based]
+#   - dev_steps: 100 -- SUPERSEDES the 2026-09-16 q95-based T_primary=39
+#     (docs/decisions.md's "Developmental steps (T)" row, itself already a
+#     correction of an earlier bug). That q95(settle_step)-based derivation
+#     turned out to be computing an ILL-POSED statistic for BOTH arms (a
+#     percentile is undefined once the censored/never-settled fraction
+#     exceeds the percentile's own complement -- true for rule_based at
+#     11.55% and NCA at 40-64%, both far past 5%; see results/rule_based/
+#     SETTLING_AUDIT.md and results/nca/HORIZON_EXTENSION.md). Replaced by
+#     the T-shift-stability criterion in results/T_PRIMARY_UNIFIED.md,
+#     applied identically to both arms: dev_steps=100 = max(NCA's own
+#     stability-selected T=100, rule_based's own stability-selected T=40).
+#     dev_steps=100, NOT 40, because NCA's first selection (T=40) was later
+#     found INTERNALLY INCONSISTENT with its own resolved W=50 (a 50-step
+#     trailing window cannot exist within a 40-step trajectory --
+#     `windowed_readout.py::windowed_body_at` silently clips rather than
+#     raising, so "T=40, W=50" was actually measuring the full 41-step
+#     trajectory, not a genuine 50-step window) and corrected to T=100
+#     (the smallest T with W=50 <= T) -- see docs/decisions.md's "NCA
+#     T_primary/W consistency fix" row.
+#     See docs/decisions.md's "unified T_primary (T-shift-stability
+#     criterion, both arms)" row.
+#
+# RESOLVED (previously a disclosed limitation, see docs/decisions.md's "Wire
+# the resolved readout policy into the primary benchmark path" row):
+# BenchmarkConfig now supports a per-arm encoder_kwargs override
+# (evodevo/experiments/benchmark.py::BenchmarkConfig.encoder_kwargs,
+# layered on top of a built-in per-arm default resolved from that arm's own
+# resolved_config.py -- see benchmark.py::_BUILTIN_ARM_DEFAULT_KWARGS /
+# _resolved_arm_kwargs). rule_based's resolved readout (mode_of_window,
+# W=6, from evodevo.encoders.rule_based.resolved_config.PRIMARY) now
+# reaches real benchmark runs through this mechanism, the same way NCA's
+# resolved readout (mode_of_window, W=50) reaches them via NCAEncoder's own
+# class default -- both arms' real benchmark runs now read out via
+# mode_of_window, RuleBasedEncoder's own class default is UNCHANGED
+# (`fixed_t`, still correct for old call sites that construct it directly).
+# This mechanism is deliberately NOT subject to check_fairness/
+# SHARED_BASE_KEYS: per-arm dynamics knobs like readout_mode are not a
+# "shared, must-match" quantity, the same as NCA's update_rule/decay.
+#
+# The `rule_based_monotone` co-primary arm (docs/decisions.md's "Monotone
+# vs unrestricted: an explicit decision" row) IS implemented below, as a
+# {encoder, variant} entry rather than a bare string -- see
+# evodevo/experiments/benchmark.py::ArmSpec/resolved_arms(). Its arm_id
+# ("rule_based_monotone") is what disambiguates its output directory,
+# manifest entry, and wall-clock measurement from `rule_based`'s, while
+# `encoder: rule_based` still resolves the same underlying config/registry
+# class; its resolved dynamics kwargs (action_monotonicity=monotone,
+# readout_mode/readout_window) come from
+# resolved_config.py::MONOTONE_ABLATION via benchmark.py's
+# _BUILTIN_ARM_DEFAULT_KWARGS, not hardcoded here -- see docs/decisions.md's
+# "Wire the resolved readout policy into the primary benchmark path" row.
+encoders: [direct, nca, rule_based, {encoder: rule_based, variant: monotone}]
 tasks: [Walker-v0]
 seeds: [0, 1, 2, 3, 4]
 configs_root: evodevo/experiments/configs
 output_dir: results/runs
 surrogate: false
 factors:
-  dev_steps: 39
+  dev_steps: 100
   init_condition: center_seed

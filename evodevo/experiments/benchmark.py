@@ -19,21 +19,32 @@ import re
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
-from typing import List, Optional
+from dataclasses import dataclass, field
+from typing import List, Optional, Union
 
 import numpy as np
 import yaml
 
 from evodevo.core.config import SHARED_BASE_KEYS, ConfigOverrideError, ExperimentConfig
-from evodevo.core.factors import ExperimentFactors
+from evodevo.core.factors import ExperimentFactors, extract_factors
 from evodevo.core.provenance import DirtyTreeError, check_git_state, write_factors_json
 from evodevo.encoders import get_encoder
+from evodevo.encoders.rule_based.resolved_config import (
+    MONOTONE_ABLATION as RULE_BASED_MONOTONE,
+    PRIMARY as RULE_BASED_PRIMARY,
+)
 from evodevo.evaluation.ppo_runner import make_evaluator
 from evodevo.evolution.progress import ProgressTracker
 from evodevo.evolution.ea import resolved_policy_for
 from evodevo.experiments.fairness import FairnessViolation, assert_comparable, assert_identical_policy
-from evodevo.experiments.run_experiment import DEFAULT_STRATEGY, DONE_MARKER, STRATEGIES, _run_output_dir, run_experiment
+from evodevo.experiments.run_experiment import (
+    DEFAULT_STRATEGY,
+    DONE_MARKER,
+    STRATEGIES,
+    _combine_tag_and_strategy,
+    _run_output_dir,
+    run_experiment,
+)
 
 DEFAULT_CONFIGS_ROOT = "evodevo/experiments/configs"
 DEFAULT_OUTPUT_DIR = "results/runs"
@@ -48,8 +59,53 @@ def _task_to_config_stem(task: str) -> str:
 
 
 @dataclass
+class ArmSpec:
+    """The generic "distinct arm identity" mechanism: an arm is (encoder
+    registry key, optional variant label). `variant=None` is the base/primary
+    arm for that encoder -- its arm_id equals the bare encoder name, so every
+    pre-existing single-string benchmark.yaml entry is unaffected. A second
+    (third, fourth, ...) arm built on the SAME encoder class (e.g.
+    rule_based's monotone ablation) is declared with a `variant` label, which
+    both disambiguates its arm_id everywhere identity is used (config
+    resolution, output dir, manifest, wall-clock projection, analysis
+    grouping) AND is folded into run_experiment()'s existing `tag` parameter
+    for path separation -- reusing the exact mechanism already used to
+    separate the `strategy` axis, rather than inventing a second one."""
+
+    encoder: str
+    variant: Optional[str] = None
+    encoder_kwargs: dict = field(default_factory=dict)
+
+    @property
+    def arm_id(self) -> str:
+        return self.encoder if self.variant is None else f"{self.encoder}_{self.variant}"
+
+    @property
+    def is_variant(self) -> bool:
+        return self.variant is not None
+
+    @classmethod
+    def from_yaml_entry(cls, entry: Union[str, dict]) -> "ArmSpec":
+        if isinstance(entry, str):
+            return cls(encoder=entry)
+        return cls(
+            encoder=entry["encoder"],
+            variant=entry.get("variant"),
+            encoder_kwargs=dict(entry.get("encoder_kwargs", {})),
+        )
+
+
+@dataclass
 class BenchmarkConfig:
-    encoders: List[str]
+    # Each element is either a bare encoder registry name (str, e.g.
+    # "rule_based" -- the base/primary arm, fully backward compatible with
+    # every pre-existing benchmark.yaml) or a mapping
+    # {encoder, variant, encoder_kwargs} describing an additional named arm
+    # built on that same encoder class (e.g. {encoder: rule_based, variant:
+    # monotone}). Use resolved_arms() to get the parsed List[ArmSpec] -- every
+    # internal function below iterates that, never this raw field, so a new
+    # variant only ever requires a new list entry here, never a code change.
+    encoders: List[Union[str, dict]]
     tasks: List[str]
     seeds: List[int]
     configs_root: str = DEFAULT_CONFIGS_ROOT
@@ -76,6 +132,22 @@ class BenchmarkConfig:
     # elsewhere, per this prompt's compute-note recommendation, WITHOUT
     # ever dropping random_search entirely.
     strategy_seeds: dict = dataclasses.field(default_factory=dict)
+    # Per-arm encoder_kwargs override: {encoder_name: {kwarg: value}}, merged
+    # on top of each arm's resolved default (see _resolved_arm_kwargs below)
+    # and on top of the shared `factors` block, then passed through to
+    # get_encoder/RuleBasedEncoder etc. as `remaining_kwargs`
+    # (evodevo.core.factors.extract_factors already splits ExperimentFactors
+    # fields out of this merged dict, so factor-shaped and encoder-specific
+    # kwargs can coexist here without conflict). Deliberately NOT subject to
+    # check_fairness/SHARED_BASE_KEYS: these are arm-specific dynamics
+    # knobs (e.g. rule_based's readout_mode/readout_window), semantically
+    # different from the genuinely-shared quantities that check protects
+    # (same reasoning as NCA's update_rule/decay never being subject to it
+    # either -- see docs/decisions.md's "Wire the resolved readout policy
+    # into the primary benchmark path" row). Defaults to {} so every
+    # pre-existing benchmark.yaml keeps its exact current behaviour unless a
+    # config or _resolved_arm_kwargs's own built-in default opts an arm in.
+    encoder_kwargs: dict = dataclasses.field(default_factory=dict)
 
     @classmethod
     def from_yaml(cls, path: str) -> "BenchmarkConfig":
@@ -86,12 +158,57 @@ class BenchmarkConfig:
     def config_path(self, encoder: str, task: str) -> str:
         return os.path.join(self.configs_root, encoder, f"{_task_to_config_stem(task)}.yaml")
 
+    def resolved_arms(self) -> List[ArmSpec]:
+        """Parses `self.encoders` (a mix of bare strings and/or
+        {encoder, variant, encoder_kwargs} mappings) into the List[ArmSpec]
+        every function in this module actually iterates."""
+        return [ArmSpec.from_yaml_entry(entry) for entry in self.encoders]
+
     def seeds_for(self, strategy: str, task: str) -> List[int]:
         per_strategy = self.strategy_seeds.get(strategy)
         if not per_strategy:
             return self.seeds
         per_task = per_strategy.get(task)
         return per_task if per_task else self.seeds
+
+
+# Built-in per-arm default encoder_kwargs, resolved from each arm's own
+# resolved_config.py candidate rather than hardcoded literals here -- this is
+# what makes rule_based's resolved readout policy (mode_of_window, W=6)
+# reach the real benchmark path, mirroring how NCA's resolved readout
+# reaches it via NCAEncoder's own class default (see benchmark.yaml's
+# header comment and docs/decisions.md's "Wire the resolved readout policy
+# into the primary benchmark path" row). Keyed by arm_id (NOT bare encoder),
+# so a second arm built on the same encoder class -- e.g. "rule_based_monotone"
+# -- gets its own resolved default (here, sourced from
+# resolved_config.MONOTONE_ABLATION, the other PPO_MATRIX_CANDIDATES entry)
+# without colliding with "rule_based"'s. An ArmSpec.encoder_kwargs entry (from
+# the encoders: list itself) is layered on top of this, and
+# bconfig.encoder_kwargs[arm_id] on top of that (highest precedence).
+_BUILTIN_ARM_DEFAULT_KWARGS = {
+    "rule_based": {
+        "readout_mode": RULE_BASED_PRIMARY.readout_mode,
+        "readout_window": RULE_BASED_PRIMARY.readout_window,
+    },
+    "rule_based_monotone": {
+        "readout_mode": RULE_BASED_MONOTONE.readout_mode,
+        "readout_window": RULE_BASED_MONOTONE.readout_window,
+        "action_monotonicity": RULE_BASED_MONOTONE.action_monotonicity,
+    },
+}
+
+
+def _resolved_arm_kwargs(bconfig: "BenchmarkConfig", arm: ArmSpec) -> dict:
+    """encoder_kwargs actually passed to run_experiment/get_encoder for
+    `arm`: the shared `factors` block, layered with this arm's built-in
+    resolved default (if any, keyed by arm_id), layered with any
+    encoder_kwargs declared inline on the ArmSpec itself, layered with any
+    explicit bconfig.encoder_kwargs[arm_id] override (highest precedence)."""
+    merged = dict(bconfig.factors)
+    merged.update(_BUILTIN_ARM_DEFAULT_KWARGS.get(arm.arm_id, {}))
+    merged.update(arm.encoder_kwargs)
+    merged.update(bconfig.encoder_kwargs.get(arm.arm_id, {}))
+    return merged
 
 
 def _git_commit_hash() -> Optional[str]:
@@ -117,38 +234,43 @@ def _library_versions() -> dict:
 
 
 def resolve_configs(bconfig: BenchmarkConfig) -> dict:
-    """Returns {(encoder, task): ExperimentConfig}, using bconfig.seeds[0] as
+    """Returns {(arm_id, task): ExperimentConfig}, using bconfig.seeds[0] as
     a representative seed (seed is exempt from the fairness protocol, so any
-    seed produces identical values on every other field)."""
+    seed produces identical values on every other field). Two arms sharing
+    an underlying encoder (e.g. rule_based / rule_based_monotone) resolve
+    their config from the SAME configs/<encoder>/<task>.yaml -- only their
+    encoder_kwargs (see _resolved_arm_kwargs) differ -- but are keyed
+    distinctly here by arm_id."""
     representative_seed = bconfig.seeds[0]
     resolved = {}
-    for encoder in bconfig.encoders:
+    for arm in bconfig.resolved_arms():
         for task in bconfig.tasks:
-            path = bconfig.config_path(encoder, task)
+            path = bconfig.config_path(arm.encoder, task)
             config = ExperimentConfig.from_method_yaml(path)
-            resolved[(encoder, task)] = dataclasses.replace(config, seed=representative_seed)
+            resolved[(arm.arm_id, task)] = dataclasses.replace(config, seed=representative_seed)
     return resolved
 
 
 def check_fairness(bconfig: BenchmarkConfig) -> dict:
-    """Resolve every (encoder, task) config and assert pairwise
-    comparability within each task, BEFORE anything is run. Raises
-    FairnessViolation on any mismatch. Returns the resolved configs dict."""
+    """Resolve every (arm, task) config and assert pairwise comparability
+    within each task, BEFORE anything is run. Raises FairnessViolation on
+    any mismatch. Returns the resolved configs dict."""
     unknown_strategies = [s for s in bconfig.strategies if s not in STRATEGIES]
     if unknown_strategies:
         raise ValueError(f"unknown strategy(ies) {unknown_strategies}; available: {sorted(STRATEGIES)}")
 
+    arms = bconfig.resolved_arms()
     resolved = resolve_configs(bconfig)
     for task in bconfig.tasks:
-        for enc_a, enc_b in itertools.combinations(bconfig.encoders, 2):
-            assert_comparable(resolved[(enc_a, task)], resolved[(enc_b, task)])
+        for arm_a, arm_b in itertools.combinations(arms, 2):
+            assert_comparable(resolved[(arm_a.arm_id, task)], resolved[(arm_b.arm_id, task)])
 
     # Run-start assertion (see evodevo.evolution.ea.resolved_policy_for):
     # the invalid-genome/cache-charging/budget-counter policy every arm will
     # actually run under must be identical, checked here before any run
     # starts, not just implicitly true because run_ea() is shared code.
     for task in bconfig.tasks:
-        policies = {encoder: resolved_policy_for(resolved[(encoder, task)]) for encoder in bconfig.encoders}
+        policies = {arm.arm_id: resolved_policy_for(resolved[(arm.arm_id, task)]) for arm in arms}
         assert_identical_policy(policies)
 
     return resolved
@@ -159,64 +281,73 @@ def _shared_fields(config: ExperimentConfig) -> dict:
     return {k: d[k] for k in sorted(SHARED_BASE_KEYS)}
 
 
-def _run_config_for(bconfig: BenchmarkConfig, resolved_configs: dict, encoder: str, task: str, seed: int) -> ExperimentConfig:
-    """The per-run config actually used to execute (encoder, task, seed):
-    the resolved (encoder, task) config with output_dir forced to
+def _run_config_for(bconfig: BenchmarkConfig, resolved_configs: dict, arm: ArmSpec, task: str, seed: int) -> ExperimentConfig:
+    """The per-run config actually used to execute (arm, task, seed):
+    the resolved (arm_id, task) config with output_dir forced to
     bconfig.output_dir. This makes bconfig.output_dir the single
     authoritative root for both the manifest and every run's output
     directory -- a per-method configs/<method>/*.yaml's own `output_dir`
     field is NOT used for benchmark-orchestrated runs (it still is when
     that config is run directly via run_experiment.py outside a
     benchmark)."""
-    return dataclasses.replace(resolved_configs[(encoder, task)], seed=seed, output_dir=bconfig.output_dir)
+    return dataclasses.replace(resolved_configs[(arm.arm_id, task)], seed=seed, output_dir=bconfig.output_dir)
 
 
-def _output_dir_for(bconfig: BenchmarkConfig, resolved_configs: dict, encoder: str, task: str, seed: int,
+def _output_dir_for(bconfig: BenchmarkConfig, resolved_configs: dict, arm: ArmSpec, task: str, seed: int,
                      strategy: str) -> str:
-    """Mirrors run_experiment.py's own tag-folding rule exactly (strategy
-    only disambiguates the path when it isn't the default "ea"), so a
+    """Folds both the arm's variant label (if any -- e.g. "monotone") and
+    the strategy into run_experiment.py's `tag`, via the exact same
+    _combine_tag_and_strategy() helper run_experiment() itself uses -- so a
     benchmark-orchestrated run and a directly-invoked run_experiment.py call
-    with the same (encoder, task, seed, strategy) land at the same path."""
-    tag = None if strategy == DEFAULT_STRATEGY else strategy
-    run_config = _run_config_for(bconfig, resolved_configs, encoder, task, seed)
-    return _run_output_dir(run_config, seed, tag=tag)
+    with the same (arm, task, seed, strategy) always land at the same
+    path, for any number of variant arms, not just the strategy axis."""
+    effective_tag = _combine_tag_and_strategy(arm.variant, strategy)
+    run_config = _run_config_for(bconfig, resolved_configs, arm, task, seed)
+    return _run_output_dir(run_config, seed, tag=effective_tag)
 
 
-def _resolved_config_path(bconfig: BenchmarkConfig, encoder: str, task: str, seed: int) -> str:
+def _resolved_config_path(bconfig: BenchmarkConfig, arm: ArmSpec, task: str, seed: int) -> str:
     """Where a fully-resolved, self-contained per-run config is written so
     run_experiment.py (which always reloads its config from a file path)
     executes against bconfig.output_dir rather than whatever `output_dir`
-    the source configs/<method>/*.yaml happens to contain."""
-    directory = os.path.join(bconfig.output_dir, "_resolved_configs", encoder, _task_to_config_stem(task))
+    the source configs/<method>/*.yaml happens to contain. Keyed by arm_id
+    (not bare encoder), so two arms sharing an encoder class never overwrite
+    each other's resolved config file."""
+    directory = os.path.join(bconfig.output_dir, "_resolved_configs", arm.arm_id, _task_to_config_stem(task))
     os.makedirs(directory, exist_ok=True)
     return os.path.join(directory, f"seed_{seed}.yaml")
 
 
 def build_manifest(bconfig: BenchmarkConfig, resolved_configs: dict) -> dict:
     """The resolved shared config (proven identical across every arm by
-    check_fairness), each encoder's describe(), the git commit, library
-    versions, and the full planned (encoder, task, seed) run matrix --
-    written BEFORE any run starts."""
+    check_fairness), each arm's describe(), the git commit, library
+    versions, and the full planned (arm, task, seed) run matrix -- written
+    BEFORE any run starts. Every arm-identity-bearing entry here is keyed by
+    arm_id, not bare encoder, so two arms sharing an encoder class (e.g.
+    rule_based / rule_based_monotone) each get their own manifest entry
+    rather than colliding into one."""
     any_config = next(iter(resolved_configs.values()))
     shared_config = _shared_fields(any_config)
 
+    arms = bconfig.resolved_arms()
     encoder_describe = {}
-    for encoder in bconfig.encoders:
-        any_encoder_config = next(cfg for (enc, _task), cfg in resolved_configs.items() if enc == encoder)
-        factors = ExperimentFactors(seed=any_encoder_config.seed, **bconfig.factors)
-        encoder_describe[encoder] = get_encoder(
-            encoder, factors=factors, grid_shape=any_encoder_config.grid_shape
+    for arm in arms:
+        any_arm_config = next(cfg for (aid, _task), cfg in resolved_configs.items() if aid == arm.arm_id)
+        factors, remaining_kwargs = extract_factors(_resolved_arm_kwargs(bconfig, arm), seed=any_arm_config.seed)
+        encoder_describe[arm.arm_id] = get_encoder(
+            arm.encoder, factors=factors, grid_shape=any_arm_config.grid_shape, **remaining_kwargs
         ).describe()
 
     run_matrix = [
         {
-            "encoder": encoder,
+            "arm_id": arm.arm_id,
+            "encoder": arm.encoder,
             "task": task,
             "seed": seed,
             "strategy": strategy,
-            "output_dir": _output_dir_for(bconfig, resolved_configs, encoder, task, seed, strategy),
+            "output_dir": _output_dir_for(bconfig, resolved_configs, arm, task, seed, strategy),
         }
-        for encoder in bconfig.encoders
+        for arm in arms
         for task in bconfig.tasks
         for strategy in bconfig.strategies
         for seed in bconfig.seeds_for(strategy, task)
@@ -237,17 +368,21 @@ def _is_run_complete(output_dir: str) -> bool:
 
 
 def estimate_wall_clock(bconfig: BenchmarkConfig, resolved_configs: dict) -> dict:
-    """Measures ONE real evaluation's wall-clock cost per encoder (using
-    that encoder's own resolved hyperparameters and evaluator mode) and
-    extrapolates the whole benchmark's estimated total wall-clock from it."""
+    """Measures ONE real evaluation's wall-clock cost per arm (using that
+    arm's own resolved hyperparameters and evaluator mode) and extrapolates
+    the whole benchmark's estimated total wall-clock from it. Keyed by
+    arm_id -- two arms sharing an encoder class (e.g. rule_based's PRIMARY
+    and monotone variants) each get their own measured cost rather than one
+    overwriting the other."""
     evaluator = make_evaluator("surrogate" if bconfig.surrogate else "real")
+    arms = bconfig.resolved_arms()
     per_encoder_cost = {}
 
-    for encoder in bconfig.encoders:
+    for arm in arms:
         any_task = bconfig.tasks[0]
-        config = resolved_configs[(encoder, any_task)]
-        factors = ExperimentFactors(seed=config.seed, **bconfig.factors)
-        encoder_instance = get_encoder(encoder, factors=factors, grid_shape=config.grid_shape)
+        config = resolved_configs[(arm.arm_id, any_task)]
+        factors, remaining_kwargs = extract_factors(_resolved_arm_kwargs(bconfig, arm), seed=config.seed)
+        encoder_instance = get_encoder(arm.encoder, factors=factors, grid_shape=config.grid_shape, **remaining_kwargs)
         rng = np.random.default_rng(config.seed)
         genome = encoder_instance.random_genome(rng)
         body = encoder_instance.decode(genome)
@@ -260,14 +395,14 @@ def estimate_wall_clock(bconfig: BenchmarkConfig, resolved_configs: dict) -> dic
             eval_episodes=config.ppo_eval_episodes,
             seed=config.seed,
         )
-        per_encoder_cost[encoder] = time.time() - start
+        per_encoder_cost[arm.arm_id] = time.time() - start
 
     total_estimate = 0.0
     n_runs_per_encoder = len(bconfig.tasks) * len(bconfig.seeds)
-    for encoder in bconfig.encoders:
+    for arm in arms:
         any_task = bconfig.tasks[0]
-        eval_budget = resolved_configs[(encoder, any_task)].eval_budget
-        total_estimate += per_encoder_cost[encoder] * eval_budget * n_runs_per_encoder
+        eval_budget = resolved_configs[(arm.arm_id, any_task)].eval_budget
+        total_estimate += per_encoder_cost[arm.arm_id] * eval_budget * n_runs_per_encoder
 
     return {
         "per_encoder_measured_cost_s": per_encoder_cost,
@@ -312,35 +447,41 @@ def run_benchmark(bconfig: BenchmarkConfig, dry_run: bool = False, allow_dirty: 
     # 3. Execute, resuming (skipping) any already-completed run.
     # eval_budgets drives ProgressTracker's ETA math -- purely additive stdout
     # reporting, wired in via run_experiment's optional progress_callback.
+    # Keyed by arm_id (not bare encoder) so two arms sharing an encoder class
+    # never collide in the budget lookup.
+    arms_by_id = {arm.arm_id: arm for arm in bconfig.resolved_arms()}
     eval_budgets = {
-        (entry["encoder"], entry["task"], entry["seed"]): resolved_configs[(entry["encoder"], entry["task"])].eval_budget
+        (entry["arm_id"], entry["task"], entry["seed"]): resolved_configs[(entry["arm_id"], entry["task"])].eval_budget
         for entry in manifest["run_matrix"]
     }
     tracker = ProgressTracker(eval_budgets)
 
     completed, skipped = [], []
     for entry in manifest["run_matrix"]:
-        encoder, task, seed = entry["encoder"], entry["task"], entry["seed"]
+        arm_id, task, seed = entry["arm_id"], entry["task"], entry["seed"]
+        arm = arms_by_id[arm_id]
         strategy = entry["strategy"]
         output_dir = entry["output_dir"]
-        label = f"{encoder}/{task}/{strategy}/seed_{seed}"
+        label = f"{arm_id}/{task}/{strategy}/seed_{seed}"
 
         if _is_run_complete(output_dir):
             print(f"[skip] {label} already complete at {output_dir} -- resuming")
             skipped.append(entry)
             continue
 
-        run_config = _run_config_for(bconfig, resolved_configs, encoder, task, seed)
-        resolved_path = _resolved_config_path(bconfig, encoder, task, seed)
+        run_config = _run_config_for(bconfig, resolved_configs, arm, task, seed)
+        resolved_path = _resolved_config_path(bconfig, arm, task, seed)
         run_config.to_yaml(resolved_path)
 
         print(f"[run]  {label}")
-        run_progress = tracker.for_run(encoder, task, seed)
+        run_progress = tracker.for_run(arm_id, task, seed)
         run_experiment(resolved_path, seed, surrogate=bconfig.surrogate, overwrite=False,
-                        encoder_kwargs=dict(bconfig.factors),
+                        encoder_kwargs=_resolved_arm_kwargs(bconfig, arm),
                         progress_callback=run_progress,
                         allow_dirty=allow_dirty,
-                        strategy=strategy)
+                        strategy=strategy,
+                        tag=arm.variant,
+                        arm_id=arm.arm_id)
         completed.append(entry)
 
     manifest["completed_this_invocation"] = completed

@@ -44,7 +44,18 @@ def _load_single_run(run_dir: str) -> pd.DataFrame:
             records.append(json.loads(line))
 
     df = pd.DataFrame.from_records(records)
-    df["encoder"] = config["encoder"]
+    # "encoder" carries arm identity (arm_id), not the bare registry class
+    # name -- this is what disambiguates two arms sharing a registry class
+    # (e.g. "rule_based" PRIMARY vs "rule_based_monotone") in every groupby
+    # in this module and its downstream consumers (budget_curves.py,
+    # plots.py, random_search_decomposition.py, report.py). Falls back to
+    # the registry encoder name for run_meta.json logs written before the
+    # arm_id field existed (arm_id == encoder for every such log, since only
+    # single-variant arms existed then). The true registry class name is
+    # still available separately as "registry_encoder", for any consumer
+    # that specifically needs the encoder class rather than arm identity.
+    df["encoder"] = config.get("arm_id", config["encoder"])
+    df["registry_encoder"] = config["encoder"]
     df["task"] = config["task"]
     df["seed"] = config["seed"]
     # Defaults to "ea" for run logs predating the P7 strategy axis (random

@@ -6,10 +6,19 @@ import pytest
 import yaml
 
 from evodevo.core.config import ConfigOverrideError
+from evodevo.core.factors import extract_factors
+from evodevo.encoders import get_encoder
+from evodevo.encoders.rule_based.resolved_config import (
+    MONOTONE_ABLATION as RULE_BASED_MONOTONE,
+    PRIMARY as RULE_BASED_PRIMARY,
+)
 from evodevo.experiments.benchmark import (
+    ArmSpec,
     BenchmarkConfig,
     MANIFEST_NAME,
+    _resolved_arm_kwargs,
     check_fairness,
+    resolve_configs,
     run_benchmark,
 )
 from evodevo.experiments.fairness import FairnessViolation
@@ -208,3 +217,133 @@ def test_mismatched_config_aborts_via_assert_comparable_when_bypassing_override_
             check_fairness(bconfig)
 
         assert not os.path.exists(os.path.join(output_dir, MANIFEST_NAME))
+
+
+def test_real_benchmark_yaml_wires_rule_based_resolved_readout_policy():
+    """This is the test that would have caught the original gap (docs/
+    decisions.md's "Wire the resolved readout policy into the primary
+    benchmark path" row): builds the encoder for the PRIMARY rule_based arm
+    through the actual production config-building path (BenchmarkConfig.
+    from_yaml on the real evodevo/experiments/configs/benchmark.yaml,
+    resolve_configs, _resolved_arm_kwargs, get_encoder) -- not a
+    hand-constructed RuleBasedEncoder(...) -- and asserts its readout_mode/
+    readout_window match evodevo.encoders.rule_based.resolved_config.PRIMARY
+    exactly."""
+    bconfig = BenchmarkConfig.from_yaml("evodevo/experiments/configs/benchmark.yaml")
+    resolved = resolve_configs(bconfig)
+    config = resolved[("rule_based", "Walker-v0")]
+
+    arm = ArmSpec(encoder="rule_based")
+    arm_kwargs = _resolved_arm_kwargs(bconfig, arm)
+    factors, remaining_kwargs = extract_factors(arm_kwargs, seed=config.seed)
+    encoder = get_encoder("rule_based", factors=factors, grid_shape=config.grid_shape, **remaining_kwargs)
+
+    assert encoder.readout_mode == RULE_BASED_PRIMARY.readout_mode == "mode_of_window"
+    assert encoder.readout_window == RULE_BASED_PRIMARY.readout_window == 6
+
+
+def test_benchmark_yaml_registers_rule_based_monotone_as_a_distinct_arm():
+    """docs/decisions.md's "Monotone vs unrestricted: an explicit decision"
+    row elevated MONOTONE_ABLATION to a co-primary PPO-matrix candidate; the
+    "Wire the resolved readout policy into the primary benchmark path" row
+    is now resolved to state this arm is registered. This asserts the real
+    benchmark.yaml declares it (as a {encoder, variant} entry, not a bare
+    string) and that its resolved encoder_kwargs match
+    resolved_config.MONOTONE_ABLATION exactly -- the real-config-path
+    counterpart to test_real_benchmark_yaml_wires_rule_based_resolved_readout_policy
+    above."""
+    bconfig = BenchmarkConfig.from_yaml("evodevo/experiments/configs/benchmark.yaml")
+    arms = {arm.arm_id: arm for arm in bconfig.resolved_arms()}
+    assert "rule_based_monotone" in arms
+    monotone_arm = arms["rule_based_monotone"]
+    assert monotone_arm.encoder == "rule_based"
+    assert monotone_arm.variant == "monotone"
+
+    resolved = resolve_configs(bconfig)
+    config = resolved[("rule_based_monotone", "Walker-v0")]
+
+    arm_kwargs = _resolved_arm_kwargs(bconfig, monotone_arm)
+    factors, remaining_kwargs = extract_factors(arm_kwargs, seed=config.seed)
+    encoder = get_encoder("rule_based", factors=factors, grid_shape=config.grid_shape, **remaining_kwargs)
+
+    assert encoder.action_monotonicity == RULE_BASED_MONOTONE.action_monotonicity == "monotone"
+    assert encoder.readout_mode == RULE_BASED_MONOTONE.readout_mode == "mode_of_window"
+    assert encoder.readout_window == RULE_BASED_MONOTONE.readout_window == 6
+
+    # And the PRIMARY arm is untouched -- still unrestricted.
+    primary_config = resolved[("rule_based", "Walker-v0")]
+    primary_kwargs = _resolved_arm_kwargs(bconfig, arms["rule_based"])
+    p_factors, p_remaining = extract_factors(primary_kwargs, seed=primary_config.seed)
+    primary_encoder = get_encoder("rule_based", factors=p_factors, grid_shape=primary_config.grid_shape, **p_remaining)
+    assert primary_encoder.action_monotonicity == RULE_BASED_PRIMARY.action_monotonicity == "unrestricted"
+
+
+def test_resolved_arms_parses_mixed_string_and_dict_encoders_generically():
+    """A fourth (throwaway) variant on top of an unrelated encoder ("nca")
+    should work with zero code changes to benchmark.py -- proving the
+    ArmSpec/resolved_arms() mechanism generalizes beyond rule_based_monotone,
+    not just special-cases it."""
+    bconfig = BenchmarkConfig(
+        encoders=[
+            "direct",
+            {"encoder": "nca"},
+            {"encoder": "nca", "variant": "throwaway_fourth_variant", "encoder_kwargs": {"dev_steps": 3}},
+        ],
+        tasks=["Walker-v0"],
+        seeds=[0],
+    )
+    arms = bconfig.resolved_arms()
+    arm_ids = [a.arm_id for a in arms]
+    assert arm_ids == ["direct", "nca", "nca_throwaway_fourth_variant"]
+    assert arms[2].encoder == "nca"
+    assert arms[2].is_variant
+    assert arms[2].encoder_kwargs == {"dev_steps": 3}
+    assert not arms[0].is_variant and not arms[1].is_variant
+
+
+def test_rule_based_and_rule_based_monotone_produce_distinct_non_colliding_artifacts():
+    """The test that proves the collision is actually fixed, not merely
+    declared fixed: constructs both rule_based (PRIMARY) and
+    rule_based_monotone via their real benchmark-config path (the production
+    evodevo/experiments/configs/benchmark.yaml), runs a short surrogate
+    benchmark, and asserts distinct output directories, no file overwrites,
+    and no shared state between the two runs."""
+    with tempfile.TemporaryDirectory() as output_dir:
+        real_bconfig = BenchmarkConfig.from_yaml("evodevo/experiments/configs/benchmark.yaml")
+        bconfig = BenchmarkConfig(
+            encoders=["rule_based", {"encoder": "rule_based", "variant": "monotone"}],
+            tasks=["Walker-v0"],
+            seeds=[0],
+            configs_root=real_bconfig.configs_root,
+            output_dir=output_dir,
+            surrogate=True,
+            factors={"dev_steps": 5, "init_condition": "center_seed"},
+        )
+
+        manifest = run_benchmark(bconfig, dry_run=False, allow_dirty=True)
+
+        entries_by_arm = {e["arm_id"]: e for e in manifest["run_matrix"]}
+        assert set(entries_by_arm) == {"rule_based", "rule_based_monotone"}
+
+        primary_dir = entries_by_arm["rule_based"]["output_dir"]
+        monotone_dir = entries_by_arm["rule_based_monotone"]["output_dir"]
+        assert primary_dir != monotone_dir
+
+        # Both actually ran (not one skipped/overwritten by the other).
+        assert len(manifest["completed_this_invocation"]) == 2
+        assert manifest["skipped_already_done"] == []
+
+        for arm_id, expected_monotonicity in (("rule_based", "unrestricted"), ("rule_based_monotone", "monotone")):
+            entry = entries_by_arm[arm_id]
+            meta_path = os.path.join(entry["output_dir"], "run_meta.json")
+            log_path = os.path.join(entry["output_dir"], "run_log.jsonl")
+            assert os.path.exists(meta_path)
+            assert os.path.exists(log_path)
+            with open(meta_path) as f:
+                meta = json.load(f)
+            assert meta["config"]["arm_id"] == arm_id
+            assert meta["config"]["encoder"] == "rule_based"  # same registry class for both
+            assert meta["encoder"]["action_monotonicity"] == expected_monotonicity
+            with open(log_path) as f:
+                n_lines = sum(1 for line in f if line.strip())
+            assert n_lines == meta["config"]["eval_budget"]

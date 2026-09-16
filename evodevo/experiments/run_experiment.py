@@ -52,6 +52,18 @@ def _run_output_dir(config: ExperimentConfig, seed: int, tag: str = None) -> str
     return os.path.join(*parts)
 
 
+def _combine_tag_and_strategy(tag: Optional[str], strategy: str) -> Optional[str]:
+    """Folds `strategy` into `tag` so the default strategy ("ea") never
+    changes an existing output path, while a non-default strategy always
+    disambiguates it -- shared by run_experiment() below and by
+    evodevo.experiments.benchmark._output_dir_for(), so a benchmark's
+    precomputed manifest path always matches what a direct run_experiment()
+    invocation with the same (tag, strategy) independently computes."""
+    if strategy == DEFAULT_STRATEGY:
+        return tag
+    return strategy if tag is None else f"{tag}_{strategy}"
+
+
 def run_experiment(
     config_path: str,
     seed: int,
@@ -62,6 +74,7 @@ def run_experiment(
     progress_callback: Optional[Callable[[dict], None]] = None,
     allow_dirty: bool = False,
     strategy: str = DEFAULT_STRATEGY,
+    arm_id: Optional[str] = None,
 ) -> str:
     """encoder_kwargs overrides/extends the encoder's own hyperparameters
     (e.g. {'dev_steps': 1} for the NCA encoder) without touching the encoder
@@ -74,7 +87,13 @@ def run_experiment(
     (see STRATEGIES above); both strategies share the exact same
     evaluation pipeline (evodevo.evolution.eval_bookkeeping), so switching
     strategy never changes budget semantics, invalid-genome policy, or the
-    P6 dual counters -- only which genome gets evaluated next.
+    P6 dual counters -- only which genome gets evaluated next. `arm_id` is a
+    purely additive identity label recorded verbatim into run_meta.json
+    (defaulting to config.encoder when not given) -- it does NOT affect
+    output-dir computation (that is still driven by `tag`/`strategy` alone,
+    exactly as before); it exists so downstream analysis can group runs by
+    arm identity (e.g. "rule_based" vs "rule_based_monotone", both of which
+    share config.encoder="rule_based") without reconstructing it from `tag`.
 
     `allow_dirty` gates the provenance check below (see
     evodevo.core.provenance): a dirty working tree raises DirtyTreeError
@@ -99,10 +118,7 @@ def run_experiment(
     # keeps its exact pre-existing output path -- only a non-default
     # strategy (random_search) disambiguates the path, keeping this a
     # backward-compatible addition rather than a breaking rename.
-    if strategy == DEFAULT_STRATEGY:
-        effective_tag = tag
-    else:
-        effective_tag = strategy if tag is None else f"{tag}_{strategy}"
+    effective_tag = _combine_tag_and_strategy(tag, strategy)
     output_dir = _run_output_dir(config, seed, tag=effective_tag)
     done_path = os.path.join(output_dir, DONE_MARKER)
     if os.path.exists(done_path) and not overwrite:
@@ -129,6 +145,7 @@ def run_experiment(
     meta_config["encoder_kwargs"] = encoder_kwargs or {}
     meta_config["tag"] = tag
     meta_config["strategy"] = strategy
+    meta_config["arm_id"] = arm_id or config.encoder
     logger.write_meta(meta_config, encoder.describe(), cache_hit_rate=result.cache_hit_rate,
                        resolved_policy=result.resolved_policy)
 
@@ -192,6 +209,12 @@ def main(argv=None) -> None:
         help="search strategy consuming the eval budget (default: %(default)s); "
         "'random_search' is the no-selection/no-mutation control (see evodevo/evolution/random_search.py)",
     )
+    parser.add_argument(
+        "--arm-id",
+        default=None,
+        help="identity label recorded into run_meta.json for downstream analysis grouping "
+        "(default: the config's encoder); does not affect the output directory",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -204,6 +227,7 @@ def main(argv=None) -> None:
             tag=args.tag,
             allow_dirty=args.allow_dirty,
             strategy=args.strategy,
+            arm_id=args.arm_id,
         )
     except FileExistsError as e:
         print(f"error: {e}", file=sys.stderr)
