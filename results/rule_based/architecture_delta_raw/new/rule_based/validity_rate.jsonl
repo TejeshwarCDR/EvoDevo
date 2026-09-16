@@ -1,0 +1,20 @@
+{"index": 0, "valid": false, "failure_categories": ["no_actuator"], "degenerate": false}
+{"index": 1, "valid": true, "failure_categories": [], "degenerate": false}
+{"index": 2, "valid": false, "failure_categories": ["too_few_voxels", "disconnected", "no_actuator"], "degenerate": true}
+{"index": 3, "valid": false, "failure_categories": ["no_actuator"], "degenerate": true}
+{"index": 4, "valid": true, "failure_categories": [], "degenerate": false}
+{"index": 5, "valid": true, "failure_categories": [], "degenerate": false}
+{"index": 6, "valid": false, "failure_categories": ["no_actuator"], "degenerate": true}
+{"index": 7, "valid": false, "failure_categories": ["too_few_voxels", "disconnected", "no_actuator"], "degenerate": true}
+{"index": 8, "valid": false, "failure_categories": ["too_few_voxels", "disconnected", "no_actuator"], "degenerate": true}
+{"index": 9, "valid": false, "failure_categories": ["too_few_voxels", "disconnected", "no_actuator"], "degenerate": true}
+{"index": 10, "valid": false, "failure_categories": ["no_actuator"], "degenerate": true}
+{"index": 11, "valid": true, "failure_categories": [], "degenerate": false}
+{"index": 12, "valid": false, "failure_categories": ["no_actuator"], "degenerate": false}
+{"index": 13, "valid": false, "failure_categories": ["no_actuator"], "degenerate": true}
+{"index": 14, "valid": true, "failure_categories": [], "degenerate": false}
+{"index": 15, "valid": true, "failure_categories": [], "degenerate": false}
+{"index": 16, "valid": true, "failure_categories": [], "degenerate": false}
+{"index": 17, "valid": true, "failure_categories": [], "degenerate": false}
+{"index": 18, "valid": false, "failure_categories": ["no_actuator"], "degenerate": false}
+{"index": 19, "valid": false, "failure_categories": ["too_few_voxels", "no_actuator"], "degenerate": false}
