@@ -29,7 +29,11 @@ def _factors(**overrides):
 
 def test_synchronicity_matches_synchronous_not_sequential_update():
     # hidden_channels=0 keeps C small and the network trivial to hand-design.
-    encoder = NCAEncoder(factors=_factors(hidden_channels=0, dev_steps=1), hidden_width=1)
+    encoder = NCAEncoder(
+        factors=_factors(hidden_channels=0, dev_steps=1),
+        hidden_width=1,
+        update_rule="unbounded_residual",
+    )
     channels = encoder.channels  # 5
 
     rng = np.random.default_rng(42)
@@ -119,7 +123,7 @@ def test_genome_length_matches_analytic_parameter_count(hidden_channels, hidden_
 
 
 def test_residual_property_zero_weights_equals_fixed_initial_state():
-    encoder = NCAEncoder(factors=_factors(dev_steps=10))
+    encoder = NCAEncoder(factors=_factors(dev_steps=10), update_rule="unbounded_residual")
     genome = np.zeros(encoder.genome_length())
     body = encoder.decode(genome)
     expected = np.argmax(encoder._initial_state[:, :, :N_MATERIALS], axis=-1).astype(int)
@@ -182,17 +186,24 @@ def test_regression_decode_pinned_for_seed_5():
     # every caller) -- this changes the interleaving of the underlying RNG
     # draws versus the old single (rows, cols, channels) draw, hence new
     # pinned bodies, not a change to the update rule itself.
-    encoder = NCAEncoder(factors=_factors())
+    #
+    # Pinned values updated AGAIN for the layer-wise-init change: the genome
+    # is now a standard-normal z-space vector, with per-layer variance
+    # scaling applied in _unpack rather than at sampling time -- see
+    # results/nca/INIT_STUDY.md. random_genome(rng) draws the same RNG
+    # sequence as before, but decode() no longer maps it to the same body
+    # since the weights it produces differ.
+    encoder = NCAEncoder(factors=_factors(), update_rule="unbounded_residual")
     rng = np.random.default_rng(5)
     genome = encoder.random_genome(rng)
     body = encoder.decode(genome)
     expected = np.array(
         [
-            [1, 3, 4, 4, 4],
-            [1, 4, 1, 1, 1],
-            [1, 4, 1, 1, 3],
-            [4, 4, 2, 1, 1],
-            [1, 1, 1, 4, 3],
+            [1, 3, 3, 3, 0],
+            [1, 1, 1, 0, 4],
+            [1, 4, 1, 3, 3],
+            [1, 1, 2, 1, 1],
+            [1, 2, 4, 4, 3],
         ],
         dtype=int,
     )
@@ -201,19 +212,31 @@ def test_regression_decode_pinned_for_seed_5():
 
 def test_regression_mutate_pinned_for_seed_9():
     # See test_regression_decode_pinned_for_seed_5: pinned values updated for
-    # the channel-count-invariant FullNonsymmetric initial state.
-    encoder = NCAEncoder(factors=_factors(), mutation_sigma=0.2, mutation_fraction=0.5)
+    # the channel-count-invariant FullNonsymmetric initial state, and AGAIN
+    # for the layer-wise-init change (results/nca/INIT_STUDY.md). mutate()
+    # itself is unchanged (still additive Gaussian in genome/z-space), so the
+    # genome's own nonzero-count and sum are unaffected by the init change --
+    # only the decoded body differs, since _unpack now scales those z-space
+    # values per-layer before they reach the network.
+    # Pinned explicitly at readout_mode="fixed_t" -- this regression test is
+    # about mutate()'s genotype-space behavior, not about the readout policy
+    # (see results/nca/READOUT_POLICY_SELECTION.md), so it must not silently
+    # break when NCAEncoder's readout default changes.
+    encoder = NCAEncoder(
+        factors=_factors(), mutation_sigma=0.2, mutation_fraction=0.5, update_rule="unbounded_residual",
+        readout_mode="fixed_t",
+    )
     genome = np.zeros(encoder.genome_length())
     rng = np.random.default_rng(9)
     mutated = encoder.mutate(genome, rng)
     body = encoder.decode(mutated)
     expected_body = np.array(
         [
-            [4, 4, 4, 4, 4],
-            [3, 4, 4, 4, 4],
-            [0, 4, 4, 4, 4],
-            [4, 4, 4, 4, 4],
-            [2, 2, 2, 2, 2],
+            [1, 1, 3, 4, 0],
+            [0, 0, 4, 0, 0],
+            [1, 4, 0, 3, 0],
+            [3, 4, 4, 3, 0],
+            [4, 4, 0, 0, 1],
         ],
         dtype=int,
     )
