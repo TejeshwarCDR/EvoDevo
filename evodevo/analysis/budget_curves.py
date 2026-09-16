@@ -48,17 +48,24 @@ def _best_so_far_by_seed(df: pd.DataFrame, x_field: str) -> pd.DataFrame:
 
 
 def _plot_panel(df: pd.DataFrame, x_field: str, ax, xlabel: str) -> None:
+    """Median line + IQR (25th/75th percentile) band across seeds -- the
+    locked convergence-curve convention (see docs/analysis-protocol.md and
+    evodevo.analysis.stats_protocol.median_iqr_curve, the same summary this
+    panel now delegates to). NOT mean +/- SD and NOT mean/min-max: median/IQR
+    is robust to the occasional outlier seed (e.g. one seed that never finds
+    a valid genome) dominating the displayed band, which either of those
+    alternatives would not be."""
+    from evodevo.analysis.stats_protocol import median_iqr_curve
+
     curves = _best_so_far_by_seed(df, x_field)
     for encoder, group in curves.groupby("encoder"):
         pivot = group.pivot_table(index=x_field, columns="seed", values="best_so_far", aggfunc="last")
         pivot = pivot.ffill()
-        mean = pivot.mean(axis=1)
-        lo = pivot.min(axis=1)
-        hi = pivot.max(axis=1)
-        ax.plot(mean.index, mean.values, label=encoder)
-        ax.fill_between(lo.index, lo.values, hi.values, alpha=0.2)
+        median, q25, q75 = median_iqr_curve(pivot.to_numpy())
+        ax.plot(pivot.index, median, label=encoder)
+        ax.fill_between(pivot.index, q25, q75, alpha=0.2)
     ax.set_xlabel(xlabel)
-    ax.set_ylabel("best-so-far fitness")
+    ax.set_ylabel("best-so-far fitness (median, IQR band)")
     ax.legend()
 
 

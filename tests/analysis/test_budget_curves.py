@@ -120,3 +120,32 @@ def test_wrapper_returns_figure_axes_and_text_together():
     fig, axes, text = plot_two_panel_comparison_with_interpretation(df)
     assert len(axes) == 2
     assert isinstance(text, str) and len(text) > 0
+
+
+def test_plotted_line_is_median_not_mean_and_robust_to_one_outlier_seed():
+    """docs/analysis-protocol.md Sec 4 locks median+IQR (not mean+/-SD, not
+    mean/min-max) specifically because a single outlier seed should not
+    dominate the plotted line. Four seeds hit the same final best_so_far
+    (10.0) at evals_spent=1; a fifth outlier seed hits 100.0. The mean would
+    be pulled to 28.0; the median stays at 10.0."""
+    rows = []
+    for seed, final in enumerate([10.0, 10.0, 10.0, 10.0, 100.0]):
+        rows.append({
+            "encoder": "arm",
+            "seed": seed,
+            "eval_index": 0,
+            "evals_spent": 1,
+            "evals_valid_cumulative": 1,
+            "fitness": final,
+            "best_fitness_so_far": final,
+        })
+    df = pd.DataFrame(rows)
+
+    fig, axes = plot_two_panel_comparison(df)
+    line = axes[0].get_lines()[0]
+    plotted_y = line.get_ydata()[0]
+
+    assert plotted_y == pytest.approx(10.0), (
+        f"expected the median (10.0) to be plotted, got {plotted_y} "
+        "(28.0 would indicate the old mean-based behaviour)"
+    )
