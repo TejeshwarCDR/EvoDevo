@@ -83,7 +83,16 @@ def _factors(**overrides):
 
 
 def test_ported_interpreter_matches_frozen_port_equivalence_fixture():
-    encoder = RuleBasedEncoder(factors=_factors())
+    # Pinned explicitly to conflict_resolution="row_major_last_wins" -- the
+    # fixture was frozen against the ORIGINAL reference implementation's
+    # growth-conflict behaviour (order-dependent, last-write-wins), which is
+    # no longer RuleBasedEncoder's own default (see
+    # evodevo/encoders/rule_based/_rules/interpreter.py::
+    # DEFAULT_CONFLICT_RESOLUTION and results/rule_based/CONFLICT_POLICY.md)
+    # -- this permanent proof must stay decoupled from any future default
+    # change, exactly like every other frozen-fixture/pinned-setting test in
+    # this project.
+    encoder = RuleBasedEncoder(factors=_factors(), conflict_resolution="row_major_last_wins")
     for entry in _FIXTURE["genomes_20"]:
         genome = encoder.deserialize_genome(entry["genome"])
         body = encoder.decode(genome)
@@ -99,7 +108,8 @@ def test_ported_interpreter_matches_frozen_port_equivalence_fixture():
 
 
 def test_ported_mutation_matches_frozen_port_equivalence_fixture():
-    encoder = RuleBasedEncoder(factors=_factors())
+    # Pinned to row_major_last_wins -- see the sibling test above.
+    encoder = RuleBasedEncoder(factors=_factors(), conflict_resolution="row_major_last_wins")
     for entry in _FIXTURE["mutation_5"]:
         child = encoder.deserialize_genome(entry["child_genome"])
         body = encoder.decode(child)

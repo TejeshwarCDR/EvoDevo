@@ -92,9 +92,37 @@ class DevelopmentalRuleGenome:
 # the mutation operators below).
 # --------------------------------------------------------------------------
 
-def _random_condition(condition_type=None):
+VALID_POSITION_PREDICATES = ("disabled", "enabled")
+
+# ConditionType.POSITION tests the ACTING CELL'S OWN absolute grid
+# coordinates ("if I am at row 0 / column 0 / the boundary, do X"). This
+# lets a rule express something functionally equivalent to a direct,
+# per-coordinate encoding ("cell (0,0) -> RIGID") using rule syntax --
+# which breaks the TRANSLATION-EQUIVARIANCE property the developmental-
+# encoding claim rests on (D(translate(s)) == translate(D(s)) for interior
+# cells; see Proposition R3, docs/rule-language-spec.md and
+# results/rule_based/LOCALITY_STUDY.md for the direct empirical
+# confirmation that POSITION is what breaks it). `position_predicate=
+# "disabled"` (the default) means the sampler/mutator never GENERATE a new
+# POSITION condition; a genome that already contains one (e.g. deserialized
+# from an old result, or from a run with `position_predicate="enabled"`)
+# still decodes and mutates its OTHER fields correctly -- only the
+# structural operators that would introduce a *new* POSITION condition
+# (`_mutate_condition_type`'s choice of new type, `_random_rule`'s
+# condition-type draw) respect this flag.
+_ALL_CONDITION_TYPES = tuple(ConditionType)
+_NON_POSITION_CONDITION_TYPES = tuple(c for c in ConditionType if c != ConditionType.POSITION)
+
+
+def _allowed_condition_types(position_predicate: str) -> tuple:
+    if position_predicate not in VALID_POSITION_PREDICATES:
+        raise ValueError(f"unsupported position_predicate '{position_predicate}'; must be one of {VALID_POSITION_PREDICATES}")
+    return _ALL_CONDITION_TYPES if position_predicate == "enabled" else _NON_POSITION_CONDITION_TYPES
+
+
+def _random_condition(condition_type=None, allowed_condition_types=_ALL_CONDITION_TYPES):
     if condition_type is None:
-        condition_type = random.choice(list(ConditionType))
+        condition_type = random.choice(allowed_condition_types)
 
     if condition_type == ConditionType.ALWAYS:
         params = {}
@@ -141,8 +169,8 @@ def _random_action(action_type=None, growth_biased=False):
     return action_type, params
 
 
-def _random_rule(growth_biased=False) -> DevelopmentalRule:
-    condition_type, condition_params = _random_condition()
+def _random_rule(growth_biased=False, allowed_condition_types=_ALL_CONDITION_TYPES) -> DevelopmentalRule:
+    condition_type, condition_params = _random_condition(allowed_condition_types=allowed_condition_types)
     action_type, action_params = _random_action(growth_biased=growth_biased)
     return DevelopmentalRule(condition_type, condition_params, action_type, action_params)
 
@@ -153,7 +181,7 @@ _SAMPLE_MIN_RULES = 3
 _SAMPLE_MAX_RULES = 7
 
 
-def sample_developmental_rules() -> DevelopmentalRuleGenome:
+def sample_developmental_rules(position_predicate: str = "disabled") -> DevelopmentalRuleGenome:
     """
     Generate a random, valid initial DevelopmentalRuleGenome, biased
     toward growth-capable rules (GROW_DIRECTIONAL/COPY_NEIGHBOR) rather
@@ -168,7 +196,13 @@ def sample_developmental_rules() -> DevelopmentalRuleGenome:
     to a randomly chosen total length in [_SAMPLE_MIN_RULES, _SAMPLE_MAX_RULES].
     The full list is shuffled before being returned so rule order also
     varies (first-match semantics make order meaningful).
+
+    `position_predicate="disabled"` (default): the further randomly
+    generated rules never draw ConditionType.POSITION (see
+    VALID_POSITION_PREDICATES's own docstring above) -- neither guaranteed
+    rule uses POSITION either way.
     """
+    allowed_condition_types = _allowed_condition_types(position_predicate)
 
     rule_count = random.randint(_SAMPLE_MIN_RULES, _SAMPLE_MAX_RULES)
 
@@ -189,7 +223,7 @@ def sample_developmental_rules() -> DevelopmentalRuleGenome:
     ]
 
     while len(rules) < rule_count:
-        rules.append(_random_rule(growth_biased=True))
+        rules.append(_random_rule(growth_biased=True, allowed_condition_types=allowed_condition_types))
 
     random.shuffle(rules)
 
@@ -227,15 +261,23 @@ def generate_robot_from_developmental_rules(
 # Structural mutation operators — same philosophy as V1's mutate_rules().
 # --------------------------------------------------------------------------
 
-def _mutate_condition_type(genome: DevelopmentalRuleGenome) -> None:
+def _mutate_condition_type(genome: DevelopmentalRuleGenome, allowed_condition_types=_ALL_CONDITION_TYPES) -> None:
     index = random.randrange(len(genome.rules))
     old_rule = genome.rules[index]
-    choices = [c for c in ConditionType if c != old_rule.condition_type]
+    choices = [c for c in allowed_condition_types if c != old_rule.condition_type]
+    if not choices:
+        return  # nothing left to mutate to (e.g. old_rule is the only allowed type)
     new_condition_type, new_params = _random_condition(random.choice(choices))
     genome.rules[index] = DevelopmentalRule(new_condition_type, new_params, old_rule.action_type, old_rule.action_params)
 
 
 def _mutate_condition_params(genome: DevelopmentalRuleGenome) -> None:
+    # Regenerates params for the rule's EXISTING condition_type -- never
+    # introduces a NEW condition type, so this is unaffected by
+    # position_predicate: if old_rule already has POSITION (e.g. from a
+    # deserialized old genome, or position_predicate="enabled"), this just
+    # draws new POSITION params, which is not "generating a new position
+    # condition" in the sense this task's constraint means.
     index = random.randrange(len(genome.rules))
     old_rule = genome.rules[index]
     _, new_params = _random_condition(old_rule.condition_type)
@@ -257,11 +299,11 @@ def _mutate_action_params(genome: DevelopmentalRuleGenome) -> None:
     genome.rules[index] = DevelopmentalRule(old_rule.condition_type, old_rule.condition_params, old_rule.action_type, new_params)
 
 
-def _add_rule(genome: DevelopmentalRuleGenome) -> None:
+def _add_rule(genome: DevelopmentalRuleGenome, allowed_condition_types=_ALL_CONDITION_TYPES) -> None:
     if len(genome.rules) >= MAX_RULES:
         return
     index = random.randint(0, len(genome.rules))
-    genome.rules.insert(index, _random_rule(growth_biased=True))
+    genome.rules.insert(index, _random_rule(growth_biased=True, allowed_condition_types=allowed_condition_types))
 
 
 def _remove_rule(genome: DevelopmentalRuleGenome) -> None:
@@ -292,18 +334,33 @@ _MUTATION_OPERATORS = (
 def mutate_developmental_rules(
     rules: DevelopmentalRuleGenome,
     mutation_rate: float = 0.2,
+    position_predicate: str = "disabled",
 ) -> DevelopmentalRuleGenome:
     """
     Produce a mutated copy of a DevelopmentalRuleGenome. The parent (and
     its rule objects) is never modified. Each structural operator (mutate
     condition type/params, action type/params, add/remove/reorder rule)
     is applied independently with probability mutation_rate.
+
+    `position_predicate="disabled"` (default): `_mutate_condition_type` and
+    `_add_rule` -- the only two operators that can introduce a NEW
+    condition onto a rule -- never draw ConditionType.POSITION. A rule that
+    already has POSITION (deserialized from an old genome, or from
+    `position_predicate="enabled"`) keeps it unless `_mutate_condition_type`
+    happens to replace THAT rule with a different type -- its own params
+    can still be re-rolled by `_mutate_condition_params` (see that
+    function's own docstring for why that does not count as "generating" a
+    new position condition).
     """
+    allowed_condition_types = _allowed_condition_types(position_predicate)
 
     child = rules.copy()
     for operator in _MUTATION_OPERATORS:
         if random.random() < mutation_rate:
-            operator(child)
+            if operator in (_mutate_condition_type, _add_rule):
+                operator(child, allowed_condition_types=allowed_condition_types)
+            else:
+                operator(child)
     return child
 
 
