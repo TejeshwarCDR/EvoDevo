@@ -31,6 +31,7 @@ import dataclasses
 import json
 import math
 import os
+import warnings
 
 import matplotlib
 
@@ -42,6 +43,7 @@ from evodevo.analysis import structural as S
 from evodevo.core.factors import ExperimentFactors
 from evodevo.encoders import get_encoder
 from evodevo.encoders.nca.encoder import NCAEncoder
+from evodevo.encoders.nca.resolved_config import PRIMARY
 from evodevo.encoders.rule_based.encoder import RuleBasedEncoder
 
 ARMS = ["nca", "rule_based"]
@@ -49,6 +51,13 @@ DEFAULT_N = 2000
 DEFAULT_INIT_CONDITION = "center_seed"  # the P3 decision (docs/decisions.md)
 DEFAULT_OUTPUT_DIR = "results/depth"
 T_MAX_HARD_CAP = 40
+
+# NCA's resolved architecture is read from evodevo/encoders/nca/resolved_config.py
+# (the single source of truth -- see its docstring and docs/decisions.md's "NCA
+# joint stability-vs-expressivity trade-off" row), not retyped here. rule_based/
+# direct are built with NO override anywhere in this module -- their numbers must
+# come out byte-identical to the previously committed results/depth/DEPTH_STUDY.md
+# (see results/nca/ARCHITECTURE_DELTA.md's regression check).
 GEOMETRIC_BOUND_FROM_CENTER = 4  # max Manhattan distance, 5x5 grid centre -> any cell
 GEOMETRIC_BOUND_CORNER_TO_CORNER = 8  # max Manhattan distance, any cell -> any cell
 NEVER_SETTLED_PROVISIONAL_THRESHOLD = 0.5  # ">half never settle" counts as "does not settle"
@@ -76,7 +85,28 @@ def _fmt(value, digits=4):
 
 
 def _build_encoder(arm: str, dev_steps: int, init_condition: str, seed: int):
-    factors = ExperimentFactors(dev_steps=dev_steps, init_condition=init_condition, seed=seed)
+    factors = ExperimentFactors(
+        dev_steps=dev_steps, init_condition=init_condition, seed=seed, hidden_channels=PRIMARY.hidden_channels
+    )
+    if arm == "nca":
+        return (
+            get_encoder(
+                arm, factors=factors, update_rule=PRIMARY.update_rule, decay=PRIMARY.decay,
+                state_bound=PRIMARY.state_bound,
+                # Pinned explicitly at fixed_t/10 (NOT PRIMARY.readout_mode):
+                # this module sweeps `dev_steps` across small values (T in
+                # {1,4,T_primary,...}), and mode_of_window at T << W silently
+                # collapses toward the near-initial-condition state (see
+                # NCAEncoder.decode's CAVEAT docstring) -- confirmed directly:
+                # re-running this sweep under PRIMARY's readout collapsed
+                # valid_rate from ~0.63 to ~0.01 at T=10, a window/T mismatch
+                # artifact, not a real architecture effect. This diagnostic's
+                # own purpose (probing sensitivity to T) requires a readout
+                # that behaves consistently across every T tested.
+                readout_mode="fixed_t", readout_window=10,
+            ),
+            factors,
+        )
     return get_encoder(arm, factors=factors), factors
 
 
@@ -330,6 +360,25 @@ def run_layer2(n_samples, init_condition, seed, output_dir):
 
 
 def _select_t_primary(layer2: dict):
+    """SUPERSEDED, 2026-09-16 -- see results/T_PRIMARY_UNIFIED.md and
+    docs/decisions.md's "unified T_primary (T-shift-stability criterion,
+    both arms)" row. This function's q95(settle_step)-over-settled-genomes
+    approach computes an ILL-POSED (not merely biased) statistic whenever
+    the never-settled ("censored") fraction exceeds ~5%, which is true for
+    BOTH arms (rule_based: 11.55% at T_max=100, results/rule_based/
+    SETTLING_AUDIT.md; NCA: 40-64%, results/nca/HORIZON_EXTENSION.md) -- a
+    percentile is only defined if the censored fraction is below the
+    percentile's own complement. This retroactively explains
+    HORIZON_EXTENSION.md's finding that q95 "tracks whatever ceiling is
+    tested": the expected behaviour of a censored percentile past that
+    threshold, not a heavy tail to chase with ever-larger T_max.
+
+    Retained here, UNCHANGED, for historical comparison in the paper's
+    methods narrative (showing the superseded approach and why it was
+    replaced is itself worth a paragraph) -- do NOT call this for the
+    project's actual T_primary; use
+    `evodevo.analysis.t_primary_unified`'s T-shift-stability criterion
+    instead, which is well-posed regardless of censoring."""
     nca_never_settled = layer2["nca"]["never_settled_fraction"]
     provisional = nca_never_settled > NEVER_SETTLED_PROVISIONAL_THRESHOLD
 
@@ -352,6 +401,14 @@ def _select_t_primary(layer2: dict):
     # "Developmental steps (T)" row for the full account of why that was
     # wrong.)
     t_primary = int(min(max(t_primary_raw, GEOMETRIC_BOUND_FROM_CENTER), T_MAX_HARD_CAP))
+    if t_primary_raw > T_MAX_HARD_CAP:
+        warnings.warn(
+            f"T_primary derivation requested {t_primary_raw} steps (from measured settling "
+            f"q95) but is capped to T_MAX_HARD_CAP={T_MAX_HARD_CAP}; granted {t_primary}. "
+            "This is a deliberate safety default (see the comment above), not an error -- "
+            "but it is a real clip and must not pass silently.",
+            stacklevel=2,
+        )
     return t_primary, provisional
 
 
@@ -628,9 +685,34 @@ def _diagnosis_section(diagnosis: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
+@dataclasses.dataclass
+class _UnmeasurablePhenotypicDisplacement:
+    """Stand-in for PhenotypicDisplacementResult when structural.py's
+    rejection-sampling loop cannot find ANY valid random parent within its
+    attempt budget -- deliberately NOT silently skipped or coerced to a
+    default: every field is None (rendered as "None" / excluded from
+    stability ranges, exactly like structural.py's own explicit-None
+    convention elsewhere), and `reason` records why, for the report to cite
+    verbatim rather than just showing a blank cell."""
+
+    reason: str
+    n: int = 0
+    mean_hamming_distance: float = None
+    median_hamming_distance: float = None
+    fraction_zero_displacement: float = None
+
+
 def run_layer3(n_samples, init_condition, seed, t_primary, output_dir):
+    if 2 * t_primary > T_MAX_HARD_CAP:
+        warnings.warn(
+            f"Layer 3's stability-past-horizon cell wants 2*T_primary={2 * t_primary} steps but is capped "
+            f"to T_MAX_HARD_CAP={T_MAX_HARD_CAP}; granted {min(2 * t_primary, T_MAX_HARD_CAP)}. A deliberate "
+            "safety default, disclosed in the generated report -- not silent.",
+            stacklevel=2,
+        )
     depths = sorted(set([1, 4, t_primary, min(2 * t_primary, T_MAX_HARD_CAP)]))
     cells = {}
+    unmeasurable = []  # (arm, T, reason) for cells that hit _UnmeasurablePhenotypicDisplacement
     for arm in ARMS:
         for T in depths:
             encoder, factors = _build_encoder(arm, dev_steps=T, init_condition=init_condition, seed=seed)
@@ -641,19 +723,33 @@ def run_layer3(n_samples, init_condition, seed, t_primary, output_dir):
             metrics["validity_rate"] = S.validity_rate(encoder, factors, n_samples, rng, output_root=jsonl_root)
             metrics["settling_profile"] = S.settling_profile(encoder, factors, n_samples, rng, t_max=T, output_root=jsonl_root)
             metrics["light_cone"] = S.light_cone(encoder, factors, n_samples, rng, t_max=T, output_root=jsonl_root)
-            metrics["phenotypic_displacement"] = S.phenotypic_displacement(encoder, factors, n_samples, rng, output_root=jsonl_root)
+            try:
+                metrics["phenotypic_displacement"] = S.phenotypic_displacement(
+                    encoder, factors, n_samples, rng, output_root=jsonl_root
+                )
+            except RuntimeError as e:
+                # A genuine, real finding (not a bug to paper over): at this
+                # (arm, T) cell, structural.py's own rejection-sampling loop
+                # found ZERO valid random parents within its attempt budget --
+                # phenotypic_displacement is a defined-only-over-valid-parents
+                # quantity and simply has no value to report here. See
+                # metrics["validity_rate"].valid_rate for this cell's own
+                # (likely near-zero) validity rate, which is the real number.
+                metrics["phenotypic_displacement"] = _UnmeasurablePhenotypicDisplacement(reason=str(e))
+                unmeasurable.append((arm, T, str(e)))
             metrics["redundancy"] = S.redundancy(encoder, factors, n_samples, rng, output_root=jsonl_root)
             metrics["diversity"] = S.diversity(encoder, factors, n_samples, rng, output_root=jsonl_root)
             metrics["perturbation_robustness"] = S.perturbation_robustness(encoder, factors, n_samples, rng, output_root=jsonl_root)
             cells[(arm, T)] = metrics
-    return depths, cells
+    return depths, cells, unmeasurable
 
 
 def _plot_metric_vs_depth(cells, depths, metric_name, field, title, ylabel, path):
     fig, ax = plt.subplots(figsize=(5.5, 4))
     colors = {"nca": "#4C72B0", "rule_based": "#DD8452"}
     for arm in ARMS:
-        values = [getattr(cells[(arm, T)][metric_name], field) for T in depths]
+        raw_values = [getattr(cells[(arm, T)][metric_name], field) for T in depths]
+        values = [np.nan if v is None else v for v in raw_values]  # None (unmeasurable cell) -> gap in the line
         ax.plot(depths, values, marker="o", label=arm, color=colors.get(arm))
     ax.set_xlabel("developmental depth T")
     ax.set_ylabel(ylabel)
@@ -664,13 +760,22 @@ def _plot_metric_vs_depth(cells, depths, metric_name, field, title, ylabel, path
     plt.close(fig)
 
 
-def _layer3_section(depths, cells, figures_dir, n_samples, init_condition, t_primary) -> str:
+def _layer3_section(depths, cells, figures_dir, n_samples, init_condition, t_primary, unmeasurable=None) -> str:
     lines = ["## Layer 3: T as a crossed factor\n"]
     lines.append(
         f"Depth sweep T in {depths} (T=1: shared non-developmental control, marked NON-DROPPABLE under "
         "any compute cut; T=4: geometric minimum; T_primary; min(2*T_primary, T_MAX_HARD_CAP): "
         f"stability-past-horizon check), N={n_samples}/cell, init_condition=`{init_condition}`.\n"
     )
+    if unmeasurable:
+        lines.append("**Cells with zero valid random parents found (phenotypic_displacement unmeasurable):**\n")
+        for arm, T, reason in unmeasurable:
+            lines.append(
+                f"- `{arm}` at T={T}: {reason} -- see that cell's own `validity_rate.valid_rate` row below "
+                "(the real, non-null number for this cell); phenotypic_displacement is undefined without at "
+                "least one valid parent to mutate, reported as `None` in the table, not coerced to 0 or "
+                "silently dropped from the sweep.\n"
+            )
     doubled = 2 * t_primary
     if doubled > T_MAX_HARD_CAP:
         lines.append(
@@ -751,8 +856,10 @@ def run_depth_study(n_samples=DEFAULT_N, init_condition=DEFAULT_INIT_CONDITION, 
     diagnosis = diagnose_non_settling_nca(n_samples, init_condition, seed)
     diagnosis_text = _diagnosis_section(diagnosis)
 
-    depths, layer3_cells = run_layer3(n_samples, init_condition, seed, t_primary, output_dir)
-    layer3_text = _layer3_section(depths, layer3_cells, figures_dir, n_samples, init_condition, t_primary)
+    depths, layer3_cells, layer3_unmeasurable = run_layer3(n_samples, init_condition, seed, t_primary, output_dir)
+    layer3_text = _layer3_section(
+        depths, layer3_cells, figures_dir, n_samples, init_condition, t_primary, unmeasurable=layer3_unmeasurable
+    )
 
     sections = []
     if provisional:

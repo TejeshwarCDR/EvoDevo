@@ -70,3 +70,24 @@ def test_build_encoder_uses_correct_mutation_param_name(arm):
         assert encoder.mutation_sigma == pytest.approx(lo)
     else:
         assert encoder.mutation_rate == pytest.approx(lo)
+
+
+def test_build_encoder_nca_uses_bounded_leaky_at_calibrated_lambda_b_and_h():
+    encoder = M._build_encoder("nca", 0.02, seed=0)
+    assert encoder.update_rule == M.PRIMARY.update_rule == "bounded_leaky"
+    assert encoder.decay == pytest.approx(M.PRIMARY.decay)
+    assert encoder.state_bound == pytest.approx(M.PRIMARY.state_bound)
+    assert encoder.hidden_channels == M.PRIMARY.hidden_channels
+
+
+def test_nca_displacement_floor_is_far_below_old_unbounded_floor():
+    # The old unbounded architecture's grid floor (mutation_sigma=0.01)
+    # produced a mean displacement of ~3.44 cells (docs/decisions.md,
+    # 2026-09-15 "Mutation tuning procedure" row). Under bounded_leaky at
+    # (lambda*, B*) and the layer-wise-scaled genome, the same floor should
+    # be materially flatter -- this is the central empirical claim this
+    # re-run exists to check.
+    encoder = M._build_encoder("nca", M.PARAM_GRIDS["nca"][0], seed=0)
+    rng = np.random.default_rng(0)
+    distances = M.sample_displacements(encoder, 300, rng)
+    assert distances.mean() < 1.5  # well below the old 3.44-cell floor

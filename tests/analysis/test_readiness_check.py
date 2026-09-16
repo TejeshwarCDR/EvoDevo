@@ -36,7 +36,7 @@ def test_string_literal_line_ranges_covers_a_known_docstring():
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     path = os.path.join(repo_root, "evodevo", "encoders", "rule_based", "_rules", "interpreter.py")
     ranges = _string_literal_line_ranges(path)
-    assert any(start <= 282 <= end for start, end in ranges)
+    assert any(start <= 505 <= end for start, end in ranges)
 
 
 def test_line_is_comment_or_string_detects_both_forms():
@@ -44,7 +44,7 @@ def test_line_is_comment_or_string_detects_both_forms():
     path = os.path.join(repo_root, "evodevo", "encoders", "rule_based", "_rules", "interpreter.py")
     string_ranges = {path: _string_literal_line_ranges(path)}
     assert _line_is_comment_or_string(path, 180, string_ranges) is True  # '#' comment
-    assert _line_is_comment_or_string(path, 282, string_ranges) is True  # docstring
+    assert _line_is_comment_or_string(path, 505, string_ranges) is True  # docstring
 
 
 def test_build_risk_register_flags_nca_never_settling():

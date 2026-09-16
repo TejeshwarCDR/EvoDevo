@@ -14,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import os
 
 import matplotlib
@@ -25,14 +26,34 @@ import numpy as np
 from evodevo.analysis import structural as S
 from evodevo.core.factors import ExperimentFactors
 from evodevo.encoders import get_encoder, list_encoders
+from evodevo.encoders.nca.resolved_config import PRIMARY
 
 DEFAULT_N = 2000
 DEFAULT_OUTPUT_DIR = "results/structural"
 DEFAULT_REPORT_PATH = os.path.join(DEFAULT_OUTPUT_DIR, "STRUCTURAL.md")
 DEFAULT_FIGURES_DIR = os.path.join(DEFAULT_OUTPUT_DIR, "figs")
 
+# NCA's resolved architecture (evodevo/encoders/nca/resolved_config.py, the single
+# source of truth -- see its own docstring and docs/decisions.md's "NCA joint
+# stability-vs-expressivity trade-off" row). direct/rule_based get no override
+# anywhere in this module -- their numbers must come out byte-identical to the
+# previously committed results/structural/STRUCTURAL.md (see
+# results/nca/ARCHITECTURE_DELTA.md's regression check).
+
 
 def _build_encoder(name: str, factors: ExperimentFactors):
+    if name == "nca":
+        nca_factors = dataclasses.replace(factors, hidden_channels=PRIMARY.hidden_channels)
+        return get_encoder(
+            name, factors=nca_factors, update_rule=PRIMARY.update_rule, decay=PRIMARY.decay,
+            state_bound=PRIMARY.state_bound,
+            # Pinned explicitly at fixed_t/10 (NOT PRIMARY.readout_mode) for
+            # the same reason as depth_study.py's own pin: this module's
+            # default dev_steps=10 is far shallower than PRIMARY's resolved
+            # W=50, where mode_of_window collapses toward the initial
+            # condition rather than reflecting steady-state behaviour.
+            readout_mode="fixed_t", readout_window=10,
+        )
     return get_encoder(name, factors=factors)
 
 

@@ -1,5 +1,10 @@
 """Fitness-blind structural measurement substrate for the genotype-phenotype
-map of each encoding arm.
+map of each encoding arm. Metrics 8-10 (readout_margin, uniform_body_fraction,
+hidden_utilisation) instrument NCA's ARGMAX READOUT itself -- how confident
+each cell's material decision is, how often development collapses to a
+single-material body, and whether the H hidden channels the readout discards
+actually carry information -- see results/nca/READOUT_STUDY.md. The argmax
+readout rule itself is NOT changed anywhere in this module.
 
 NO PPO, NO task, NO reward, NO EA anywhere in this module -- every
 subsequent decision in this workstream depends on these seven metrics being
@@ -127,12 +132,31 @@ def _rule_based_trajectory_from_grid(encoder: RuleBasedEncoder, genome, grid0: n
     equivalent to a single synchronous update step -- see interpreter.py),
     so this is O(t_max) rather than develop_trajectory()'s O(t_max^2)
     from-scratch-per-t approach, and lets us resume from an arbitrary
-    (possibly perturbed/damaged) intermediate grid."""
+    (possibly perturbed/damaged) intermediate grid.
+
+    BUG FIX (2026-09-16, found while verifying the monotone ablation):
+    this previously called develop_rules() with NO interpreter kwargs at
+    all, silently ignoring the encoder's own configured
+    conflict_resolution/copy_neighbor_reads/boundary/neighbourhood/
+    action_monotonicity and using the interpreter's raw defaults instead
+    -- meaning settling_profile/light_cone/perturbation_robustness (every
+    caller of _full_trajectory for rule_based) were measuring the WRONG
+    dynamics whenever an encoder was constructed with any non-default
+    interpreter setting. Fixed by threading every one of the encoder's
+    own settings through explicitly, exactly as encoder.decode()/
+    develop_trajectory() already do."""
     grid = np.array(grid0, dtype=int, copy=True)
     bodies = [grid.copy()]
     magnitudes = []
     for _ in range(t_max):
-        next_grid = develop_rules(genome, shape=encoder.grid_shape, iterations=1, initial_grid=grid)
+        next_grid = develop_rules(
+            genome, shape=encoder.grid_shape, iterations=1, initial_grid=grid,
+            conflict_resolution=encoder.conflict_resolution,
+            copy_neighbor_reads=encoder.copy_neighbor_reads,
+            boundary=encoder.boundary,
+            neighbourhood=encoder.neighbourhood,
+            action_monotonicity=encoder.action_monotonicity,
+        )
         magnitudes.append(int(np.count_nonzero(next_grid != grid)))
         grid = next_grid
         bodies.append(grid.copy())
@@ -302,10 +326,10 @@ class LightConeResult:
 def _perturbed_initial_state_nca(encoder: NCAEncoder, perturb_cell: Tuple[int, int]) -> np.ndarray:
     state = encoder._initial_state.copy()
     r, c = perturb_cell
-    # Perturbation magnitude equal to init_scale (the same scale the
-    # genome's own weights are drawn at), added to every channel of the
+    # Perturbation magnitude equal to init_gain (the variance-scaling gain
+    # the genome's own weights are drawn at), added to every channel of the
     # perturbed cell -- an arbitrary but fixed and documented sign.
-    state[r, c, :] += encoder.init_scale
+    state[r, c, :] += encoder.init_gain
     return state
 
 
@@ -644,7 +668,14 @@ def perturbation_robustness(
                 r, c = divmod(int(idx), cols)
                 grid[r, c] = int(rng.integers(0, N_MATERIALS))
             for _ in range(T - k):
-                grid = develop_rules(genome, shape=encoder.grid_shape, iterations=1, initial_grid=grid)
+                grid = develop_rules(
+                    genome, shape=encoder.grid_shape, iterations=1, initial_grid=grid,
+                    conflict_resolution=encoder.conflict_resolution,
+                    copy_neighbor_reads=encoder.copy_neighbor_reads,
+                    boundary=encoder.boundary,
+                    neighbourhood=encoder.neighbourhood,
+                    action_monotonicity=encoder.action_monotonicity,
+                )
             damaged_final = grid
 
         else:
@@ -668,4 +699,245 @@ def perturbation_robustness(
         mean_hamming_distance=float(hammings_arr.mean()),
         median_hamming_distance=float(np.median(hammings_arr)),
         fraction_unaffected=float(np.mean(hammings_arr == 0)),
+    )
+
+
+# ---------------------------------------------------------------------------
+# 8. readout_margin
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ReadoutMarginResult:
+    n: int
+    n_cells: int
+    near_tie_threshold: float
+    mean_margin: float
+    median_margin: float
+    fraction_cells_near_tie: float
+    fraction_bodies_with_near_tie_cell: float
+
+
+def readout_margin(
+    encoder, factors: ExperimentFactors, n_samples: int, rng: np.random.Generator,
+    near_tie_threshold: float = 0.01, output_root: str = RESULTS_ROOT,
+) -> ReadoutMarginResult:
+    """Per-cell (max logit - second-max logit) at t=T, over the 5 material
+    channels NCA's argmax readout actually decides between. Requires an
+    NCAEncoder: rule_based and direct both produce a discrete body directly,
+    with no pre-argmax continuous logits to measure a margin over -- this
+    metric is specifically about the confidence of NCA's argmax decision,
+    not a generic property every arm's decode() exposes."""
+    if not isinstance(encoder, NCAEncoder):
+        raise TypeError(
+            f"readout_margin requires an NCAEncoder (got {type(encoder).__name__}): only NCA exposes "
+            "continuous pre-argmax material logits (state[:, :, :N_MATERIALS]) -- rule_based/direct "
+            "decode() straight to a discrete body with no logits to take a margin over."
+        )
+
+    records = []
+    all_margins: List[np.ndarray] = []
+    bodies_with_tie = 0
+
+    for i in range(n_samples):
+        genome = encoder.random_genome(rng)
+        _, _, states = _nca_trajectory_from_state(encoder, genome, encoder._initial_state, encoder.dev_steps)
+        final_logits = states[-1][:, :, :N_MATERIALS]  # (rows, cols, N_MATERIALS)
+        sorted_logits = np.sort(final_logits, axis=-1)
+        margin = (sorted_logits[..., -1] - sorted_logits[..., -2]).flatten()  # (rows*cols,)
+
+        all_margins.append(margin)
+        has_tie = bool(np.any(margin < near_tie_threshold))
+        if has_tie:
+            bodies_with_tie += 1
+
+        records.append({
+            "index": i,
+            "margins": margin.tolist(),
+            "has_near_tie_cell": has_tie,
+        })
+
+    _write_jsonl(_jsonl_path(encoder.name, "readout_margin", output_root), records)
+
+    margins_arr = np.concatenate(all_margins)
+    return ReadoutMarginResult(
+        n=n_samples,
+        n_cells=int(margins_arr.size),
+        near_tie_threshold=near_tie_threshold,
+        mean_margin=float(margins_arr.mean()),
+        median_margin=float(np.median(margins_arr)),
+        fraction_cells_near_tie=float(np.mean(margins_arr < near_tie_threshold)),
+        fraction_bodies_with_near_tie_cell=bodies_with_tie / n_samples,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 9. uniform_body_fraction
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class UniformBodyFractionResult:
+    n: int
+    uniform_fraction: float
+    uniform_count_by_material: Dict[int, int]
+    uniform_fraction_by_material: Dict[int, float]
+
+
+def uniform_body_fraction(
+    encoder, factors: ExperimentFactors, n_samples: int, rng: np.random.Generator,
+    output_root: str = RESULTS_ROOT,
+) -> UniformBodyFractionResult:
+    """Fraction of decoded bodies holding a single material across all 25
+    cells (the same "uniform" test as validity_rate's degenerate_fraction /
+    _is_degenerate, arm-agnostic), broken down by WHICH material -- directly
+    quantifies the single-material collapse the P7 surrogate investigation
+    surfaced for NCA."""
+    counts_by_material: Dict[int, int] = {m: 0 for m in range(N_MATERIALS)}
+    uniform_count = 0
+    records = []
+
+    for i in range(n_samples):
+        genome = encoder.random_genome(rng)
+        body = encoder.decode(genome)
+        unique_vals = np.unique(body)
+        is_uniform = bool(unique_vals.size == 1)
+        material = int(unique_vals[0]) if is_uniform else None
+
+        if is_uniform:
+            uniform_count += 1
+            counts_by_material[material] = counts_by_material.get(material, 0) + 1
+
+        records.append({"index": i, "uniform": is_uniform, "material": material})
+
+    _write_jsonl(_jsonl_path(encoder.name, "uniform_body_fraction", output_root), records)
+
+    return UniformBodyFractionResult(
+        n=n_samples,
+        uniform_fraction=uniform_count / n_samples,
+        uniform_count_by_material=counts_by_material,
+        uniform_fraction_by_material={m: c / n_samples for m, c in counts_by_material.items()},
+    )
+
+
+# ---------------------------------------------------------------------------
+# 10. hidden_utilisation
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class HiddenUtilisationResult:
+    n: int
+    hidden_channels: int
+    per_channel_spatial_variance: List[float]  # variance across the 25 cells at t=T, averaged over genomes
+    per_channel_temporal_variance: List[float]  # variance across t=0..T per cell, averaged over cells/genomes
+    per_channel_correlation_with_readout: List[float]  # Pearson r: channel@T/2 vs final material id, pooled
+
+
+def hidden_utilisation(
+    encoder, factors: ExperimentFactors, n_samples: int, rng: np.random.Generator,
+    output_root: str = RESULTS_ROOT,
+) -> HiddenUtilisationResult:
+    """Whether NCA's H hidden channels -- carried through development but
+    discarded by the argmax readout (only channels 0..N_MATERIALS-1 feed it)
+    -- actually do anything: their spatial variance (across cells, at t=T),
+    their temporal variance (across steps, per cell), and their correlation
+    with the material the readout ultimately picks (measured at t=T/2, half
+    a step of causal slack before the final readout, so a channel that
+    merely mirrors the already-decided material at t=T is not what's being
+    tested). Low variance on both axes means a channel is inert; low
+    |correlation| means a channel varies but doesn't covary with the
+    decision the readout actually makes.
+
+    CAVEAT on the correlation number: material ids 0..N_MATERIALS-1 are a
+    categorical label, not an ordinal scale, so a linear Pearson correlation
+    against them is a crude, order-dependent indicator -- a large value is
+    good evidence of a real relationship, but a near-zero value does not
+    rule out a real, non-monotonic (e.g. one-material-vs-rest) relationship
+    between a channel and the decision. Requires an NCAEncoder; H=0 returns
+    an explicitly empty result (not an error) so it can be called uniformly
+    across an H ablation sweep."""
+    if not isinstance(encoder, NCAEncoder):
+        raise TypeError(
+            f"hidden_utilisation requires an NCAEncoder (got {type(encoder).__name__}): hidden channels "
+            "are an NCA-specific concept (state channels beyond the N_MATERIALS the readout uses)."
+        )
+
+    H = encoder.hidden_channels
+    if H == 0:
+        _write_jsonl(_jsonl_path(encoder.name, "hidden_utilisation", output_root), [])
+        return HiddenUtilisationResult(
+            n=n_samples,
+            hidden_channels=0,
+            per_channel_spatial_variance=[],
+            per_channel_temporal_variance=[],
+            per_channel_correlation_with_readout=[],
+        )
+
+    records = []
+    spatial_vars_per_genome: List[List[float]] = []  # [genome][channel]
+    temporal_vars_per_genome: List[List[float]] = []
+    mid_values_pooled = [[] for _ in range(H)]  # [channel] -> flat list over (genome, cell)
+    final_material_pooled = []  # flat list over (genome, cell), shared across channels
+
+    for i in range(n_samples):
+        genome = encoder.random_genome(rng)
+        T = encoder.dev_steps
+        _, _, states = _nca_trajectory_from_state(encoder, genome, encoder._initial_state, T)
+        mid_step = T // 2
+        final_state = states[-1]
+        mid_state = states[mid_step]
+        final_material = _nca_readout(final_state).flatten()  # (rows*cols,)
+
+        channel_stack = np.stack(states, axis=0)  # (T+1, rows, cols, channels)
+
+        genome_spatial = []
+        genome_temporal = []
+        genome_mid_values = []
+        for h in range(H):
+            ch_idx = N_MATERIALS + h
+            spatial_var = float(np.var(final_state[:, :, ch_idx]))
+            temporal_var = float(np.mean(np.var(channel_stack[:, :, :, ch_idx], axis=0)))
+            mid_values = mid_state[:, :, ch_idx].flatten()
+
+            genome_spatial.append(spatial_var)
+            genome_temporal.append(temporal_var)
+            genome_mid_values.append(mid_values.tolist())
+            mid_values_pooled[h].extend(mid_values.tolist())
+
+        spatial_vars_per_genome.append(genome_spatial)
+        temporal_vars_per_genome.append(genome_temporal)
+        final_material_pooled.extend(final_material.tolist())
+
+        records.append({
+            "index": i,
+            "spatial_variance_per_channel": genome_spatial,
+            "temporal_variance_per_channel": genome_temporal,
+            "mid_step_values_per_channel": genome_mid_values,
+            "final_material": final_material.tolist(),
+        })
+
+    _write_jsonl(_jsonl_path(encoder.name, "hidden_utilisation", output_root), records)
+
+    final_material_arr = np.array(final_material_pooled, dtype=float)
+    correlations = []
+    for h in range(H):
+        channel_arr = np.array(mid_values_pooled[h], dtype=float)
+        if np.std(channel_arr) == 0.0 or np.std(final_material_arr) == 0.0:
+            # a constant channel (or constant readout) has undefined linear
+            # correlation; 0 (no LINEAR relationship detectable) is the
+            # honest report, not NaN.
+            correlations.append(0.0)
+        else:
+            correlations.append(float(np.corrcoef(channel_arr, final_material_arr)[0, 1]))
+
+    spatial_arr = np.array(spatial_vars_per_genome)  # (n_samples, H)
+    temporal_arr = np.array(temporal_vars_per_genome)  # (n_samples, H)
+
+    return HiddenUtilisationResult(
+        n=n_samples,
+        hidden_channels=H,
+        per_channel_spatial_variance=[float(v) for v in spatial_arr.mean(axis=0)],
+        per_channel_temporal_variance=[float(v) for v in temporal_arr.mean(axis=0)],
+        per_channel_correlation_with_readout=correlations,
     )
