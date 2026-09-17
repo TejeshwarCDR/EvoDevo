@@ -1,0 +1,26 @@
+{
+  "dirty": true,
+  "dirty_files": [
+    "evodevo/analysis/stats_protocol.py",
+    "evodevo/analysis/stats_protocol_validation.py",
+    "evodevo/experiments/benchmark.py",
+    "evodevo/experiments/configs/benchmark.yaml",
+    "results/mutation/MUTATION_CALIBRATION.md",
+    "results/mutation/figs/calibrated_distributions.png",
+    "results/mutation/figs/displacement_vs_param.png",
+    "results/mutation/mutation_calibration_raw.json",
+    "tests/analysis/test_stats_protocol.py",
+    "tests/experiments/test_benchmark.py",
+    "results/runs/strategy_comparison_v2/",
+    "tests/experiments/test_benchmark_profiles.py"
+  ],
+  "factors": {
+    "dev_steps": 5,
+    "hidden_channels": 3,
+    "init_condition": "center_seed",
+    "mutation_scale": 1.0,
+    "neighbourhood": "von_neumann",
+    "seed": 2
+  },
+  "git_commit": "787aa78336bfaa3277b0ab0415098982857dde98"
+}

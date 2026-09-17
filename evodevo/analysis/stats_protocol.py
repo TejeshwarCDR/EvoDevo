@@ -132,11 +132,23 @@ class Cell:
     task: str
 
 
+#: Comparison kinds. "cross_arm": two arms with DIFFERENT base encoders --
+#: a representation-choice question. "ablation_within_arm": two arms that
+#: SHARE a base encoder (e.g. rule_based / rule_based_monotone) -- an
+#: ablation question (does this one changed knob affect task performance?),
+#: not a representation-choice one; conflating the two would read
+#: confusingly in a significance table. "arm_vs_own_random_search": the
+#: prior-vs-search decomposition, unrelated to either of the above.
+CROSS_ARM = "cross_arm"
+ABLATION_WITHIN_ARM = "ablation_within_arm"
+ARM_VS_OWN_RANDOM_SEARCH = "arm_vs_own_random_search"
+
+
 @dataclass
 class ComparisonSpec:
     cell_a: Cell
     cell_b: Cell
-    kind: str  # "cross_arm" or "arm_vs_own_random_search" (generalizes to any non-primary strategy)
+    kind: str
 
 
 def enumerate_planned_comparisons(
@@ -144,6 +156,7 @@ def enumerate_planned_comparisons(
     strategies: Sequence[str],
     tasks: Sequence[str],
     primary_strategy: str = "ea",
+    arm_base_encoder: Optional[Dict[str, str]] = None,
 ) -> List[ComparisonSpec]:
     """The hypothesis-scoped comparison family LOCKED by docs/analysis-protocol.md:
     only comparisons with a single, clean scientific interpretation, never
@@ -154,25 +167,45 @@ def enumerate_planned_comparisons(
     Per task, for every task in `tasks`:
       1. every cross-arm pair under `primary_strategy` (the main scientific
          question: how do the arms compare under real search) -- C(len(arms), 2).
+         Labelled CROSS_ARM if the two arms have different base encoders, or
+         ABLATION_WITHIN_ARM if they share one (e.g. rule_based vs.
+         rule_based_monotone) -- an ablation question, not a
+         representation-choice one, and reported as a visibly distinct
+         `kind` so a significance table never conflates the two.
       2. for every arm, that arm's `primary_strategy` vs. each OTHER strategy
          in `strategies` (the prior-vs-search decomposition: how much of an
          arm's performance is its encoding's prior vs. the EA's search
          contribution) -- len(arms) * (len(strategies) - 1).
 
+    `arm_base_encoder`: {arm_id: base_encoder_registry_name}, e.g. from
+    {a.arm_id: a.encoder for a in bconfig.resolved_arms()}
+    (evodevo.experiments.benchmark.ArmSpec) -- this is how the
+    cross_arm/ablation_within_arm distinction is DERIVED, generically, from
+    whether two arms share a base encoder, rather than special-casing any
+    encoder by name; a future encoder gaining its own ablation variant is
+    handled automatically. Defaults to `{arm: arm for arm in arms}` (every
+    arm is its own base encoder, i.e. every pair is CROSS_ARM) for backward
+    compatibility with callers that don't have arm/encoder metadata.
+
     Purely a function of (arms, strategies, tasks): adding a second task, a
     fifth arm, or a third strategy changes the returned family size with NO
     code change here -- this is what "not hardcoded to three arms or Walker"
     means in practice. For the CURRENT matrix (4 arms, {ea, random_search},
-    1 task): 6 cross-arm + 4 arm-vs-own-random_search = 10 comparisons."""
+    1 task): 6 cross-arm-or-ablation-within-arm (5 cross_arm + 1
+    ablation_within_arm, rule_based vs rule_based_monotone) + 4
+    arm-vs-own-random_search = 10 comparisons."""
+    if arm_base_encoder is None:
+        arm_base_encoder = {arm: arm for arm in arms}
     other_strategies = [s for s in strategies if s != primary_strategy]
     comparisons: List[ComparisonSpec] = []
     for task in tasks:
         for arm_a, arm_b in itertools.combinations(arms, 2):
+            same_base_encoder = arm_base_encoder[arm_a] == arm_base_encoder[arm_b]
             comparisons.append(
                 ComparisonSpec(
                     cell_a=Cell(arm_a, primary_strategy, task),
                     cell_b=Cell(arm_b, primary_strategy, task),
-                    kind="cross_arm",
+                    kind=ABLATION_WITHIN_ARM if same_base_encoder else CROSS_ARM,
                 )
             )
         for arm in arms:
@@ -181,7 +214,7 @@ def enumerate_planned_comparisons(
                     ComparisonSpec(
                         cell_a=Cell(arm, primary_strategy, task),
                         cell_b=Cell(arm, strategy, task),
-                        kind="arm_vs_own_random_search",
+                        kind=ARM_VS_OWN_RANDOM_SEARCH,
                     )
                 )
     return comparisons
@@ -222,6 +255,7 @@ def run_protocol(
     tasks: Sequence[str],
     primary_strategy: str = "ea",
     alpha: float = DEFAULT_ALPHA,
+    arm_base_encoder: Optional[Dict[str, str]] = None,
 ) -> ProtocolResult:
     """`fitness_by_cell`: {(arm, strategy, task): [per-seed final fitness]},
     e.g. built from evodevo.analysis.aggregate.per_seed_finals()'s output
@@ -230,11 +264,17 @@ def run_protocol(
     so this test, evodevo.analysis.report, and budget_curves.py never
     silently disagree on what "final fitness" means.
 
+    `arm_base_encoder` is passed straight through to
+    enumerate_planned_comparisons() -- see its docstring for the
+    cross_arm/ablation_within_arm distinction it derives.
+
     Enumerates the planned comparison family via
     enumerate_planned_comparisons(), runs Mann-Whitney U + A12 on each, then
     applies ONE Holm-Bonferroni correction across the whole family (not
     per-task or per-kind separately -- the family is the unit of correction)."""
-    plan = enumerate_planned_comparisons(arms, strategies, tasks, primary_strategy=primary_strategy)
+    plan = enumerate_planned_comparisons(
+        arms, strategies, tasks, primary_strategy=primary_strategy, arm_base_encoder=arm_base_encoder
+    )
 
     raw_results = []
     for spec in plan:

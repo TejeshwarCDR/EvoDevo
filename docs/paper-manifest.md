@@ -161,14 +161,23 @@ Vargha-Delaney A12 effect size, Holm-Bonferroni corrected across the full
 `m={M}`-comparison family."
 
 **Columns**: `comparison` (`cell_a` vs `cell_b`), `kind` (`cross_arm` /
-`arm_vs_own_random_search`), `n_a`, `n_b`, `mean_a`, `mean_b`,
+`ablation_within_arm` / `arm_vs_own_random_search` -- see
+`docs/analysis-protocol.md` Sec 3's "cross_arm vs. ablation_within_arm"
+subsection: `cross_arm` is a representation-choice question between two
+DIFFERENT base encoders, `ablation_within_arm` is an ablation question
+between two arms sharing ONE base encoder -- e.g. `rule_based` vs.
+`rule_based_monotone` -- derived generically from shared base-encoder
+identity, never hardcoded by name), `n_a`, `n_b`, `mean_a`, `mean_b`,
 `vargha_delaney_a12`, `mann_whitney_u`, `p_raw`, `p_holm`,
-`significant_at_alpha`.
+`significant_at_alpha`. The `kind` column must be rendered visibly (not
+just available in the underlying data) so a reader never mistakes an
+ablation result for a cross-arm one or vice versa.
 
 **Arms/tasks**: the full planned family for whatever matrix is in effect at
-report time (currently `m=10`: 6 cross-arm EA pairs + 4 arm-vs-own-random_search
-pairs, 1 task -- see `docs/analysis-protocol.md` Sec 3 for the exact
-derivation). Doubles automatically per added task.
+report time (currently `m=10`: 6 cross-arm-family EA pairs -- 5 `cross_arm`
++ 1 `ablation_within_arm` (`rule_based` vs `rule_based_monotone`) -- + 4
+`arm_vs_own_random_search` pairs, 1 task -- see `docs/analysis-protocol.md`
+Sec 3 for the exact derivation). Doubles automatically per added task.
 
 **Source**: `evodevo/analysis/stats_protocol.py::run_protocol`, exactly as
 rehearsed in `results/STATS_PROTOCOL_VALIDATION.md` Sec 2.

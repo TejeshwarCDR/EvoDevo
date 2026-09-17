@@ -77,6 +77,26 @@ Explicitly excluded: cross-arm-and-cross-strategy comparisons (e.g. `direct`
 under `ea` vs. `rule_based` under `random_search`), which mix two different
 axes of variation into one number with no single clean interpretation.
 
+**`cross_arm` vs. `ablation_within_arm`, and why the distinction matters**:
+within family 1 above, `enumerate_planned_comparisons` further splits
+cross-arm-family pairs into two `kind` labels, derived generically from
+whether the two arms share a base encoder registry entry (never by hardcoding
+an encoder's name): `cross_arm` when they do not (e.g. `direct` vs. `nca` --
+a REPRESENTATION-CHOICE question, "which encoding is better"), and
+`ablation_within_arm` when they do (e.g. `rule_based` vs.
+`rule_based_monotone` -- an ABLATION question, "does this one changed knob
+on the SAME encoding affect task performance"). These are different
+scientific questions with different implications for interpretation: a
+significant `cross_arm` result supports choosing one encoding over another;
+a significant `ablation_within_arm` result speaks to whether a specific
+design choice (here, monotone's termination guarantee) costs or preserves
+task performance within one encoding, and says nothing about how that
+encoding compares to the others. Labelling both identically in the
+significance table (Table 4, `docs/paper-manifest.md`) would read as if
+they answered the same kind of question; they do not. The mechanism
+generalises automatically to any future encoder that gains its own ablation
+variant -- no special-casing is required.
+
 **For the CURRENT experimental matrix** -- 4 arms (`direct`, `nca`,
 `rule_based`, `rule_based_monotone`, per `docs/decisions.md`'s co-primary
 decision and its Part-1 registration fix), 2 strategies (`ea`,

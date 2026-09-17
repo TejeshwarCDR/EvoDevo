@@ -25,20 +25,24 @@ m=10 comparisons per trial (matching the CURRENT matrix's planned-comparison cou
 
 ## 2. Dry run: real pipeline on committed surrogate data
 
-`results/runs/strategy_comparison/` (surrogate, NOT real PPO fitness) loaded via `evodevo.analysis.aggregate.load_all_runs` and run through `stats_protocol.run_protocol` end-to-end, exactly as it will be run on real results.
+`results/runs/strategy_comparison_v2/` (surrogate, NOT real PPO fitness) loaded via `evodevo.analysis.aggregate.load_all_runs` and run through `stats_protocol.run_protocol` end-to-end, exactly as it will be run on real results.
 
-- Arms: ['direct', 'nca', 'rule_based']
+- Arms: ['direct', 'nca', 'rule_based', 'rule_based_monotone']
 - Strategies: ['ea', 'random_search']
 - Tasks: ['Walker-v0']
-- Planned comparisons enumerated: **6** (this data's matrix: 3 arms x 2 strategies x 1 task -> C(3,2)=3 cross-arm + 3 arm-vs-own-random_search, per task)
+- Planned comparisons enumerated: **10** (this data's matrix: 4 arms x 2 strategies x 1 task -> C(4,2)=6 cross-arm + 4 arm-vs-own-random_search, per task)
 
 | Comparison | Kind | n_a | n_b | mean_a | mean_b | A12 | U | p_raw | p_holm | significant (Holm) |
 |---|---|---|---|---|---|---|---|---|---|---|
-| direct/ea vs nca/ea (Walker-v0) | cross_arm | 3 | 3 | 14.1333 | 26.0000 | 0.0000 | 0.00 | 0.0495 | 0.2972 | no |
-| direct/ea vs rule_based/ea (Walker-v0) | cross_arm | 3 | 3 | 14.1333 | 26.0000 | 0.0000 | 0.00 | 0.0495 | 0.2972 | no |
-| nca/ea vs rule_based/ea (Walker-v0) | cross_arm | 3 | 3 | 26.0000 | 26.0000 | 0.5000 | 4.50 | 1.0000 | 1.0000 | no |
-| direct/ea vs direct/random_search (Walker-v0) | arm_vs_own_random_search | 3 | 3 | 14.1333 | 10.0800 | 1.0000 | 9.00 | 0.0495 | 0.2972 | no |
-| nca/ea vs nca/random_search (Walker-v0) | arm_vs_own_random_search | 3 | 3 | 26.0000 | 26.0000 | 0.5000 | 4.50 | 1.0000 | 1.0000 | no |
+| direct/ea vs nca/ea (Walker-v0) | cross_arm | 3 | 3 | 14.1333 | -10.0000 | 1.0000 | 9.00 | 0.0495 | 0.4953 | no |
+| direct/ea vs rule_based/ea (Walker-v0) | cross_arm | 3 | 3 | 14.1333 | 26.0000 | 0.0000 | 0.00 | 0.0495 | 0.4953 | no |
+| direct/ea vs rule_based_monotone/ea (Walker-v0) | cross_arm | 3 | 3 | 14.1333 | 26.0000 | 0.0000 | 0.00 | 0.0495 | 0.4953 | no |
+| nca/ea vs rule_based/ea (Walker-v0) | cross_arm | 3 | 3 | -10.0000 | 26.0000 | 0.0000 | 0.00 | 0.0495 | 0.4953 | no |
+| nca/ea vs rule_based_monotone/ea (Walker-v0) | cross_arm | 3 | 3 | -10.0000 | 26.0000 | 0.0000 | 0.00 | 0.0495 | 0.4953 | no |
+| rule_based/ea vs rule_based_monotone/ea (Walker-v0) | ablation_within_arm | 3 | 3 | 26.0000 | 26.0000 | 0.5000 | 4.50 | 1.0000 | 1.0000 | no |
+| direct/ea vs direct/random_search (Walker-v0) | arm_vs_own_random_search | 3 | 3 | 14.1333 | 10.0800 | 1.0000 | 9.00 | 0.0495 | 0.4953 | no |
+| nca/ea vs nca/random_search (Walker-v0) | arm_vs_own_random_search | 3 | 3 | -10.0000 | 0.3067 | 0.3333 | 3.00 | 0.5127 | 1.0000 | no |
 | rule_based/ea vs rule_based/random_search (Walker-v0) | arm_vs_own_random_search | 3 | 3 | 26.0000 | 26.0000 | 0.5000 | 4.50 | 1.0000 | 1.0000 | no |
+| rule_based_monotone/ea vs rule_based_monotone/random_search (Walker-v0) | arm_vs_own_random_search | 3 | 3 | 26.0000 | 26.0000 | 0.5000 | 4.50 | 1.0000 | 1.0000 | no |
 
 **Result: PASS** -- the protocol ran end-to-end against real (surrogate) project data with no errors, producing correctly-labelled per-comparison rows and a Holm correction sized to the data's own matrix shape. This is the rehearsal for the day real PPO results arrive: the same call, `stats_protocol.run_protocol(fitness_by_cell, arms, strategies, tasks)`, against real per_seed_finals-derived data, produces the final report's significance table.

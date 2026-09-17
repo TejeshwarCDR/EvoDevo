@@ -36,7 +36,14 @@ from evodevo.analysis.stats_protocol import (
 )
 
 OUTPUT_PATH = "results/STATS_PROTOCOL_VALIDATION.md"
-STRATEGY_COMPARISON_ROOT = "results/runs/strategy_comparison"
+# v2 (not the original results/runs/strategy_comparison/, kept as-is and
+# still cited elsewhere) includes rule_based_monotone as a fourth arm --
+# generated fresh via the real, current benchmark.yaml config path
+# (surrogate=True, 3 seeds) specifically so this dry run can exercise and
+# display the ablation_within_arm vs cross_arm distinction for real, not
+# just on synthetic data (the original 3-arm dataset predates
+# rule_based_monotone's registration and has no ablation pair to show).
+STRATEGY_COMPARISON_ROOT = "results/runs/strategy_comparison_v2"
 
 
 def _normal_cdf(x: float) -> float:
@@ -157,12 +164,16 @@ def run_synthetic_validation() -> dict:
 # ---------------------------------------------------------------------------
 
 
-def _fitness_by_cell_from_run_dir(root_dir: str) -> Tuple[Dict[Tuple[str, str, str], List[float]], List[str], List[str], List[str]]:
+def _fitness_by_cell_from_run_dir(root_dir: str):
     """Loads every run under `root_dir` and groups final best-so-far fitness
     (the same cummax-by-eval_index definition used by
     evodevo.analysis.aggregate.per_seed_finals) by (encoder, strategy, task)
     -- the standard "final fitness per seed" shared across this project's
-    analysis tooling."""
+    analysis tooling. Also derives arm_base_encoder from the df's
+    "registry_encoder" column (evodevo.analysis.aggregate's arm-identity
+    fix) so run_protocol can correctly distinguish an ablation-within-arm
+    comparison (e.g. rule_based vs rule_based_monotone) from a cross-arm
+    one, generically, without hardcoding any arm name here."""
     df = load_all_runs(root_dir)
     fitness_by_cell: Dict[Tuple[str, str, str], List[float]] = {}
     for (encoder, strategy, task), group in df.groupby(["encoder", "strategy", "task"]):
@@ -175,12 +186,14 @@ def _fitness_by_cell_from_run_dir(root_dir: str) -> Tuple[Dict[Tuple[str, str, s
     arms = sorted(df["encoder"].unique())
     strategies = sorted(df["strategy"].unique())
     tasks = sorted(df["task"].unique())
-    return fitness_by_cell, arms, strategies, tasks
+    arm_base_encoder = dict(df.drop_duplicates("encoder").set_index("encoder")["registry_encoder"]) \
+        if "registry_encoder" in df.columns else {arm: arm for arm in arms}
+    return fitness_by_cell, arms, strategies, tasks, arm_base_encoder
 
 
 def run_dry_run_validation(root_dir: str = STRATEGY_COMPARISON_ROOT):
-    fitness_by_cell, arms, strategies, tasks = _fitness_by_cell_from_run_dir(root_dir)
-    result = run_protocol(fitness_by_cell, arms, strategies, tasks)
+    fitness_by_cell, arms, strategies, tasks, arm_base_encoder = _fitness_by_cell_from_run_dir(root_dir)
+    result = run_protocol(fitness_by_cell, arms, strategies, tasks, arm_base_encoder=arm_base_encoder)
     return result, fitness_by_cell, arms, strategies, tasks
 
 

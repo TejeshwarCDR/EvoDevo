@@ -4,6 +4,9 @@ import numpy as np
 import pytest
 
 from evodevo.analysis.stats_protocol import (
+    ABLATION_WITHIN_ARM,
+    ARM_VS_OWN_RANDOM_SEARCH,
+    CROSS_ARM,
     Cell,
     enumerate_planned_comparisons,
     holm_bonferroni,
@@ -105,6 +108,74 @@ def test_run_protocol_end_to_end_on_synthetic_cells():
     assert result.holm.m == len(result.comparisons)
     cross_arm = [c for c in result.comparisons if c.kind == "cross_arm"][0]
     assert cross_arm.a12 == pytest.approx(1.0)  # a's values fully exceed b's
+
+
+def test_enumerate_planned_comparisons_distinguishes_ablation_within_arm_from_cross_arm():
+    """rule_based vs rule_based_monotone (same base encoder) is an ablation
+    question, not a representation-choice one -- it must get a distinct
+    `kind`, derived generically from arm_base_encoder, not hardcoded by name."""
+    arm_base_encoder = {
+        "direct": "direct",
+        "nca": "nca",
+        "rule_based": "rule_based",
+        "rule_based_monotone": "rule_based",
+    }
+    plan = enumerate_planned_comparisons(
+        arms=["direct", "nca", "rule_based", "rule_based_monotone"],
+        strategies=["ea", "random_search"],
+        tasks=["Walker-v0"],
+        arm_base_encoder=arm_base_encoder,
+    )
+    assert len(plan) == 10  # unchanged count -- only the label changes
+    by_pair = {(c.cell_a.arm, c.cell_b.arm): c.kind for c in plan if c.kind != ARM_VS_OWN_RANDOM_SEARCH}
+    assert by_pair[("rule_based", "rule_based_monotone")] == ABLATION_WITHIN_ARM
+    assert by_pair[("direct", "nca")] == CROSS_ARM
+    assert by_pair[("direct", "rule_based")] == CROSS_ARM
+    assert by_pair[("direct", "rule_based_monotone")] == CROSS_ARM
+    assert by_pair[("nca", "rule_based")] == CROSS_ARM
+    assert by_pair[("nca", "rule_based_monotone")] == CROSS_ARM
+    assert sum(c.kind == ABLATION_WITHIN_ARM for c in plan) == 1
+    assert sum(c.kind == CROSS_ARM for c in plan) == 5
+
+
+def test_enumerate_planned_comparisons_generalizes_to_a_future_ablation_variant():
+    """Not special-cased to rule_based by name: an unrelated encoder's own
+    hypothetical ablation variant is classified the same way, purely from
+    arm_base_encoder."""
+    arm_base_encoder = {"widget": "widget", "widget_ablated": "widget", "other": "other"}
+    plan = enumerate_planned_comparisons(
+        arms=["widget", "widget_ablated", "other"],
+        strategies=["ea"],
+        tasks=["t"],
+        arm_base_encoder=arm_base_encoder,
+    )
+    by_pair = {(c.cell_a.arm, c.cell_b.arm): c.kind for c in plan}
+    assert by_pair[("widget", "widget_ablated")] == ABLATION_WITHIN_ARM
+    assert by_pair[("widget", "other")] == CROSS_ARM
+    assert by_pair[("widget_ablated", "other")] == CROSS_ARM
+
+
+def test_enumerate_planned_comparisons_defaults_to_all_cross_arm_without_base_encoder_map():
+    """Backward compatible: a caller with no arm/encoder metadata gets the
+    old behaviour (every pair CROSS_ARM), not a crash."""
+    plan = enumerate_planned_comparisons(arms=["a", "b"], strategies=["ea"], tasks=["t"])
+    assert all(c.kind == CROSS_ARM for c in plan)
+
+
+def test_run_protocol_threads_arm_base_encoder_through():
+    fitness_by_cell = {
+        ("rule_based", "ea", "t"): [10.0, 11.0, 12.0, 9.0, 10.5],
+        ("rule_based_monotone", "ea", "t"): [10.1, 10.9, 11.8, 9.2, 10.4],
+    }
+    result = run_protocol(
+        fitness_by_cell,
+        arms=["rule_based", "rule_based_monotone"],
+        strategies=["ea"],
+        tasks=["t"],
+        arm_base_encoder={"rule_based": "rule_based", "rule_based_monotone": "rule_based"},
+    )
+    assert len(result.comparisons) == 1
+    assert result.comparisons[0].kind == ABLATION_WITHIN_ARM
 
 
 def test_run_protocol_holm_correction_is_internally_consistent_with_holm_bonferroni():
