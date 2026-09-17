@@ -29,6 +29,7 @@ from evodevo.core.config import SHARED_BASE_KEYS, ConfigOverrideError, Experimen
 from evodevo.core.factors import ExperimentFactors, extract_factors
 from evodevo.core.provenance import DirtyTreeError, check_git_state, write_factors_json
 from evodevo.encoders import get_encoder
+from evodevo.encoders.nca.resolved_config import PRIMARY as NCA_PRIMARY
 from evodevo.encoders.rule_based.resolved_config import (
     MONOTONE_ABLATION as RULE_BASED_MONOTONE,
     PRIMARY as RULE_BASED_PRIMARY,
@@ -48,6 +49,67 @@ from evodevo.experiments.run_experiment import (
 
 DEFAULT_CONFIGS_ROOT = "evodevo/experiments/configs"
 DEFAULT_OUTPUT_DIR = "results/runs"
+
+# Two named PROFILES, the single source of truth for the SHARED_BASE_KEYS
+# fields that determine wall-clock cost (ppo_timesteps/population_size/
+# eval_budget/offspring_size) -- everything else (arm/strategy/task
+# definitions, encoder dynamics configuration) is resolved identically
+# regardless of profile, so nothing about an encoder architecture decision
+# can duplicate or drift between profiles.
+#
+# FAST_DEV: bit-for-bit today's values (see evodevo/experiments/configs/
+# shared/base.yaml, unchanged) -- this is what CI, structural/fitness-blind
+# analysis, and all N/R-series tooling continues to use. A dedicated test
+# (test_fast_dev_profile_matches_shared_base_yaml) pins this equality so it
+# cannot silently drift from shared/base.yaml.
+#
+# PRIMARY_MATRIX: ppo_timesteps=1_000_000, the explicit target this project
+# has always stated (docs/decisions.md's "Direct-encoding real-PPO baseline
+# budget" row already names EvoGym's own >1e6-timestep recommendation; 5000
+# was always disclosed there as a "pipeline-validation-scale budget, not the
+# scientific comparison budget"). population_size/eval_budget/offspring_size
+# are DELIBERATELY ABSENT here -- there is no equivalent explicit recorded
+# target for these anywhere in this project's decisions, and inventing one
+# would misrepresent an open decision as a resolved one. See
+# PRIMARY_MATRIX_OPEN_FIELDS and _check_profile_ready_for_real_run below.
+FAST_DEV = "fast_dev"
+PRIMARY_MATRIX = "primary_matrix"
+
+PROFILES = {
+    FAST_DEV: {
+        "ppo_timesteps": 5000,
+        "population_size": 15,
+        "offspring_size": 15,
+        "eval_budget": 300,
+    },
+    PRIMARY_MATRIX: {
+        "ppo_timesteps": 1_000_000,
+    },
+}
+
+# population_size/offspring_size/eval_budget are jointly "how big is one
+# generation, and how many generations" -- an undecided scoping question as
+# a whole (docs/PRE_PARALLELIZATION_READINESS.md's "NOT covered" section),
+# not three independently-guessable numbers, so all three are gated together.
+PRIMARY_MATRIX_OPEN_FIELDS = ("population_size", "offspring_size", "eval_budget")
+
+
+class OpenProfileDecisionError(RuntimeError):
+    """Raised when a REAL (non-surrogate) run is attempted under a profile
+    that does not have every SHARED_BASE_KEYS field this project tracks
+    explicitly resolved -- currently only `primary_matrix`, missing
+    PRIMARY_MATRIX_OPEN_FIELDS. This is a genuine open project decision
+    pending the pre-flight wall-clock projection and an explicit scoping
+    call, NOT a bug to route around by guessing a value."""
+
+
+class FastDevRealRunGuardError(RuntimeError):
+    """Raised when a REAL (non-surrogate) run is attempted under the
+    `fast_dev` profile without an explicit acknowledgement -- fast_dev's
+    ppo_timesteps is a pipeline-validation-scale placeholder (docs/
+    decisions.md's "Direct-encoding real-PPO baseline budget" row), and
+    launching a real PPO matrix under it silently would be exactly the kind
+    of expensive, hard-to-notice mistake this guard exists to prevent."""
 MANIFEST_NAME = "benchmark_manifest.json"
 
 
@@ -148,6 +210,24 @@ class BenchmarkConfig:
     # pre-existing benchmark.yaml keeps its exact current behaviour unless a
     # config or _resolved_arm_kwargs's own built-in default opts an arm in.
     encoder_kwargs: dict = dataclasses.field(default_factory=dict)
+    # Which named PROFILE's ppo_timesteps/population_size/offspring_size/
+    # eval_budget to apply (see PROFILES above), overriding whatever
+    # configs/shared/base.yaml says for those SAME fields for every arm
+    # identically (so this can never create a fairness violation between
+    # arms -- every arm gets the exact same profile-resolved values).
+    # Defaults to "fast_dev" so every pre-existing benchmark.yaml/test that
+    # doesn't set this keeps its EXACT current behaviour.
+    profile: str = FAST_DEV
+    # Explicit, caller-supplied override of PROFILES[profile], highest
+    # precedence -- this is how a genuinely-made scoping decision for
+    # `primary_matrix`'s population_size/eval_budget/offspring_size is
+    # supplied, once made (see PRIMARY_MATRIX_OPEN_FIELDS/
+    # OpenProfileDecisionError) -- NEVER a place to invent a default.
+    profile_overrides: dict = dataclasses.field(default_factory=dict)
+    # Explicit acknowledgement required to launch a REAL (non-surrogate) run
+    # under `fast_dev` -- see FastDevRealRunGuardError. False by default, so
+    # the guard is loud unless deliberately silenced.
+    allow_fast_dev_real_run: bool = False
 
     @classmethod
     def from_yaml(cls, path: str) -> "BenchmarkConfig":
@@ -163,6 +243,34 @@ class BenchmarkConfig:
         {encoder, variant, encoder_kwargs} mappings) into the List[ArmSpec]
         every function in this module actually iterates."""
         return [ArmSpec.from_yaml_entry(entry) for entry in self.encoders]
+
+    def resolved_profile_kwargs(self) -> dict:
+        """PROFILES[self.profile], with self.profile_overrides layered on
+        top (highest precedence). For `fast_dev` this is always all four
+        SHARED_BASE_KEYS fields; for `primary_matrix` it is ppo_timesteps
+        plus whatever of PRIMARY_MATRIX_OPEN_FIELDS profile_overrides has
+        explicitly supplied -- possibly none of them, by design. This is the
+        FULL declarative profile (used for display/error messages and by
+        _check_profile_ready_for_real_run) -- see applied_profile_kwargs()
+        for what resolve_configs() actually applies to a resolved config."""
+        if self.profile not in PROFILES:
+            raise ValueError(f"unknown profile '{self.profile}'; available: {sorted(PROFILES)}")
+        return {**PROFILES[self.profile], **self.profile_overrides}
+
+    def applied_profile_kwargs(self) -> dict:
+        """What resolve_configs() actually overrides on top of each arm's
+        own resolved (shared/base.yaml + per-method) config. `fast_dev` is
+        a deliberate NO-OP here -- it is BY DEFINITION today's existing
+        behaviour (whatever configs/shared/base.yaml, or a test's own
+        fixture, already provides), not a value forcibly re-applied on top
+        of it -- so a test using a custom, deliberately tiny eval_budget for
+        fast iteration is completely unaffected by the profile mechanism.
+        `primary_matrix` (and any other future non-fast_dev profile) DOES
+        apply its resolved_profile_kwargs(), since changing the effective
+        budget is the entire point of selecting it."""
+        if self.profile == FAST_DEV:
+            return dict(self.profile_overrides)
+        return self.resolved_profile_kwargs()
 
     def seeds_for(self, strategy: str, task: str) -> List[int]:
         per_strategy = self.strategy_seeds.get(strategy)
@@ -194,6 +302,22 @@ _BUILTIN_ARM_DEFAULT_KWARGS = {
         "readout_mode": RULE_BASED_MONOTONE.readout_mode,
         "readout_window": RULE_BASED_MONOTONE.readout_window,
         "action_monotonicity": RULE_BASED_MONOTONE.action_monotonicity,
+    },
+    # hidden_channels is the ONE field of NCA's resolved architecture that
+    # does NOT reach the real benchmark path via NCAEncoder's own class
+    # defaults (unlike update_rule/decay/state_bound/init_gain/readout_mode/
+    # readout_window, which already equal resolved_config.PRIMARY exactly as
+    # NCAEncoder's own constructor defaults) -- hidden_channels instead comes
+    # from the shared, cross-encoder ExperimentFactors.hidden_channels field
+    # (evodevo/core/factors.py), whose own default (3) predates the N-series
+    # "Hidden channel count (H) -- final re-resolution" decision (DROP H to
+    # 0, docs/decisions.md) and was never wired to track it. Confirmed via
+    # docs/decisions.md's row history that H=0 is the last-recorded,
+    # unsuperseded decision (resolved_config.py::PRIMARY.hidden_channels is
+    # already 0 and correct) -- this entry is the missing wiring, not a
+    # change to the decision itself.
+    "nca": {
+        "hidden_channels": NCA_PRIMARY.hidden_channels,
     },
 }
 
@@ -240,15 +364,67 @@ def resolve_configs(bconfig: BenchmarkConfig) -> dict:
     an underlying encoder (e.g. rule_based / rule_based_monotone) resolve
     their config from the SAME configs/<encoder>/<task>.yaml -- only their
     encoder_kwargs (see _resolved_arm_kwargs) differ -- but are keyed
-    distinctly here by arm_id."""
+    distinctly here by arm_id.
+
+    bconfig.applied_profile_kwargs() (a no-op for the default `fast_dev`
+    profile; ppo_timesteps=1_000_000 plus any explicit profile_overrides for
+    `primary_matrix`) is applied identically to every arm's resolved config
+    here, on top of whatever configs/shared/base.yaml (or a test's own
+    fixture) provided for those same fields -- since it is applied
+    identically across every arm, this can never introduce a fairness
+    violation between arms."""
     representative_seed = bconfig.seeds[0]
+    profile_kwargs = bconfig.applied_profile_kwargs()
     resolved = {}
     for arm in bconfig.resolved_arms():
         for task in bconfig.tasks:
             path = bconfig.config_path(arm.encoder, task)
             config = ExperimentConfig.from_method_yaml(path)
-            resolved[(arm.arm_id, task)] = dataclasses.replace(config, seed=representative_seed)
+            resolved[(arm.arm_id, task)] = dataclasses.replace(
+                config, seed=representative_seed, **profile_kwargs
+            )
     return resolved
+
+
+def _check_profile_ready_for_real_run(bconfig: BenchmarkConfig) -> None:
+    """Refuses to proceed with a REAL (non-surrogate) run unless: (a) the
+    active profile has every SHARED_BASE_KEYS field this project tracks
+    explicitly resolved (currently only `primary_matrix` can fail this, by
+    design -- see PRIMARY_MATRIX_OPEN_FIELDS), and (b) a real run under
+    `fast_dev` is explicitly acknowledged (fast_dev's ppo_timesteps is a
+    disclosed pipeline-validation-scale placeholder, not the scientific
+    comparison budget). A surrogate run is exempt from both checks -- it
+    never trains real PPO, so neither guard's concern applies. Called before
+    ANY run starts (including a non-surrogate dry run, since
+    estimate_wall_clock's projection is meaningless without a real
+    population_size/eval_budget to extrapolate from)."""
+    if bconfig.surrogate:
+        return
+
+    resolved = bconfig.resolved_profile_kwargs()
+    if bconfig.profile == PRIMARY_MATRIX:
+        missing = [k for k in PRIMARY_MATRIX_OPEN_FIELDS if k not in resolved]
+        if missing:
+            raise OpenProfileDecisionError(
+                f"profile='primary_matrix' has no explicit value for {missing} -- this is "
+                "a genuine OPEN project decision (population_size/offspring_size/eval_budget "
+                "for the primary matrix), pending the pre-flight wall-clock projection and an "
+                "explicit scoping decision (see docs/PRE_PARALLELIZATION_READINESS.md's 'NOT "
+                "covered' section). This is not a bug to route around -- pass "
+                "profile_overrides={'population_size': ..., 'offspring_size': ..., "
+                "'eval_budget': ...} explicitly once that decision is made; do not guess a value."
+            )
+
+    if bconfig.profile == FAST_DEV and not bconfig.allow_fast_dev_real_run:
+        raise FastDevRealRunGuardError(
+            f"refusing to launch a REAL (non-surrogate) PPO run under profile='fast_dev' "
+            f"(ppo_timesteps={resolved['ppo_timesteps']}, population_size={resolved['population_size']}, "
+            f"eval_budget={resolved['eval_budget']} -- a pipeline-validation-scale placeholder, "
+            "NOT the scientific comparison budget; see docs/decisions.md's 'Direct-encoding "
+            "real-PPO baseline budget' row). If this is genuinely intended (e.g. local "
+            "smoke-testing with real PPO), pass allow_fast_dev_real_run=True "
+            "(--i-know-this-is-fast-dev on the CLI) explicitly."
+        )
 
 
 def check_fairness(bconfig: BenchmarkConfig) -> dict:
@@ -419,6 +595,13 @@ def _write_manifest(bconfig: BenchmarkConfig, manifest: dict) -> str:
 
 
 def run_benchmark(bconfig: BenchmarkConfig, dry_run: bool = False, allow_dirty: bool = False) -> dict:
+    # -1. Announce the active profile and (for a real run) refuse to
+    # proceed under an unready/unacknowledged one, BEFORE anything else --
+    # cheapest possible check, and the one this project's own history shows
+    # is worth failing loudly rather than silently (see PROFILES above).
+    print(f"[profile] {bconfig.profile} (surrogate={bconfig.surrogate})")
+    _check_profile_ready_for_real_run(bconfig)
+
     # 0. Provenance gate FIRST, before anything else -- a standalone check
     # (evodevo.core.provenance), independent of ExperimentConfig/lock_hash.
     commit_hash, dirty_files = check_git_state(allow_dirty)
@@ -504,11 +687,29 @@ def main(argv=None) -> None:
         help="allow running with an uncommitted working tree (local iteration only -- "
         "never for a run whose output is cited in a report or a docs/decisions.md row)",
     )
+    parser.add_argument(
+        "--profile",
+        choices=sorted(PROFILES),
+        default=None,
+        help="override the config's profile (default: whatever the config's own `profile` field "
+        "says, or 'fast_dev' if unset)",
+    )
+    parser.add_argument(
+        "--i-know-this-is-fast-dev",
+        action="store_true",
+        dest="allow_fast_dev_real_run",
+        help="required to launch a REAL (non-surrogate) run under the 'fast_dev' profile -- "
+        "see FastDevRealRunGuardError",
+    )
     args = parser.parse_args(argv)
 
     bconfig = BenchmarkConfig.from_yaml(args.config)
     if args.surrogate:
         bconfig = dataclasses.replace(bconfig, surrogate=True)
+    if args.profile is not None:
+        bconfig = dataclasses.replace(bconfig, profile=args.profile)
+    if args.allow_fast_dev_real_run:
+        bconfig = dataclasses.replace(bconfig, allow_fast_dev_real_run=True)
 
     try:
         run_benchmark(bconfig, dry_run=args.dry_run, allow_dirty=args.allow_dirty)
@@ -518,6 +719,9 @@ def main(argv=None) -> None:
         # override a shared-base key); FairnessViolation fires afterward (if
         # two already-loaded configs still disagree on a required-equal
         # field). Either way, nothing has been written to output_dir yet.
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except (OpenProfileDecisionError, FastDevRealRunGuardError) as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(1)
     except DirtyTreeError:

@@ -8,6 +8,7 @@ import yaml
 from evodevo.core.config import ConfigOverrideError
 from evodevo.core.factors import extract_factors
 from evodevo.encoders import get_encoder
+from evodevo.encoders.nca.resolved_config import PRIMARY as NCA_PRIMARY
 from evodevo.encoders.rule_based.resolved_config import (
     MONOTONE_ABLATION as RULE_BASED_MONOTONE,
     PRIMARY as RULE_BASED_PRIMARY,
@@ -240,6 +241,31 @@ def test_real_benchmark_yaml_wires_rule_based_resolved_readout_policy():
 
     assert encoder.readout_mode == RULE_BASED_PRIMARY.readout_mode == "mode_of_window"
     assert encoder.readout_window == RULE_BASED_PRIMARY.readout_window == 6
+
+
+def test_real_benchmark_yaml_wires_nca_resolved_hidden_channels():
+    """The NCA counterpart of the readout-policy wiring test above: docs/
+    decisions.md's "Hidden channel count (H) -- final re-resolution" row
+    dropped H to 0 (resolved_config.py::PRIMARY.hidden_channels=0), but
+    ExperimentFactors.hidden_channels' own default (3, evodevo/core/
+    factors.py) was never wired to track it -- unlike update_rule/decay/
+    state_bound/init_gain/readout_mode/readout_window, which already reach
+    the real benchmark path via NCAEncoder's own class defaults, H reaches
+    it only via this arm-specific _BUILTIN_ARM_DEFAULT_KWARGS entry. Builds
+    the encoder for the real, production `nca` arm through the actual
+    production config-building path and asserts hidden_channels matches
+    resolved_config.PRIMARY exactly, not ExperimentFactors' own stale
+    class-level default."""
+    bconfig = BenchmarkConfig.from_yaml("evodevo/experiments/configs/benchmark.yaml")
+    resolved = resolve_configs(bconfig)
+    config = resolved[("nca", "Walker-v0")]
+
+    arm = ArmSpec(encoder="nca")
+    arm_kwargs = _resolved_arm_kwargs(bconfig, arm)
+    factors, remaining_kwargs = extract_factors(arm_kwargs, seed=config.seed)
+    encoder = get_encoder("nca", factors=factors, grid_shape=config.grid_shape, **remaining_kwargs)
+
+    assert encoder.hidden_channels == NCA_PRIMARY.hidden_channels == 0
 
 
 def test_benchmark_yaml_registers_rule_based_monotone_as_a_distinct_arm():

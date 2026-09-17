@@ -61,6 +61,20 @@
 # resolved_config.py::MONOTONE_ABLATION via benchmark.py's
 # _BUILTIN_ARM_DEFAULT_KWARGS, not hardcoded here -- see docs/decisions.md's
 # "Wire the resolved readout policy into the primary benchmark path" row.
+# PROFILE (evodevo/experiments/benchmark.py::PROFILES): this file currently
+# targets `fast_dev` -- ppo_timesteps=5000, population_size=15,
+# offspring_size=15, eval_budget=300, the SAME pipeline-validation-scale
+# placeholder this project has always used and disclosed (docs/decisions.md's
+# "Direct-encoding real-PPO baseline budget" row). It is NOT the scientific
+# comparison budget. Launching a REAL (non-surrogate) run against this file
+# as-is requires an explicit --i-know-this-is-fast-dev acknowledgement (see
+# FastDevRealRunGuardError) -- the guard exists specifically so this file is
+# never mistaken for launch-ready as-is. To run the actual primary matrix,
+# change `profile` to `primary_matrix` below AND supply profile_overrides
+# for population_size/offspring_size/eval_budget once that open scoping
+# decision is made (see docs/PRE_PARALLELIZATION_READINESS.md's "NOT
+# covered" section) -- do not guess a value here.
+profile: fast_dev
 encoders: [direct, nca, rule_based, {encoder: rule_based, variant: monotone}]
 tasks: [Walker-v0]
 seeds: [0, 1, 2, 3, 4]
