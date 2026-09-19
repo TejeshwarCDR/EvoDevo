@@ -8,7 +8,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from typing import Callable, Optional
+from typing import Callable, List, Optional, Tuple
 
 import numpy as np
 import yaml
@@ -75,6 +75,7 @@ def run_experiment(
     allow_dirty: bool = False,
     strategy: str = DEFAULT_STRATEGY,
     arm_id: Optional[str] = None,
+    precomputed_git_state: Optional[Tuple[str, List[str]]] = None,
 ) -> str:
     """encoder_kwargs overrides/extends the encoder's own hyperparameters
     (e.g. {'dev_steps': 1} for the NCA encoder) without touching the encoder
@@ -100,12 +101,28 @@ def run_experiment(
     unless explicitly overridden -- for local iteration only, never for a
     run whose output is cited in a report or a docs/decisions.md row. This
     is a standalone provenance wrapper: it does not touch ExperimentConfig's
-    shape, SHARED_BASE_KEYS, or the lock hash in evodevo.experiments.lock_hash."""
+    shape, SHARED_BASE_KEYS, or the lock hash in evodevo.experiments.lock_hash.
+
+    `precomputed_git_state`, if given, is an already-computed
+    (commit_hash, dirty_files) pair and skips this function's own
+    check_git_state call entirely -- used by evodevo.experiments.benchmark's
+    run_benchmark(), which checks cleanliness exactly once at the very start
+    of a benchmark invocation (before its own manifest/factors bookkeeping
+    writes anything) and threads that single result through every
+    run_experiment() call in its run matrix. Without this, each call here
+    would re-derive git state independently and see the benchmark's own
+    prior writes (e.g. results/runs/factors.json, the manifest) as tree
+    dirtiness, spuriously blocking a later run in the same invocation. Left
+    as None (the default) for run_experiment()'s own standalone CLI use,
+    where a fresh check_git_state call here is exactly right."""
     if strategy not in STRATEGIES:
         raise ValueError(f"unknown strategy '{strategy}'; available: {sorted(STRATEGIES)}")
     run_strategy = STRATEGIES[strategy]
 
-    commit_hash, dirty_files = check_git_state(allow_dirty)
+    if precomputed_git_state is not None:
+        commit_hash, dirty_files = precomputed_git_state
+    else:
+        commit_hash, dirty_files = check_git_state(allow_dirty)
 
     loaded = ExperimentConfig.from_method_yaml(config_path)
     # --seed overrides the config's seed; everything else comes from the YAML.

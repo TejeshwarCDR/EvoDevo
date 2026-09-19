@@ -127,6 +127,67 @@ def test_resume_skips_completed_runs():
         assert len(second["skipped_already_done"]) == 3
 
 
+def test_resuming_completed_cells_does_not_spuriously_dirty_gate_a_new_cell(monkeypatch):
+    """Regression test: run_benchmark()'s own manifest/factors bookkeeping
+    writes used to make the tree look dirty mid-invocation, and each
+    run_experiment() call independently re-checked git state -- so a
+    genuinely new cell resumed alongside already-complete ones could hit a
+    spurious DirtyTreeError caused by the tool's own writes, not by any real
+    uncommitted work. Fixed by checking git cleanliness exactly once, at the
+    very start of run_benchmark(), and threading that single result through
+    every run_experiment() call via precomputed_git_state instead of letting
+    each one re-derive it independently."""
+    call_count = {"n": 0}
+
+    def fake_git_dirty_files():
+        call_count["n"] += 1
+        # First call ever seen this invocation (run_benchmark's own
+        # top-of-function check) reports a clean tree. Any further call
+        # simulates the tree having been dirtied in between -- e.g. by this
+        # same invocation's own manifest/factors writes -- which is exactly
+        # the spurious-failure scenario this test guards against.
+        return [] if call_count["n"] == 1 else ["results/runs/benchmark_manifest.json"]
+
+    monkeypatch.setattr("evodevo.core.provenance.git_dirty_files", fake_git_dirty_files)
+
+    with tempfile.TemporaryDirectory() as configs_root, tempfile.TemporaryDirectory() as output_dir:
+        _build_configs_tree(configs_root)
+
+        # First invocation: only "direct", so it lands on disk as an
+        # already-complete cell for the second invocation to resume.
+        first_bconfig = BenchmarkConfig(
+            encoders=["direct"],
+            tasks=["Walker-v0"],
+            seeds=[0],
+            configs_root=configs_root,
+            output_dir=output_dir,
+            surrogate=True,
+            factors={"dev_steps": 5, "init_condition": "center_seed"},
+        )
+        run_benchmark(first_bconfig, dry_run=False, allow_dirty=True)
+
+        # Fresh call count for the second invocation, simulating a clean
+        # git tree at the moment it starts.
+        call_count["n"] = 0
+
+        second_bconfig = BenchmarkConfig(
+            encoders=["direct", "nca"],
+            tasks=["Walker-v0"],
+            seeds=[0],
+            configs_root=configs_root,
+            output_dir=output_dir,
+            surrogate=True,
+            factors={"dev_steps": 5, "init_condition": "center_seed"},
+        )
+        # allow_dirty=False: with the bug present, nca's new cell would hit
+        # a second (spurious) git_dirty_files call and raise DirtyTreeError.
+        manifest = run_benchmark(second_bconfig, dry_run=False, allow_dirty=False)
+
+    assert call_count["n"] == 1, "git cleanliness must be checked exactly once per benchmark invocation"
+    assert len(manifest["skipped_already_done"]) == 1  # direct's cell, resumed
+    assert len(manifest["completed_this_invocation"]) == 1  # nca's cell, genuinely new
+
+
 def test_dry_run_writes_manifest_and_timing_but_runs_nothing():
     with tempfile.TemporaryDirectory() as configs_root, tempfile.TemporaryDirectory() as output_dir:
         _build_configs_tree(configs_root)

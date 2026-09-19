@@ -604,6 +604,15 @@ def run_benchmark(bconfig: BenchmarkConfig, dry_run: bool = False, allow_dirty: 
 
     # 0. Provenance gate FIRST, before anything else -- a standalone check
     # (evodevo.core.provenance), independent of ExperimentConfig/lock_hash.
+    # Computed EXACTLY ONCE here, before any of this function's own writes
+    # (write_factors_json/_write_manifest below, or each run_experiment()
+    # call's own factors.json), and threaded through to every
+    # run_experiment() call via precomputed_git_state. Without this, each
+    # run_experiment() call would re-derive git state independently and see
+    # this function's own prior bookkeeping writes as tree dirtiness --
+    # spuriously raising DirtyTreeError on a later (genuinely new) run in
+    # the same invocation, even though the tree was clean when the
+    # invocation started.
     commit_hash, dirty_files = check_git_state(allow_dirty)
 
     # 1. Fairness check FIRST, before anything is run or written.
@@ -664,7 +673,8 @@ def run_benchmark(bconfig: BenchmarkConfig, dry_run: bool = False, allow_dirty: 
                         allow_dirty=allow_dirty,
                         strategy=strategy,
                         tag=arm.variant,
-                        arm_id=arm.arm_id)
+                        arm_id=arm.arm_id,
+                        precomputed_git_state=(commit_hash, dirty_files))
         completed.append(entry)
 
     manifest["completed_this_invocation"] = completed
