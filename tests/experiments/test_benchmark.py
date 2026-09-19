@@ -329,6 +329,42 @@ def test_real_benchmark_yaml_wires_nca_resolved_hidden_channels():
     assert encoder.hidden_channels == NCA_PRIMARY.hidden_channels == 0
 
 
+@pytest.mark.parametrize("arm_id,encoder_name,param_name", [
+    ("direct", "direct", "mutation_rate"),
+    ("nca", "nca", "mutation_sigma"),
+    ("rule_based", "rule_based", "mutation_rate"),
+    ("rule_based_monotone", "rule_based", "mutation_rate"),
+])
+def test_real_benchmark_yaml_wires_calibrated_mutation_strength(arm_id, encoder_name, param_name):
+    """The same wiring-gap shape as the hidden_channels test above, found
+    during a module-wide duplicated-literal/silent-clip audit: the
+    calibrated per-arm mutation strength (docs/decisions.md's mutation-
+    tuning rows, results/mutation/mutation_calibration_raw.json) never
+    reached the real benchmark.yaml-driven path -- every real run used each
+    encoder's own uncalibrated class default (direct=0.1, nca=0.1,
+    rule_based=0.2) instead. Builds each real, production arm through the
+    actual production config-building path and asserts the resolved
+    mutation parameter matches the committed calibration artifact exactly,
+    not the encoder's own class-level default. rule_based_monotone is
+    included since mutation strength is a property of the base encoder
+    (rule_based), not of the dynamics variant, and must not regress
+    separately from "rule_based" itself."""
+    with open("results/mutation/mutation_calibration_raw.json") as f:
+        calibrated = json.load(f)["calibrated"][encoder_name]
+    assert calibrated["param_name"] == param_name
+
+    bconfig = BenchmarkConfig.from_yaml("evodevo/experiments/configs/benchmark.yaml")
+    resolved = resolve_configs(bconfig)
+    config = resolved[(arm_id, "Walker-v0")]
+
+    arm = next(a for a in bconfig.resolved_arms() if a.arm_id == arm_id)
+    arm_kwargs = _resolved_arm_kwargs(bconfig, arm)
+    factors, remaining_kwargs = extract_factors(arm_kwargs, seed=config.seed)
+    encoder = get_encoder(encoder_name, factors=factors, grid_shape=config.grid_shape, **remaining_kwargs)
+
+    assert getattr(encoder, param_name) == pytest.approx(calibrated["param_value"])
+
+
 def test_benchmark_yaml_registers_rule_based_monotone_as_a_distinct_arm():
     """docs/decisions.md's "Monotone vs unrestricted: an explicit decision"
     row elevated MONOTONE_ABLATION to a co-primary PPO-matrix candidate; the

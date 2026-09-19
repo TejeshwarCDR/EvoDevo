@@ -41,12 +41,26 @@ guards, since they never train real PPO.
 **Per-arm dynamics fields (identical under either profile -- profiles only
 affect the four SHARED_BASE_KEYS fields in the table above)**:
 
+**UPDATED 2026-09-19**: `mutation_rate`/`mutation_sigma` below were found NOT to
+reach the real benchmark.yaml-driven path either -- the exact same wiring-gap
+shape as the `hidden_channels` fix in &sect;5, just never checked for this
+field. `resolved_config.py` deliberately does not carry these (a solved value
+is an artifact, not a design choice, per its own docstring); the single
+source is the committed `results/mutation/mutation_calibration_raw.json`.
+Fixed by `benchmark.py::_load_calibrated_mutation_kwargs()`, merged into
+`_resolved_arm_kwargs()` ahead of the existing `_BUILTIN_ARM_DEFAULT_KWARGS`
+layer, keyed by each arm's BASE encoder (so `rule_based_monotone` gets
+`rule_based`'s own calibrated `mutation_rate` too) -- see `docs/decisions.md`'s
+"Wire the calibrated mutation strength into the primary benchmark path" row
+and `tests/experiments/test_benchmark.py::test_real_benchmark_yaml_wires_calibrated_mutation_strength`.
+The table below reflects the corrected, actually-resolved values.
+
 | arm_id | encoder (registry) | strategy | dev_steps | init_condition | dynamics fields |
 |---|---|---|---|---|---|
-| `direct` | `direct` | `ea` / `random_search` | 100 | `center_seed` | `mutation_rate=0.1`, `empty_prob=0.6` |
-| `nca` | `nca` | `ea` / `random_search` | 100 | `center_seed` | `update_rule=bounded_leaky`, **`hidden_channels=0`** (see &sect;5's citation), `state_bound=5.0`, `decay=0.2`, `spectral_normalise=false`, `readout_mode=mode_of_window`, `readout_window=50` |
-| `rule_based` | `rule_based` | `ea` / `random_search` | 100 | `center_seed` | `conflict_resolution=first_rule_index`, `position_predicate=disabled`, `boundary=no_op`, `neighbourhood=von_neumann`, `action_monotonicity=unrestricted`, `readout_mode=mode_of_window`, `readout_window=6` |
-| `rule_based_monotone` | `rule_based` | `ea` / `random_search` | 100 | `center_seed` | same as `rule_based` EXCEPT `action_monotonicity=monotone` (from `resolved_config.MONOTONE_ABLATION`, via `benchmark.py::_BUILTIN_ARM_DEFAULT_KWARGS["rule_based_monotone"]`) |
+| `direct` | `direct` | `ea` / `random_search` | 100 | `center_seed` | **`mutation_rate=0.1535`** (calibrated, `results/mutation/mutation_calibration_raw.json`), `empty_prob=0.6` |
+| `nca` | `nca` | `ea` / `random_search` | 100 | `center_seed` | `update_rule=bounded_leaky`, **`hidden_channels=0`** (see &sect;5's citation), `state_bound=5.0`, `decay=0.2`, `spectral_normalise=false`, `readout_mode=mode_of_window`, `readout_window=50`, **`mutation_sigma=0.0305`** (calibrated) |
+| `rule_based` | `rule_based` | `ea` / `random_search` | 100 | `center_seed` | `conflict_resolution=first_rule_index`, `position_predicate=disabled`, `boundary=no_op`, `neighbourhood=von_neumann`, `action_monotonicity=unrestricted`, `readout_mode=mode_of_window`, `readout_window=6`, **`mutation_rate=0.0779`** (calibrated) |
+| `rule_based_monotone` | `rule_based` | `ea` / `random_search` | 100 | `center_seed` | same as `rule_based` (including its calibrated `mutation_rate=0.0779`) EXCEPT `action_monotonicity=monotone` (from `resolved_config.MONOTONE_ABLATION`, via `benchmark.py::_BUILTIN_ARM_DEFAULT_KWARGS["rule_based_monotone"]`) |
 
 **Citation for every dynamics field above** (closing the "hidden_channels had
 no citation" gap this table previously had): `direct.mutation_rate`/

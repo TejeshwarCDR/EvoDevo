@@ -112,6 +112,42 @@ class FastDevRealRunGuardError(RuntimeError):
     of expensive, hard-to-notice mistake this guard exists to prevent."""
 MANIFEST_NAME = "benchmark_manifest.json"
 
+# The calibrated per-arm mutation strength (docs/decisions.md's mutation-
+# tuning rows, most recently the "THIRD re-run" row) never reached the real
+# benchmark.yaml-driven path -- the exact same wiring gap already found and
+# fixed once for NCA's hidden_channels (see _BUILTIN_ARM_DEFAULT_KWARGS's
+# own comment above), just for a different field, and never checked because
+# resolved_config.py deliberately does NOT carry mutation_rate/mutation_sigma
+# (its own docstring: "a solved value is itself an artifact, not a design
+# choice"). The artifact IS the single source of truth here instead; read
+# lazily (at resolve time, not import time) so merely importing this module
+# does not require the calibration to have been run, matching
+# OpenProfileDecisionError/FastDevRealRunGuardError's own "fail loudly only
+# when a real resolution is actually attempted" discipline.
+MUTATION_CALIBRATION_RAW = os.path.join("results", "mutation", "mutation_calibration_raw.json")
+
+
+def _load_calibrated_mutation_kwargs() -> dict:
+    """{registry_encoder: {param_name: param_value}} read from
+    MUTATION_CALIBRATION_RAW (evodevo.analysis.mutation_calibration's own
+    committed output). Raises FileNotFoundError with an actionable message
+    if the artifact is missing, rather than silently falling back to each
+    encoder's own uncalibrated class default (direct=0.1, nca=0.1,
+    rule_based=0.2 -- all different from the calibrated values)."""
+    if not os.path.exists(MUTATION_CALIBRATION_RAW):
+        raise FileNotFoundError(
+            f"{MUTATION_CALIBRATION_RAW} not found -- the calibrated per-arm mutation "
+            "strength (docs/decisions.md's mutation-tuning rows) cannot be resolved for "
+            "a real benchmark run. Run `python -m evodevo.analysis.mutation_calibration` "
+            "first; do not silently fall back to each encoder's own uncalibrated default."
+        )
+    with open(MUTATION_CALIBRATION_RAW) as f:
+        calibrated = json.load(f)["calibrated"]
+    return {
+        arm: {calibrated[arm]["param_name"]: calibrated[arm]["param_value"]}
+        for arm in ("direct", "nca", "rule_based")
+    }
+
 
 def _task_to_config_stem(task: str) -> str:
     """'Walker-v0' -> 'walker', 'UpStepper-v0' -> 'upstepper' -- matches the
@@ -324,11 +360,17 @@ _BUILTIN_ARM_DEFAULT_KWARGS = {
 
 def _resolved_arm_kwargs(bconfig: "BenchmarkConfig", arm: ArmSpec) -> dict:
     """encoder_kwargs actually passed to run_experiment/get_encoder for
-    `arm`: the shared `factors` block, layered with this arm's built-in
-    resolved default (if any, keyed by arm_id), layered with any
-    encoder_kwargs declared inline on the ArmSpec itself, layered with any
-    explicit bconfig.encoder_kwargs[arm_id] override (highest precedence)."""
+    `arm`: the shared `factors` block, layered with the calibrated mutation
+    strength for this arm's BASE encoder (keyed by arm.encoder, e.g.
+    "rule_based_monotone" still gets rule_based's own calibrated
+    mutation_rate, since mutation strength is a property of the encoder
+    class/genome representation, not of the dynamics variant), layered with
+    this arm's built-in resolved dynamics default (if any, keyed by
+    arm_id), layered with any encoder_kwargs declared inline on the ArmSpec
+    itself, layered with any explicit bconfig.encoder_kwargs[arm_id]
+    override (highest precedence)."""
     merged = dict(bconfig.factors)
+    merged.update(_load_calibrated_mutation_kwargs().get(arm.encoder, {}))
     merged.update(_BUILTIN_ARM_DEFAULT_KWARGS.get(arm.arm_id, {}))
     merged.update(arm.encoder_kwargs)
     merged.update(bconfig.encoder_kwargs.get(arm.arm_id, {}))
