@@ -130,3 +130,57 @@ Both were checked against `git log --follow` on the file itself vs. on `evodevo/
 ## Coverage confirmation
 
 All 69 `.md` files under `docs/` and `results/` appear in the verdict table above. `results/BENCHMARK_REPORT.md` and `docs/FINAL_SMOKE_TEST.md` are both explicitly resolved as SUPERSEDED with prominent banners, not silently skipped.
+
+## Part 6 — `docs/decisions.md` Internal Consistency Audit
+
+### 1. Zero-OPEN-rows confirmation (via the actual enforcing convention, not informal grep)
+
+`docs/decisions.md` itself states: *"No row may remain 'OPEN' in the final submission."* The project's own enforcing mechanism is `evodevo.analysis.readiness_check.scan_decisions_open_rows()` — it does **not** match the word "OPEN" anywhere in a row (an earlier version did, and mis-flagged a resolved row whose own rationale prose merely *discussed* its prior OPEN status); it matches only rows whose **Chosen** column (the 4th of 5 table columns) is the bare marker `OPEN`.
+
+Re-ran this exact function directly against the live file:
+
+```
+from evodevo.analysis.readiness_check import scan_decisions_open_rows
+scan_decisions_open_rows()  ->  []   (0 rows)
+```
+
+Also ran its two existing regression tests (`tests/analysis/test_readiness_check.py` and `tests/analysis/test_rule_based_readiness_check.py`, both `test_scan_decisions_open_rows_ignores_the_word_open_in_resolved_rationale`) — both pass, confirming the detection *logic itself* is sound, not just that it happened to return zero this time.
+
+**For contrast, informal `grep -c "OPEN" docs/decisions.md` returns 5** — every one of those 5 hits is prose discussing a row's *former* OPEN status or the file's own header rule, not a live OPEN row. This is exactly the false-positive class the project's own convention was built to avoid, and confirms why "re-run the actual test" (not grep) was the right instruction: informal grep would have produced a misleading non-zero count.
+
+**Result: 0 OPEN rows, confirmed by the real enforcing convention. Total data rows in the decisions table: 47** (counted programmatically with the exact same row-inclusion logic `scan_decisions_open_rows()` itself uses — header and separator lines excluded; one of the table's rows, dated 2026-09-16 on the readout-policy resolution, has its Rationale cell continue onto a further unwrapped paragraph in the raw file that is not itself a new `|`-prefixed table row, so a naive line-range count over-estimates).
+
+### 2. Contradiction sweep (full read, start to finish, all 47 rows)
+
+Read every row in full. `docs/decisions.md` is largely self-policing already — 6 rows (dated topics: the two original T_primary rows, the TRANSIENT-vs-LIMIT-CYCLE row, the readout-policy row, the unified-T_primary row, and the mutation re-run row) already carry an explicit `(SUPERSEDED -- see ... row below/above)` tag in their own topic cell, and one entire correction (the order-independence percentage mismatch, 12.95%/30.40% vs. a stale 15.90%/34.45%) was deliberately left unmarked on the *original* R2/R3 rows by the row that found it (its own text: *"docs/decisions.md's own R2/R3 rows are NOT edited (append-only convention) -- this row is the correction of record instead"*) — a disclosed, reasoned choice, not an oversight, so it was left as-is.
+
+**5 genuine contradictions were found** — an older row stating a "final"/adopted value on the same topic as a later row's different final value, with no cross-reference either direction — and each was fixed by adding a short `(SUPERSEDED -- see the "..." row below)` tag to the **older** row's topic cell, in the exact style the document already uses elsewhere. No Chosen/Rationale content was edited or removed (append-only convention preserved).
+
+| Topic | Older row (now tagged) | Newer row (already correct) | What changed |
+|---|---|---|---|
+| Hidden channel count (H) | "Hidden channel count (H)" — `H=3` is PRIMARY | "Hidden channel count (H) -- final re-resolution" — DROP H to 0 | `H`: 3 → 0 |
+| Mutation tuning (values) | "Mutation tuning procedure" (P5 original) — `D*=4.9915`, `nca σ=0.0201` | "...RE-RUN under the bounded/normalised NCA architecture" — `D*=2.5000`, `nca σ=0.1177` | D* and all three arms' parameters re-solved |
+| Mutation tuning (values, 2nd hop) | "...RE-RUN under the bounded/normalised..." (itself now also tagged) | "...THIRD re-run, under the Outcome-B PRIMARY" — `nca σ=0.0305` | nca `mutation_sigma` re-solved again for the final architecture |
+| NCA timescale calibration | "NCA timescale calibration..." — selected `lambda*=0.05, B*=2` | "NCA joint stability-vs-expressivity trade-off" — RETRACTS N4's point, adopts `decay=0.2, state_bound=5.0` | decay/state_bound: 0.05/2 → 0.2/5.0 |
+| rule_based monotone status | "Implement and verify the termination-guaranteed 'monotone' ablation..." — "monotone remains the ablation" | "Monotone vs unrestricted: an explicit decision" — DEFER, run both as co-primary | status: ablation-only → co-primary PPO-matrix candidate |
+
+Re-ran `scan_decisions_open_rows()` after these edits: still 0 (the tags were added to the topic cell, never the Chosen cell, so the OPEN-detection convention is unaffected).
+
+**Note on a pre-existing, unrelated parsing quirk found while verifying:** rows discussing the mutation tolerance (`\|mean - D\*\| <= 0.5`) use escaped literal pipe characters for absolute-value notation in prose. A naive pipe-count/split (as both informal `grep -c '|'` and the readiness-checker's own naive `line.split("|")` do) over-counts these as extra table cells. This predates this audit (confirmed present in the original row text before any edit here) and does not affect the OPEN-row check's correctness for the current file (verified: still 0, and the check's own logic only looks for an exact `"OPEN"` string match, which no misaligned cell produces) — flagged here for visibility, not fixed, since it's outside this task's scope.
+
+### 3. Every `results/*.md` citation: existence + Part-2-staleness cross-check
+
+Extracted all 33 unique `results/*.md` paths cited across every row (`grep -oE`), and separately checked the one citation in the document's own header (not a row).
+
+- **32 of 33 row-cited files exist** and were cross-checked against Part 2/5's staleness verdict table above.
+- **1 does not exist**: `results/RESULTS.md`, cited only in the document's own header ("...before the results in `results/RESULTS.md` are considered final"). This is not a broken citation to something that was supposed to already exist — it is an explicit forward reference to the eventual final paper-facing results write-up, which by design does not exist yet (the actual primary-matrix PPO run has not happened; see `results/BENCHMARK_REPORT.md`'s own superseded banner and `docs/PRE_PARALLELIZATION_READINESS.md`). No fix needed; noted for completeness per this task's instruction to confirm every citation resolves to a real file.
+- **No row cites a now-superseded report's stale number as if it were still live evidence.** The one place this risk was real — row 49 ("Monotone vs unrestricted") citing `results/rule_based/MONOTONE_ABLATION.md` — correctly uses that report's underlying structural *measurements* (which are unaffected by the status contradiction) to justify a *different* conclusion than that report's own now-superseded "kept as ablation" status line; it does not repeat the stale status claim. This is exactly the pattern Part 2's own banner on `results/rule_based/MONOTONE_ABLATION.md` already documents.
+- Row 39 (the "T=40-staleness audit" row) explicitly cites `results/NCA_READINESS.md` and `results/COMPARISON_READINESS.md` — both flagged SUPERSEDED in Part 2/5 above — but only for a narrow, explicitly-scoped purpose (whether their `T=40` mentions are stale relative to the shared `T_primary`), and correctly concludes those specific mentions are historical citations, not live claims. This narrow use is accurate and is not the same claim Part 2/5 flagged (Part 2 flagged NCA_READINESS.md's *hidden_channels* and *T_primary=5* claims, and COMPARISON_READINESS.md's *headline* `T_primary=39`, none of which row 39 relies on). No contradiction.
+- `docs/READY_TO_RUN.md` (flagged SUPERSEDED in Part 2/5) is cited exactly once, in row 24, purely to describe the historical act of recording a lock hash there in 2026-09-02 — not as a claim that the hash is still valid today. That row's own rationale already states the hash is invalidated by any future config change, which is exactly what later happened; no contradiction.
+- No row cites `results/BENCHMARK_REPORT.md`, `docs/FINAL_SMOKE_TEST.md`, `docs/RESULTS_EXPLAINED.md`, `docs/ARCHITECTURE_SNAPSHOT.md`, `docs/CODE_STRUCTURE_REFERENCE.md`, or `REPO_INVENTORY_REPORT.md` at all (all six flagged SUPERSEDED in Part 2/5) — so there is no risk of `decisions.md` treating any of them as live evidence.
+
+### Verification
+
+After all edits: `scan_decisions_open_rows()` still returns `[]`; the two existing readiness-check regression tests for this function still pass; `docs/decisions.md`'s table structure (5 columns per row) is intact for every edited row.
+
+**Acceptance check**: 0 OPEN rows confirmed via the actual enforcing test (not informal grep). All 5 found contradictions resolved with an explicit supersession note on the older row, matching the document's own established tagging convention — none silently merged or deleted.
