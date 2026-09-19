@@ -35,6 +35,7 @@ from evodevo.encoders.rule_based._rules.genome import (
 from evodevo.encoders.rule_based._rules.types import ActionType, ConditionType, Direction, GROWABLE_STATES, PositionType, VoxelState
 from evodevo.encoders.rule_based.context_analysis import effective_rule_count
 from evodevo.encoders.rule_based.encoder import RuleBasedEncoder
+from evodevo.encoders.rule_based.resolved_config import PRIMARY as RB_PRIMARY
 
 DEFAULT_N = 2000
 DEFAULT_SEED = 0
@@ -143,7 +144,7 @@ def _patched_rule_bounds(min_rules: int, max_rules: int):
         genome_mod.MIN_RULES, genome_mod.MAX_RULES = old_min, old_max
 
 
-def _sample_genome_with_n_rules(n: int, position_predicate: str = "disabled") -> DevelopmentalRuleGenome:
+def _sample_genome_with_n_rules(n: int, position_predicate: str = RB_PRIMARY.position_predicate) -> DevelopmentalRuleGenome:
     """Draws a genome with EXACTLY n rules, bypassing sample_developmental_
     rules()'s own [3,7] sampling range -- used to test whether MAX_RULES=12
     itself is binding (a genome explicitly given a 12-rule budget) and for
@@ -160,14 +161,14 @@ def effective_rule_count_distributions(n: int = DEFAULT_N, seed: int = DEFAULT_S
     random_sampler_counts = []
     for idx in range(n):
         random.seed(int(rng.integers(0, 2**31 - 1)))
-        genome = sample_developmental_rules(position_predicate="disabled")
+        genome = sample_developmental_rules(position_predicate=RB_PRIMARY.position_predicate)
         random_sampler_counts.append(effective_rule_count(genome))
 
     rng2 = np.random.default_rng(seed)
     full_budget_counts = []
     for idx in range(n):
         random.seed(int(rng2.integers(0, 2**31 - 1)))
-        genome = _sample_genome_with_n_rules(MAX_RULES, position_predicate="disabled")
+        genome = _sample_genome_with_n_rules(MAX_RULES, position_predicate=RB_PRIMARY.position_predicate)
         full_budget_counts.append(effective_rule_count(genome))
 
     return {
@@ -184,7 +185,7 @@ def effective_rule_count_distributions(n: int = DEFAULT_N, seed: int = DEFAULT_S
 
 def _build_capacity_encoder(seed: int) -> RuleBasedEncoder:
     factors = ExperimentFactors(dev_steps=100, init_condition="center_seed", seed=seed)
-    return RuleBasedEncoder(factors=factors, position_predicate="disabled")
+    return RuleBasedEncoder(factors=factors, position_predicate=RB_PRIMARY.position_predicate)
 
 
 class _FixedNGenomeEncoder:

@@ -1,7 +1,10 @@
 """Tests for evodevo/analysis/windowed_readout.py, including the
 validity_aware tie-break added by the 2026-09-16 rule_based tie-break fix
 (results/rule_based/TIEBREAK_VALIDITY_CHECK.md)."""
+import warnings
+
 import numpy as np
+import pytest
 
 from evodevo.analysis.windowed_readout import mode_of_window, windowed_body_at
 
@@ -91,3 +94,26 @@ def test_windowed_body_at_passes_through_validity_aware():
     trajectory = [invalid, valid]
     result = windowed_body_at(trajectory, t=1, w=2, validity_aware=True)
     np.testing.assert_array_equal(result, valid)
+
+
+def test_windowed_body_at_warns_when_window_exceeds_available_trajectory():
+    # w > t + 1: the "window" silently becomes the full available prefix
+    # instead of a genuine w-step trailing window -- exactly the bug class
+    # docs/decisions.md's "NCA T_primary/W consistency fix" row found (a
+    # W=50 window queried at T=40 was never a genuine 50-step window).
+    trajectory = [np.zeros((5, 5), dtype=int) for _ in range(5)]  # t in [0, 4]
+    with pytest.warns(UserWarning, match="exceeds the available trajectory"):
+        windowed_body_at(trajectory, t=4, w=50)
+
+
+def test_windowed_body_at_warns_when_t_exceeds_available_trajectory():
+    trajectory = [np.zeros((5, 5), dtype=int) for _ in range(5)]  # valid t: 0..4
+    with pytest.warns(UserWarning, match="outside the available trajectory"):
+        windowed_body_at(trajectory, t=10, w=2)
+
+
+def test_windowed_body_at_no_warning_when_w_and_t_both_fit():
+    trajectory = [np.zeros((5, 5), dtype=int) for _ in range(10)]
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        windowed_body_at(trajectory, t=8, w=5)

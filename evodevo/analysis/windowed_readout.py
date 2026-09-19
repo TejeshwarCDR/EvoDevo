@@ -14,6 +14,8 @@ codebase, not two independently-maintained copies.
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 
 
@@ -74,7 +76,40 @@ def windowed_body_at(trajectory: list, t: int, w: int, validity_aware: bool = Fa
     Clips to whatever prefix of the trajectory is available if t < w - 1 or
     t exceeds the trajectory's length, matching decode()'s own clipping
     behaviour for a `dev_steps` shorter than the readout window. See
-    `mode_of_window`'s own docstring for `validity_aware`."""
-    t = max(0, min(t, len(trajectory) - 1))
-    start = max(0, t - w + 1)
-    return mode_of_window(trajectory[start : t + 1], validity_aware=validity_aware, grid_shape=grid_shape)
+    `mode_of_window`'s own docstring for `validity_aware`.
+
+    Both clips below are WARNED, not silent -- a silent version of the
+    second one (returning `min(w, available history)` steps rather than a
+    genuine trailing W-step window) previously caused a real bug: a
+    (T_primary, W) pair with W > T looked like a valid W-step-window
+    measurement but was actually reading the full available trajectory
+    instead, and this was not caught until the numbers it produced were
+    scrutinised directly (see docs/decisions.md's "NCA T_primary/W
+    consistency fix" row). Callers that intentionally sweep across W > T to
+    characterise this exact behaviour (e.g. evodevo.analysis
+    .readout_policy_selection's own local, duplicate clamp, or
+    rule_based_readout_policy.py's W-vs-T sweep, both of which already mark
+    or filter these cells explicitly) still get a real, disclosed clip --
+    the window-shrink warning below uses one fixed message so Python's
+    default per-location warning dedup collapses a legitimate sweep's many
+    hits into a single notice per process, rather than spamming."""
+    clamped_t = max(0, min(t, len(trajectory) - 1))
+    if clamped_t != t:
+        warnings.warn(
+            f"windowed_body_at: requested t={t} is outside the available trajectory "
+            f"(0..{len(trajectory) - 1}) -- clipped to t={clamped_t}. This is a real clip and "
+            "must not pass silently; check the caller's T/shift bookkeeping.",
+            stacklevel=2,
+        )
+    start = max(0, clamped_t - w + 1)
+    if clamped_t - w + 1 < 0:
+        warnings.warn(
+            "windowed_body_at: requested window width w exceeds the available trajectory at t "
+            "(w > t + 1) -- returning the full available prefix instead of a genuine w-step "
+            "trailing window. This is documented, intentional degradation (matching decode()'s "
+            "own short-trajectory behaviour) but has caused a real bug before when silently "
+            "mistaken for a genuine window (docs/decisions.md's \"NCA T_primary/W consistency "
+            "fix\" row) -- if unexpected, check that the readout window does not exceed dev_steps.",
+            stacklevel=2,
+        )
+    return mode_of_window(trajectory[start : clamped_t + 1], validity_aware=validity_aware, grid_shape=grid_shape)

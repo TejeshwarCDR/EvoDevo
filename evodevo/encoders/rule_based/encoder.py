@@ -16,6 +16,7 @@ from __future__ import annotations
 import dataclasses
 
 import random as _global_random
+import warnings
 from typing import Any, List
 
 import numpy as np
@@ -125,7 +126,17 @@ class RuleBasedEncoder(Encoder):
         # factors.mutation_scale multiplies this arm's own mutation
         # probability -- it does not change the mutation operator itself
         # (still mutate_developmental_rules' per-rule Bernoulli flip).
-        self.mutation_rate = min(1.0, mutation_rate * factors.mutation_scale)
+        _scaled_mutation_rate = mutation_rate * factors.mutation_scale
+        if _scaled_mutation_rate > 1.0:
+            warnings.warn(
+                f"RuleBasedEncoder: mutation_rate * factors.mutation_scale = "
+                f"{mutation_rate} * {factors.mutation_scale} = {_scaled_mutation_rate} exceeds 1.0 "
+                "(a per-rule mutation probability cannot exceed 100%) -- clipped to 1.0. This is a "
+                "real clip and must not pass silently; if unintended, lower mutation_rate or "
+                "mutation_scale.",
+                stacklevel=2,
+            )
+        self.mutation_rate = min(1.0, _scaled_mutation_rate)
         # factors.neighbourhood is NCA-specific (it crosses NCAEncoder's
         # perception axis as an experimental factor) and has no meaning for
         # this arm -- rule_based's OWN neighbourhood axis (below) is a

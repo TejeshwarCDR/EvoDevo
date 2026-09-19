@@ -28,6 +28,7 @@ from evodevo.encoders.rule_based.context_analysis import (
     effective_rule_count,
     rule_coverage,
 )
+from evodevo.encoders.rule_based.resolved_config import PRIMARY
 
 DEFAULT_N = 2000
 DEFAULT_SEED = 0
@@ -40,7 +41,7 @@ RESULTS_DIR = "results/rule_based"
 def _draw_genome(seed: int):
     rng = np.random.default_rng(seed)
     _global_random.seed(int(rng.integers(0, 2**31 - 1)))
-    return sample_developmental_rules(position_predicate="disabled")
+    return sample_developmental_rules(position_predicate=PRIMARY.position_predicate)
 
 
 def _initial_grid():

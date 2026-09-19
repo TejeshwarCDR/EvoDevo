@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import warnings
 
 import numpy as np
 
@@ -182,7 +183,17 @@ def verify_genome_aware_readout_is_t_shift_stable(n_check: int = 50, seed: int =
     already reached its exact 2-cycle, REGARDLESS of which phase T or T+shift
     lands on. Verified directly (not just asserted) by re-deriving (A, B) at
     every shifted query point and confirming the SET {A, B} -- hence the
-    readout -- never changes."""
+    readout -- never changes.
+
+    NOTE on the t-clamp below: `bodies` has length T_MAX_AUDIT+1, but
+    RESOLVED_T+shift can reach 105 for shift=+5 -- outside that range, so
+    `t` is clamped. This is verified harmless for THIS check specifically
+    (an exact period-2 genome's body at any t is always phase A or B, so
+    clamping cannot change which pair is read), but is warned rather than
+    left silent, since a silent version of exactly this pattern (a T-shift
+    query landing past the computed trajectory) previously produced a
+    spurious result elsewhere (docs/decisions.md's "T=40-staleness audit"
+    row, the T=105-clipped-to-100 HARD_MAX_ITERATIONS incident)."""
     genomes, encoder = find_period2_genomes(n_target=n_check, seed=seed)
     n_stable = 0
     for genome, A, B in genomes:
@@ -190,7 +201,16 @@ def verify_genome_aware_readout_is_t_shift_stable(n_check: int = 50, seed: int =
         base_pair = {tuple(int(v) for v in A.flatten()), tuple(int(v) for v in B.flatten())}
         stable = True
         for shift in (-5, -1, 1, 5):
-            t = max(0, min(RESOLVED_T + shift, len(bodies) - 1))
+            requested_t = RESOLVED_T + shift
+            t = max(0, min(requested_t, len(bodies) - 1))
+            if t != requested_t:
+                warnings.warn(
+                    f"verify_genome_aware_readout_is_t_shift_stable: requested t={requested_t} "
+                    f"exceeds the computed trajectory (0..{len(bodies) - 1}) -- clipped to t={t}. "
+                    "Verified harmless for exact period-2 genomes (see docstring), but this is a "
+                    "real clip and must not pass silently.",
+                    stacklevel=2,
+                )
             a2, b2 = bodies[t], bodies[t - 1]
             pair = {tuple(int(v) for v in a2.flatten()), tuple(int(v) for v in b2.flatten())}
             if pair != base_pair:

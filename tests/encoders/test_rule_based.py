@@ -73,6 +73,24 @@ def _factors(**overrides):
     return ExperimentFactors(**params)
 
 
+def test_mutation_rate_overflow_warns_loudly_instead_of_silently_clipping():
+    # mutation_rate * factors.mutation_scale > 1.0 is clipped to 1.0 (a
+    # per-rule mutation probability cannot exceed 100%) -- but must warn,
+    # not silently substitute a different effective rate than requested.
+    with pytest.warns(UserWarning, match="exceeds 1.0"):
+        enc = RuleBasedEncoder(factors=_factors(mutation_scale=5.0), mutation_rate=0.5)
+    assert enc.mutation_rate == 1.0
+
+
+def test_mutation_rate_within_bounds_does_not_warn():
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        enc = RuleBasedEncoder(factors=_factors(mutation_scale=1.0), mutation_rate=0.1707)
+    assert enc.mutation_rate == pytest.approx(0.1707)
+
+
 # ---------------------------------------------------------------------------
 # The single most important test in this file: proves the ported
 # interpreter, run TODAY, still reproduces the exact bodies frozen at the

@@ -28,14 +28,22 @@ from evodevo.core.factors import ExperimentFactors
 from evodevo.encoders.nca.encoder import NCAEncoder
 from evodevo.encoders.nca.resolved_config import PRIMARY as NCA_PRIMARY
 from evodevo.encoders.rule_based.encoder import RuleBasedEncoder
+from evodevo.encoders.rule_based.resolved_config import PRIMARY as RB_PRIMARY
 
 DEFAULT_N = 2000
 DEFAULT_SEED = 0
 
-# Resolved, post-N15-fix values.
+# SHARED_T_PRIMARY has no single Python-importable source (it is a measured,
+# cross-arm-derived value recorded in evodevo/experiments/configs/
+# benchmark.yaml's factors.dev_steps, not a resolved_config.py field) --
+# kept as a local literal, matching this project's convention elsewhere
+# (e.g. T_MAX_HARD_CAP-style constants) for values whose source of truth is
+# a config/report rather than a Python object. NCA_W/RB_W DO have such a
+# source (each arm's own resolved_config.py::PRIMARY.readout_window) and are
+# imported from there rather than duplicated.
 SHARED_T_PRIMARY = 100
-NCA_W = 50
-RB_W = 6
+NCA_W = NCA_PRIMARY.readout_window
+RB_W = RB_PRIMARY.readout_window
 
 OUTPUT_ROOT = "results/windowed_validity_check"
 

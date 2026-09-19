@@ -31,6 +31,7 @@ from evodevo.core.factors import ExperimentFactors
 from evodevo.core.materials import SOFT
 from evodevo.encoders.rule_based._rules.interpreter import develop_rules
 from evodevo.encoders.rule_based.encoder import RuleBasedEncoder
+from evodevo.encoders.rule_based.resolved_config import PRIMARY
 
 DEFAULT_N = 2000
 DEFAULT_SEED = 0
@@ -59,8 +60,8 @@ def _draw_genome(idx: int, encoder: RuleBasedEncoder):
     return encoder.random_genome(rng)
 
 
-def exact_cycle(genome, conflict_resolution: str, position_predicate: str = "disabled",
-                 action_monotonicity: str = "unrestricted", cap: int = SEARCH_CAP) -> dict:
+def exact_cycle(genome, conflict_resolution: str, position_predicate: str = PRIMARY.position_predicate,
+                 action_monotonicity: str = PRIMARY.action_monotonicity, cap: int = SEARCH_CAP) -> dict:
     """Floyd/Brent-style exact cycle detection: steps the interpreter ONE
     iteration at a time (feeding the previous grid back in as
     `initial_grid`), recording every visited grid state's first-seen step
@@ -94,8 +95,8 @@ def exact_cycle(genome, conflict_resolution: str, position_predicate: str = "dis
     return {"mu": None, "p": None, "cap_hit": True, "steps_taken": cap}
 
 
-def run(n: int = DEFAULT_N, seed: int = DEFAULT_SEED, conflict_resolution: str = "first_rule_index",
-        position_predicate: str = "disabled", label: str = "current") -> dict:
+def run(n: int = DEFAULT_N, seed: int = DEFAULT_SEED, conflict_resolution: str = PRIMARY.conflict_resolution,
+        position_predicate: str = PRIMARY.position_predicate, label: str = "current") -> dict:
     """Draws genomes in the SAME order results/rule_based/SETTLING_AUDIT.md
     used (`rng = np.random.default_rng(seed)`, then `encoder.random_genome
     (rng)` reused across a simple loop -- NOT re-seeded per index), so the
@@ -353,8 +354,8 @@ def main():
     parser.add_argument("--output", type=str, default=os.path.join(RESULTS_DIR, "CYCLE_CHARACTERISATION.md"))
     args = parser.parse_args()
 
-    current = run(n=args.n, seed=args.seed, conflict_resolution="first_rule_index",
-                   position_predicate="disabled", label="current")
+    current = run(n=args.n, seed=args.seed, conflict_resolution=PRIMARY.conflict_resolution,
+                   position_predicate=PRIMARY.position_predicate, label="current")
     baseline = run(n=args.n, seed=args.seed, conflict_resolution="row_major_last_wins",
                     position_predicate="enabled", label="pre-R2/R3 baseline")
 

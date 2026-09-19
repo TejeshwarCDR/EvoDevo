@@ -37,6 +37,7 @@ from evodevo.core.materials import N_MATERIALS, SOFT
 from evodevo.encoders.rule_based._rules.genome import sample_developmental_rules
 from evodevo.encoders.rule_based._rules.interpreter import RANK, develop_rules
 from evodevo.encoders.rule_based.encoder import RuleBasedEncoder
+from evodevo.encoders.rule_based.resolved_config import PRIMARY
 
 DEFAULT_N = 2000
 DEFAULT_SEED = 0
@@ -76,7 +77,7 @@ def verify_phi_and_termination(n: int = DEFAULT_N, seed: int = DEFAULT_SEED) -> 
     rng = np.random.default_rng(seed)
     for idx in range(n):
         random.seed(int(rng.integers(0, 2**31 - 1)))
-        genome = sample_developmental_rules(position_predicate="disabled")
+        genome = sample_developmental_rules(position_predicate=PRIMARY.position_predicate)
 
         grid = _initial_grid()
         phi_prev = _phi(grid)
@@ -119,8 +120,8 @@ def verify_no_cycles_under_monotone(n: int = DEFAULT_N, seed: int = DEFAULT_SEED
     results = []
     for idx in range(n):
         random.seed(int(rng.integers(0, 2**31 - 1)))
-        genome = sample_developmental_rules(position_predicate="disabled")
-        r = exact_cycle(genome, conflict_resolution="first_rule_index", action_monotonicity="monotone")
+        genome = sample_developmental_rules(position_predicate=PRIMARY.position_predicate)
+        r = exact_cycle(genome, conflict_resolution=PRIMARY.conflict_resolution, action_monotonicity="monotone")
         results.append(r)
     return {"n": n, "results": results}
 

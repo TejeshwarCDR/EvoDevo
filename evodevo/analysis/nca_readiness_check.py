@@ -238,7 +238,7 @@ def run_section1_check(n_genomes=500, t_steps=100, h_values=(0, 3, 6), seed=0) -
         factors = ExperimentFactors(dev_steps=t_steps, init_condition="center_seed", seed=seed, hidden_channels=H)
         for boundary in VALID_BOUNDARIES:
             encoder = NCAEncoder(
-                factors=factors, update_rule="bounded_leaky", decay=PRIMARY.decay,
+                factors=factors, update_rule=PRIMARY.update_rule, decay=PRIMARY.decay,
                 state_bound=PRIMARY.state_bound, boundary=boundary,
             )
             init_inf_norm = float(np.max(np.abs(encoder._initial_state)))
@@ -314,7 +314,7 @@ def run_section2_check(n=VERIFICATION_N, seed=VERIFICATION_SEED, t_max=40) -> di
     this fresh, cheap, read-only check reports the number at the settings
     that are actually resolved."""
     factors = ExperimentFactors(dev_steps=t_max, init_condition="center_seed", seed=seed, hidden_channels=RS.PRIMARY_H)
-    encoder = NCAEncoder(factors=factors, update_rule="bounded_leaky", decay=PRIMARY.decay, state_bound=PRIMARY.state_bound)
+    encoder = NCAEncoder(factors=factors, update_rule=PRIMARY.update_rule, decay=PRIMARY.decay, state_bound=PRIMARY.state_bound)
 
     def _readout(state):
         return np.argmax(state[:, :, :N_MATERIALS], axis=-1).astype(int)
@@ -357,7 +357,7 @@ def run_section2_check(n=VERIFICATION_N, seed=VERIFICATION_SEED, t_max=40) -> di
     probe_genomes = [rng2.normal(scale=rng2.choice([0.001, 0.01, 0.1, 1.0, 10.0]), size=encoder.genome_length()) for _ in range(500)]
     for decay in (0.1, 0.2, 0.5, 1.0):
         probe_factors = ExperimentFactors(dev_steps=1, init_condition="center_seed", seed=seed, hidden_channels=RS.PRIMARY_H)
-        probe_encoder = NCAEncoder(factors=probe_factors, update_rule="bounded_leaky", decay=decay, state_bound=PRIMARY.state_bound)
+        probe_encoder = NCAEncoder(factors=probe_factors, update_rule=PRIMARY.update_rule, decay=decay, state_bound=PRIMARY.state_bound)
         for genome in probe_genomes:
             lambda_indep_checked += 1
             certified_here = is_certified_contractive(genome, probe_encoder)
@@ -760,7 +760,7 @@ def run_section9_checks(prov: dict, s8: dict) -> dict:
     # (a) every Section 0 config value matches the artifact it claims to read.
     # Re-derive independently (a second, fresh construction) and diff.
     factors = ExperimentFactors(dev_steps=40, init_condition="center_seed", seed=VERIFICATION_SEED, hidden_channels=RS.PRIMARY_H)
-    rederived = NCAEncoder(factors=factors, update_rule="bounded_leaky", decay=PRIMARY.decay, state_bound=PRIMARY.state_bound)
+    rederived = NCAEncoder(factors=factors, update_rule=PRIMARY.update_rule, decay=PRIMARY.decay, state_bound=PRIMARY.state_bound)
     config_matches = True
     mismatches = []
     field_map = {

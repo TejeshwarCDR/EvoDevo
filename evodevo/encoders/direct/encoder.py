@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import dataclasses
+import warnings
 
 import numpy as np
 
@@ -24,7 +25,17 @@ class DirectEncoder(Encoder):
         # init_condition, neighbourhood and hidden_channels have no effect
         # here (explicit no-op). Only mutation_scale applies, since mutation
         # strength is meaningful for every arm.
-        self.mutation_rate = min(1.0, mutation_rate * factors.mutation_scale)
+        _scaled_mutation_rate = mutation_rate * factors.mutation_scale
+        if _scaled_mutation_rate > 1.0:
+            warnings.warn(
+                f"DirectEncoder: mutation_rate * factors.mutation_scale = "
+                f"{mutation_rate} * {factors.mutation_scale} = {_scaled_mutation_rate} exceeds 1.0 "
+                "(a per-cell mutation probability cannot exceed 100%) -- clipped to 1.0. This is a "
+                "real clip and must not pass silently; if unintended, lower mutation_rate or "
+                "mutation_scale.",
+                stacklevel=2,
+            )
+        self.mutation_rate = min(1.0, _scaled_mutation_rate)
         self.empty_prob = empty_prob
         remaining = (1.0 - empty_prob) / (N_MATERIALS - 1)
         self._material_probs = np.array([empty_prob] + [remaining] * (N_MATERIALS - 1))
