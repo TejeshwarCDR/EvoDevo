@@ -1,3 +1,37 @@
+> **SUPERSEDED as of 2026-09-19 — THIS IS NOT THE FINAL BENCHMARK RESULT.**
+> This report (committed 2026-09-15, commit `7675f0d`) was generated **before**
+> the entire NCA and rule_based architecture-redesign workstream (committed
+> 2026-09-17, commits `a5abe84`/`0af2992` onward) — it predates
+> `evodevo/encoders/nca/resolved_config.py` and
+> `evodevo/encoders/rule_based/resolved_config.py` existing at all. Concretely
+> stale: NCA ran at `dev_steps=10` (current shared `T_primary=100`),
+> `hidden_channels=3` (current PRIMARY `hidden_channels=0`), with no
+> `update_rule` concept at all (current PRIMARY `update_rule="bounded_leaky"`;
+> this run used the old, since-retracted unbounded residual update) and
+> `mutation_sigma=0.1` (the raw class default, not even P5's original
+> calibrated 0.0201, let alone the current calibrated 0.0305). rule_based ran
+> with `mutation_rate=0.2` and no `conflict_resolution`/`position_predicate`/
+> `readout_mode` fields at all (current PRIMARY:
+> `conflict_resolution="first_rule_index"`, `position_predicate="disabled"`,
+> `readout_mode="mode_of_window"`, calibrated `mutation_rate=0.0779`; this run
+> predates R1-R8 entirely). This was already flagged as a BLOCKER by the
+> project's own `results/COMPARISON_READINESS.md` Section 7 immediately after
+> it was committed ("Every headline claim in results/BENCHMARK_REPORT.md as
+> currently committed is not a fairness-corrected comparison").
+>
+> **The real, final benchmark result under the current resolved architecture
+> does not yet exist.** It will be produced by the actual primary-matrix run
+> (see `docs/decisions.md`'s "Mechanize the already-disclosed ppo_timesteps
+> gap" and "Do NOT guess population_size/eval_budget/offspring_size" rows,
+> and `docs/PRE_PARALLELIZATION_READINESS.md`) — `evodevo/experiments/configs/
+> benchmark.yaml` is still on the `fast_dev` profile, and `primary_matrix`'s
+> `population_size`/`offspring_size`/`eval_budget` remain an explicit, open,
+> undecided scoping question. Do not cite the numbers below as a completed
+> comparison of the current three encodings.
+>
+> Kept for historical/methodological value (an early pipeline-validation run,
+> not a result to discard).
+
 # Benchmark Report: Direct vs. NCA vs. Rule-Based Morphology Encodings
 
 **Headline:** No detectable difference between arms: across every pairwise comparison, the bootstrap confidence interval for the mean-fitness difference includes zero.

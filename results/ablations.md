@@ -1,3 +1,16 @@
+> **PARTIALLY SUPERSEDED as of 2026-09-19.** The "`status: not yet run`" claim
+> for every fitness column remains true today — no A1/A2/E3 real-PPO fitness
+> run has ever been executed, per the same disclosure in
+> `docs/decisions.md`'s "Ablation sweep (A1/A2/E3) real-PPO execution scope"
+> row. However, Section A2's framing "`hidden_channels=3` is the NCA default"
+> (and the `prior_*` structural statistics throughout, all measured at
+> `dev_steps<=20` under the pre-redesign unbounded-residual NCA) is stale:
+> the current resolved PRIMARY is `hidden_channels=0`
+> (`evodevo/encoders/nca/resolved_config.py::PRIMARY`, per
+> `docs/decisions.md`'s "Hidden channel count (H) -- final re-resolution"
+> row). If/when this sweep is actually run, it should be re-measured against
+> the current resolved architecture, not the priors tabulated here.
+
 # Ablation Report
 
 3 seeds per arm, identical PPO/EA budget to the main comparison (`population_size`, `offspring_size`, `eval_budget`, `ppo_timesteps` unchanged across arms within each axis). "Prior" statistics are computed on random genomes only (no PPO, no evolution; N=500) and characterise the encoding's raw morphology-generation behaviour under each hyperparameter setting, independent of fitness.

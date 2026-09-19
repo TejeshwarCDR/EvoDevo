@@ -1,3 +1,18 @@
+> **SUPERSEDED as of 2026-09-19.** This inventory (committed 2026-09-02,
+> `826b817`) is explicitly a "pre-restructure snapshot" per its own commit
+> message, describing the repo layout **before**
+> `evodevo/experiments/configs/`, the current `evodevo/`/`external/`/`docs/`/
+> `results/` structure, and every architecture/config decision recorded in
+> `docs/decisions.md` since. Its "currently"-phrased claims (e.g. "the main
+> repo has zero commits," a separate `evogym-rule-based-encoding/` directory,
+> "NCA... currently has priors only, no `results/runs/nca/*` data") describe
+> that pre-restructure state, not the current repository. For the current
+> module layout see `docs/CODE_STRUCTURE_REFERENCE.md`/
+> `docs/module-ownership.md`; for current resolved configuration see
+> `evodevo/encoders/{nca,rule_based}/resolved_config.py`. Kept for
+> historical/methodological value (this inventory drove the subsequent
+> restructuring).
+
 # EvoGym_Project — Technical Inventory Report
 
 Read-only inspection. No files were modified, moved, renamed, or deleted; no implementation code was written or refactored. All claims cite exact paths/classes/functions; anything unverifiable by static reading is flagged explicitly rather than assumed.

@@ -1,3 +1,30 @@
+> **PARTIALLY SUPERSEDED as of 2026-09-19.** This report was generated as an
+> intermediate checkpoint right after the "joint stability-vs-expressivity
+> trade-off (Outcome B)" decision (`docs/decisions.md`), but **before** two
+> later same-workstream decisions that were committed in the same commit
+> (`a5abe84`) without this report being regenerated:
+> (1) **Hidden channels**: Section 11 here still lists "Decide whether to drop
+> the hidden channels (H=3)... or run a task-performance check" as an open
+> item — that decision was already made by the time of commit:
+> `docs/decisions.md`'s "Hidden channel count (H) -- final re-resolution" row
+> DROPPED H to 0. The current resolved value is
+> `evodevo/encoders/nca/resolved_config.py::PRIMARY.hidden_channels == 0`, not
+> the undecided 3 this report treats it as.
+> (2) **T_primary**: Section 8/11 here report the Outcome-B-provisional
+> `T_primary=5`. This was superseded twice more within the same workstream —
+> first by the T-shift-stability criterion (`docs/decisions.md`'s "Unified
+> T_primary" row, `results/nca/READOUT_POLICY_SELECTION.md`), then by the
+> W-consistency fix (`docs/decisions.md`'s "NCA T_primary/W consistency fix"
+> row) — landing at the current shared `T_primary=100`
+> (`evodevo/experiments/configs/benchmark.yaml`). This report also asks for
+> `results/nca/CONVERGENCE.md` to be regenerated "at the N4-resolved
+> (lambda*, B*)" (Section 2/10) — that request is itself stale: `decay`/
+> `state_bound` were RETRACTED to the Outcome-B values (0.2/5.0), and
+> `results/nca/CONVERGENCE.md` was subsequently regenerated at those values
+> (confirmed current per `docs/decisions.md`'s Outcome-B row).
+> Everything else in this report (the boundedness/regeneration verification,
+> the readout-independent findings) is unaffected and remains accurate.
+
 # NCA Architecture Readiness Report
 
 Verification-only pass over the entire N1-N8 NCA-architecture-redesign workstream. Nothing in this report was fixed, tuned, or re-run to look better -- every number either comes from an existing committed artifact or a cheap, read-only check performed at report-generation time. If a check failed or an artifact was stale/missing, that is reported as a finding below, not silently worked around.

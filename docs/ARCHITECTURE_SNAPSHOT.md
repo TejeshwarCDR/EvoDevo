@@ -1,3 +1,22 @@
+> **SUPERSEDED as of 2026-09-19 (encoder-internals sections B.2/B.3 —
+> everything else may still be accurate).** This snapshot (as of 2026-09-03,
+> committed `0a9a61b` on 2026-09-15) predates the entire NCA/rule_based
+> architecture-redesign workstream (committed 2026-09-17). Section B.2
+> describes NCA's `_step` as a plain, unbounded residual update
+> (`state+delta`, no clamping/decay) with `hidden_channels=3` and
+> `mutation_sigma=0.1` "by default" — the current resolved primary is
+> `update_rule="bounded_leaky"` with `decay=0.2`/`state_bound=5.0`,
+> `hidden_channels=0`, calibrated `mutation_sigma=0.0305`
+> (`evodevo/encoders/nca/resolved_config.py::PRIMARY`). Section B.3 describes
+> `decode()` calling `develop_rules()` with no mention of
+> `conflict_resolution`/`position_predicate`/`action_monotonicity`/
+> `readout_mode` — those axes didn't exist yet; the current resolved primary
+> is `conflict_resolution="first_rule_index"`, `position_predicate="disabled"`,
+> `readout_mode="mode_of_window"`
+> (`evodevo/encoders/rule_based/resolved_config.py::PRIMARY`), plus a
+> co-primary `monotone` variant. See `docs/decisions.md`'s N1-N17/R1-R8 rows
+> for the full derivation of every change.
+
 # Architecture Snapshot
 
 Read-only snapshot of the EvoDevo repository (`/Users/tejeshwarcdr/Academics/EvoGym_Project`) as of 2026-09-03, git commit `9e5cef87f5777b7c66397fea008a53a44229b907` (per `results/runs/benchmark_manifest.json:148`). Every claim below cites an exact `file:line` that was actually read, or the exact command that was actually run. Where something could not be executed, that is stated explicitly rather than guessed.

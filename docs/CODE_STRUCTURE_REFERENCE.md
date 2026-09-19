@@ -1,3 +1,20 @@
+> **SUPERSEDED as of 2026-09-19 (NCA/rule_based internals sections —
+> everything else may still be accurate).** This reference (committed
+> `0a9a61b` on 2026-09-15) predates the entire NCA/rule_based
+> architecture-redesign workstream (committed 2026-09-17). Its `NCAEncoder`
+> description (`_step(state,w1,b1,w2,b2)`: `delta=hidden@w2+b2; return
+> state+delta`, `hidden_channels=3` in the default constructor call, genome
+> length 792) describes the pre-redesign unbounded-residual update rule with
+> no `update_rule`/`decay`/`state_bound` concept at all. The current resolved
+> primary is `update_rule="bounded_leaky"` (state-clamped, decay-weighted),
+> `hidden_channels=0` (genome length 501) —
+> `evodevo/encoders/nca/resolved_config.py::PRIMARY`. It likewise does not
+> mention rule_based's `conflict_resolution`/`position_predicate`/
+> `action_monotonicity`/`readout_mode` axes, which did not exist yet; current
+> resolved primary in
+> `evodevo/encoders/rule_based/resolved_config.py::PRIMARY`. See
+> `docs/decisions.md`'s N1-N17/R1-R8 rows for the full derivation.
+
 # EvoGym_Project — Code Structure Reference
 
 This document is produced entirely from direct inspection of the source tree at

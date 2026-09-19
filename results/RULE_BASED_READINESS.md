@@ -1,3 +1,18 @@
+> **PARTIALLY SUPERSEDED as of 2026-09-19.** Section 6/12/line-349's framing —
+> "the monotone ablation... was correctly KEPT as an ablation, not silently
+> promoted to the primary" — is superseded. `docs/decisions.md`'s "Monotone
+> vs unrestricted: an explicit decision" row found this report's own
+> "self-evidently correct" framing didn't actually weigh monotone's 4/5
+> structural dominance against the cost, and resolved it differently: **DEFER
+> to the PPO matrix — run BOTH `unrestricted` and `monotone` as co-primary
+> candidates**, not "keep monotone as ablation-only." Current state:
+> `evodevo/encoders/rule_based/resolved_config.py::PPO_MATRIX_CANDIDATES =
+> (PRIMARY, MONOTONE_ABLATION)`, and `rule_based_monotone` is a registered,
+> distinct arm in `evodevo/experiments/configs/benchmark.yaml`. The
+> underlying structural evidence this report cites (R1-R4's propositions, the
+> termination guarantee, the 4/5-metric comparison table) is unaffected and
+> remains accurate — only the "kept as ablation" status conclusion is stale.
+
 # Rule-Based Architecture Readiness Report
 
 Verification-only pass over the entire rule_based architecture-redesign workstream (propositions R1-R4, the capacity study, the architecture-delta cascade, and the silent-clip fixes). Nothing in this report was fixed, tuned, or re-run to look better -- every number either comes from an existing committed artifact or a cheap, read-only check performed at report-generation time. If a check failed or an artifact was stale, missing, or inconsistent with another artifact, that is reported as a finding below, not silently worked around or reconciled.

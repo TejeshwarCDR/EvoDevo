@@ -1,3 +1,13 @@
+> **SUPERSEDED as of 2026-09-19 (architecture context, not the numbers
+> themselves).** Same content/vintage as `results/nca_sanity.md` (confirmed
+> byte-for-byte identical per `docs/decisions.md`'s "Pre-launch audit
+> reconfirmation" row) — measured under the pre-redesign NCA (`dev_steps=10`,
+> `hidden_channels=3`, unbounded-residual `_step`, no `update_rule` concept).
+> The current resolved NCA (`evodevo/encoders/nca/resolved_config.py::PRIMARY`:
+> `update_rule="bounded_leaky"`, `hidden_channels=0`, shared `T_primary=100`)
+> behaves very differently — see `results/nca/ARCHITECTURE_DELTA.md`'s
+> before/after table.
+
 # nca Encoder Sanity Report
 
 N = 2000 random genomes, seed = 0. No PPO was run for this experiment.

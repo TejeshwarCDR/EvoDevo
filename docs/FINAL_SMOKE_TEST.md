@@ -1,3 +1,33 @@
+> **SUPERSEDED as of 2026-09-19 — THIS IS NOT A VERIFICATION OF THE CURRENT PIPELINE.**
+> This smoke test (dated 2026-09-02, committed `0a9a61b`) exercised the
+> pipeline **before** the entire NCA and rule_based architecture-redesign
+> workstream (committed 2026-09-17, commits `a5abe84`/`0af2992` onward).
+> It verified real-PPO end-to-end plumbing under the pre-redesign
+> configuration — the same `dev_steps=10`/`hidden_channels=3`/no-`update_rule`
+> NCA and no-`conflict_resolution`/`position_predicate` rule_based described
+> in `results/BENCHMARK_REPORT.md`'s own superseded-banner above — not under
+> `bounded_leaky`/`mode_of_window` NCA, `first_rule_index`/`position_predicate
+> ="disabled"` rule_based, the co-primary `rule_based_monotone` arm, or the
+> current shared `T_primary=100`. The config-hash it verified
+> (`56b3ed67...`) no longer matches the current resolved configuration (every
+> one of the fields above has since changed via `docs/decisions.md`'s N1-N17/
+> R1-R8 rows) — re-running `python -m evodevo.experiments.lock_hash` today
+> against `evodevo/experiments/configs/benchmark.yaml` would NOT reproduce
+> this hash.
+>
+> **This document's own closing line, "STATUS: READY TO RUN," describes
+> readiness for the pre-redesign pipeline only, not the current one.** No
+> smoke test of the current, redesigned architecture has been run yet, and
+> **the real, final pre-launch smoke test and benchmark result do not yet
+> exist** — they will need to be produced fresh against the current
+> `resolved_config.py` values before the actual primary-matrix run (see
+> `docs/PRE_PARALLELIZATION_READINESS.md`, and `docs/decisions.md`'s "Do NOT
+> guess population_size/eval_budget/offspring_size" row for what is still an
+> open decision blocking that run). Do not read this file as evidence the
+> current pipeline is launch-ready.
+>
+> Kept for historical/methodological value.
+
 # Final Pre-Launch Smoke Test
 
 Date: 2026-09-02

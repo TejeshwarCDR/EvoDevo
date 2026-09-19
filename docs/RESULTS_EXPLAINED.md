@@ -1,3 +1,18 @@
+> **SUPERSEDED as of 2026-09-19.** This is the lay-audience explainer for
+> `results/BENCHMARK_REPORT.md`'s run — see that file's own superseded banner
+> for the full detail. In short: this run predates the entire NCA/rule_based
+> architecture-redesign workstream (committed 2026-09-17). Its NCA numbers
+> (e.g. Section 6's "68.35% of NCA genomes are still changing state," "~40x
+> the initial-state scale") describe the old `update_rule` (unbounded
+> residual, no `bounded_leaky`/`decay`/`state_bound`), `dev_steps=10` (current
+> shared `T_primary=100`), `hidden_channels=3` (current PRIMARY `0`). See
+> `evodevo/encoders/nca/resolved_config.py::PRIMARY` and
+> `evodevo/encoders/rule_based/resolved_config.py::PRIMARY` for the current
+> resolved configuration, and `docs/decisions.md`'s NCA/rule_based redesign
+> rows for what changed and why. **The real, final results explainer does not
+> yet exist** — it will need to be rewritten against the actual primary-matrix
+> run once that is executed (see `docs/PRE_PARALLELIZATION_READINESS.md`).
+
 # Results Explained
 
 **Headline: no detectable difference between the three encodings.** Across every pairwise comparison (direct vs. NCA, direct vs. rule-based, NCA vs. rule-based), the 95% confidence interval on the difference in final best fitness includes zero. This is a real, expected-to-be-reported outcome under this project's falsifiability commitment, not a failed experiment — see below for what it does and doesn't mean given the (small, early-training) scale of this run.

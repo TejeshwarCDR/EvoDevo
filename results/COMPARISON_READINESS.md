@@ -1,3 +1,20 @@
+> **SUPERSEDED as of 2026-09-19 (numbers only — its own BLOCKER finding
+> stands).** This report (last regenerated 2026-09-15, commit `2c09895`)
+> verifies the P1-P7 workstream only and predates the entire NCA/rule_based
+> architecture-redesign workstream (committed 2026-09-17, `a5abe84`/`0af2992`
+> onward). Its own headline `T_primary=39` (Section 3) is superseded by the
+> unified T-shift-stability criterion — the current shared `T_primary=100`
+> (`evodevo/experiments/configs/benchmark.yaml`'s `factors.dev_steps`, see
+> `docs/decisions.md`'s "Unified T_primary" and "NCA T_primary/W consistency
+> fix" rows and `results/T_PRIMARY_UNIFIED.md`). Its NCA references predate
+> `bounded_leaky`/`hidden_channels=0`/`mode_of_window` entirely. **However,
+> this report's own Section 7 BLOCKER finding — that `results/runs/` (and by
+> extension `results/BENCHMARK_REPORT.md`) predates the whole fairness
+> workstream and must not be cited as a headline result — remains true and is
+> now even more true**, since that same run also predates the later
+> architecture redesign. See `results/BENCHMARK_REPORT.md`'s own superseded
+> banner.
+
 # Comparison Readiness Report
 
 Verification-only pass over the P1-P7 comparison-fairness workstream. Nothing in this report was fixed, tuned, or re-run to look better -- every number either comes from an existing committed artifact or a read-only check performed at report-generation time. If a check failed or an artifact was missing, that is reported as a finding below, not silently worked around.

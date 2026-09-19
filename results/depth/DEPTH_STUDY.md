@@ -1,3 +1,18 @@
+> **SUPERSEDED as of 2026-09-19 (T_primary number only).** This report's
+> headline "`T_primary = 39`" (derived via `depth_study.py::_select_t_primary`'s
+> `q95(settle_step)`-based method) is superseded. That method was later found
+> ILL-POSED for both arms (a percentile is undefined once the never-settled
+> fraction exceeds its own complement — true for both NCA and rule_based) and
+> replaced by the T-shift-stability criterion (`docs/decisions.md`'s "Unified
+> T_primary" row); the method is retained in `depth_study.py`'s own code,
+> explicitly labelled superseded in its docstring, purely for this historical
+> derivation. **The current shared `T_primary = 100`**
+> (`evodevo/experiments/configs/benchmark.yaml`'s `factors.dev_steps`, see
+> `results/T_PRIMARY_UNIFIED.md`). This report's Layer 1/2 raw measurements
+> (light-cone speeds, settling distributions) are unaffected and remain
+> accurate as the P4-era record; only the T_primary NUMBER they feed into
+> is stale.
+
 # Depth study (developmental depth T)
 
 Fitness-blind (evodevo/analysis/structural.py, evodevo/analysis/depth_study.py). N=2000 genomes/cell, init_condition=`center_seed` (the P3 decision), seed=0. No PPO, no task, no reward were run to produce any number on this page.

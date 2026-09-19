@@ -46,6 +46,17 @@ N=2000, T_primary=100.
 
 **Cost, reported plainly**: monotone changes valid_rate by 0.1060 relative to unrestricted -- monotone does NOT cost validity in this sample -- the termination guarantee comes essentially for free on this metric, though other metrics above should also be read for the full picture (e.g. diversity, displacement).
 
+> **Status line below SUPERSEDED as of 2026-09-19.** This report's own
+> "ABLATION, not primary" status framing is what `docs/decisions.md`'s
+> "Monotone vs unrestricted: an explicit decision" row later found
+> insufficiently weighed against the cost table right below and overturned:
+> the actual decision is DEFER — `monotone` now runs as a co-primary
+> candidate alongside `unrestricted` in the PPO matrix
+> (`evodevo/encoders/rule_based/resolved_config.py::PPO_MATRIX_CANDIDATES`,
+> `rule_based_monotone` in `evodevo/experiments/configs/benchmark.yaml`), not
+> merely "kept as an ablation." The measurements below this line are
+> unaffected and remain accurate.
+
 ## Status: ABLATION, not primary -- but the data does NOT match the a priori expectation
 
 `action_monotonicity="monotone"` REMAINS an ABLATION in this report (RuleBasedEncoder's own class default stays "unrestricted") -- but the measured cost table above does NOT match the naive expectation that a termination guarantee trades away expressivity. On FOUR of the five core structural metrics, monotone is BETTER than unrestricted, not worse: valid_rate +0.1060, degenerate_fraction -0.1215, unique_valid_body_fraction +0.0550, uniform_body_fraction -0.1215 -- PLUS the termination/no-cycling guarantee itself, entirely free of charge on these metrics. The one place a real cost shows up is mutation sensitivity: mean_hamming_displacement drops by -0.6545 and fraction_zero_displacement rises by 0.0250 -- monotone genomes are LESS sensitive to mutation (more neutral mutations), a genuine, disclosed downside for evolvability/search even though it costs nothing on the structural metrics measured directly.
