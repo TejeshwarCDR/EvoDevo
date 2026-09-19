@@ -1,4 +1,10 @@
 # evogym must be installed separately from source (see evogym/ in this repo).
+# setuptools<81: evogym/envs/base.py still does `import pkg_resources`, which
+# setuptools dropped as of 84.0.0 (deprecated, then removed). Without this
+# pin, a fresh venv rebuild fails at `import evogym.envs` with
+# ModuleNotFoundError: No module named 'pkg_resources'. See
+# docs/LAB_MACHINE_SETUP.md Part 4 / risk register item 2.
+setuptools<81
 numpy<2.0.0
 gymnasium
 stable-baselines3
