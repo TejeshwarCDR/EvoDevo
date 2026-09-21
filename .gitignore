@@ -8,6 +8,13 @@ dist/
 .pytest_cache/
 results/**/controller/*.zip
 
+# Pre-flight run output (evodevo/preflight/): self-checks and real runs
+# alike. This is generated harness output, never source -- see
+# PREFLIGHT_READINESS.md and evodevo/preflight/__main__.py's own dirty-tree
+# launch check, which excludes results/ from what must be committed before
+# a real run for exactly this reason.
+results/preflight/
+
 # Nested repo with its own git history — tracked as a plain directory, not
 # a submodule; its internals (including compiled build artifacts) are
 # intentionally excluded from this outer repo.
