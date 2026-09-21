@@ -98,10 +98,23 @@ def test_real_ppo_smoke():
 
 # --- Regression: evaluate_body()'s extraction of _rollout_fitness() and the
 # addition of evaluate_body_with_curve() must not have changed evaluate_body
-# ()'s own behaviour. Compares the committed HEAD version of this module
-# against whatever is currently on disk (which may equal HEAD, or may carry
-# this exact refactor as an uncommitted change) on a fixed set of valid and
-# invalid bodies, at the same real-PPO settings.
+# ()'s own behaviour. Compares the CURRENT file against a hash PINNED to the
+# commit immediately before _rollout_fitness was introduced -- not against
+# HEAD, which would become a vacuous self-comparison the moment the refactor
+# itself is committed (git show HEAD:... and the current file are then byte-
+# identical, so the comparison always trivially passes regardless of whether
+# a LATER edit reintroduces a real behaviour change). Pinning to a fixed,
+# pre-refactor commit keeps this test meaningful indefinitely: it always
+# compares "what evaluate_body() did before this refactor" against "what it
+# does now", not "now" against "a few seconds ago".
+#
+# PRE_REFACTOR_PPO_RUNNER_COMMIT is the parent of the (single) commit that
+# introduced _rollout_fitness, found via:
+#   git log --format=%H -S_rollout_fitness -- evodevo/evaluation/ppo_runner.py
+# (131350c98d806a9b155ce1f83e6917c15e4bf352, "Add evaluate_body_with_curve"),
+# taking that commit's own parent so the reference predates the refactor
+# entirely. Confirmed to contain zero occurrences of "_rollout_fitness".
+PRE_REFACTOR_PPO_RUNNER_COMMIT = "9e877489a101a75b8b9195791a3a23e877fa8386"
 
 DISCONNECTED_BODY = np.array(
     [
@@ -145,29 +158,29 @@ _PARITY_BODIES = [
 ]
 
 
-def _load_ppo_runner_at_head():
-    """Loads the git-committed HEAD version of evodevo/evaluation/
-    ppo_runner.py as its own, separately-named module -- via `git show`
-    into a temp file, not `git stash` (stashing would touch the whole
-    working tree, not just this one file, for the duration of the test).
-    Its own imports are all absolute (`from evodevo.morphology...`, see the
+def _load_ppo_runner_at_commit(commit: str, module_name: str):
+    """Loads evodevo/evaluation/ppo_runner.py as it existed at a given
+    commit, as its own separately-named module -- via `git show` into a
+    temp file, not `git stash` (stashing would touch the whole working
+    tree, not just this one file, for the duration of the test). Its own
+    imports are all absolute (`from evodevo.morphology...`, see the
     module's own docstring/imports), so loading it from an arbitrary temp
     path resolves correctly against the normal evodevo package already on
     sys.path -- no path surgery needed beyond the load itself."""
     result = subprocess.run(
-        ["git", "show", "HEAD:evodevo/evaluation/ppo_runner.py"],
+        ["git", "show", f"{commit}:evodevo/evaluation/ppo_runner.py"],
         cwd=REPO_ROOT, capture_output=True, text=True, check=True,
     )
-    head_source = result.stdout
+    source = result.stdout
 
     import tempfile
 
-    tmp_dir = tempfile.mkdtemp(prefix="ppo_runner_head_")
-    tmp_path = os.path.join(tmp_dir, "ppo_runner_head.py")
+    tmp_dir = tempfile.mkdtemp(prefix="ppo_runner_pinned_")
+    tmp_path = os.path.join(tmp_dir, f"{module_name}.py")
     with open(tmp_path, "w") as f:
-        f.write(head_source)
+        f.write(source)
 
-    spec = importlib.util.spec_from_file_location("ppo_runner_head_parity_check", tmp_path)
+    spec = importlib.util.spec_from_file_location(module_name, tmp_path)
     module = importlib.util.module_from_spec(spec)
     # dataclasses's own annotation-resolution logic looks the module up via
     # sys.modules[cls.__module__] -- it must be registered there BEFORE
@@ -187,28 +200,35 @@ def _load_ppo_runner_at_head():
 
 @pytest.mark.slow
 @pytest.mark.skipif(not HAS_SIMULATOR, reason="evogym.simulator_cpp is not built")
-def test_evaluate_body_is_bit_identical_between_head_and_working_tree():
-    """See docs/decisions.md / PREFLIGHT_READINESS.md Section 9's
-    "ppo_runner.py change" subsection: this proves the _rollout_fitness()
-    extraction (and the addition of evaluate_body_with_curve(), which
-    evaluate_body() itself never calls) left evaluate_body() itself
-    bit-identical -- same fitness, valid, reason, body_hash -- for a fixed
-    set of 5 bodies (2 valid, 3 invalid via 3 different validation
-    failures), at ppo_timesteps=2000, seed=0."""
-    head_module = _load_ppo_runner_at_head()
+def test_evaluate_body_is_bit_identical_against_pre_refactor_commit():
+    """See PREFLIGHT_READINESS.md Section 9's "ppo_runner.py change"
+    subsection: this proves the _rollout_fitness() extraction (and the
+    addition of evaluate_body_with_curve(), which evaluate_body() itself
+    never calls) left evaluate_body() itself bit-identical -- same
+    fitness, valid, reason, body_hash -- for a fixed set of 5 bodies (2
+    valid, 3 invalid via 3 different validation failures), at
+    ppo_timesteps=2000, seed=0.
+
+    Deliberately pinned to PRE_REFACTOR_PPO_RUNNER_COMMIT rather than HEAD
+    -- see that constant's own comment for why comparing against HEAD
+    becomes a vacuous self-comparison the instant the refactor is
+    committed."""
+    pinned_module = _load_ppo_runner_at_commit(
+        PRE_REFACTOR_PPO_RUNNER_COMMIT, "ppo_runner_pre_refactor_pin",
+    )
 
     for name, body in _PARITY_BODIES:
-        head_result = head_module.evaluate_body(
+        pinned_result = pinned_module.evaluate_body(
             body, task="Walker-v0", ppo_timesteps=2000, eval_episodes=1, seed=0,
         )
-        working_tree_result = evaluate_body(
+        current_result = evaluate_body(
             body, task="Walker-v0", ppo_timesteps=2000, eval_episodes=1, seed=0,
         )
 
-        assert head_result.valid == working_tree_result.valid, name
-        assert head_result.reason == working_tree_result.reason, name
-        assert head_result.body_hash == working_tree_result.body_hash, name
-        assert head_result.fitness == working_tree_result.fitness, (
-            f"{name}: fitness differs -- HEAD={head_result.fitness!r} "
-            f"working_tree={working_tree_result.fitness!r}"
+        assert pinned_result.valid == current_result.valid, name
+        assert pinned_result.reason == current_result.reason, name
+        assert pinned_result.body_hash == current_result.body_hash, name
+        assert pinned_result.fitness == current_result.fitness, (
+            f"{name}: fitness differs -- pre-refactor={pinned_result.fitness!r} "
+            f"current={current_result.fitness!r}"
         )
