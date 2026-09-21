@@ -494,10 +494,15 @@ def _section_9() -> str:
     )
     lines.append("")
     lines.append(
-        "- `final_decisions.md` does not exist anywhere in this repository. Every \"D-number\" referenced "
-        "throughout `evodevo/preflight/` (D5-D16) has been implemented from the wording given directly in "
-        "each build prompt, cited as the authoritative source in each module's own docstring -- there is no "
-        "separate document to diff this implementation against."
+        "- `docs/final_decisions.md` still does not exist in this repository. A later instruction asked for "
+        "an uploaded `final_decisions.md` to be copied to `docs/final_decisions.md` and committed, so every "
+        "D-number cited in the code has a document to diff against -- but no such file could be found "
+        "anywhere on this machine's filesystem or in the accessible conversation context (searched "
+        "exhaustively). This is reported as a genuine, outstanding blocker, not silently skipped or "
+        "fabricated: every \"D-number\" referenced throughout `evodevo/preflight/` (D5-D16) remains "
+        "implemented from the wording given directly in each build prompt, cited as the authoritative "
+        "source in each module's own docstring, with no separate document to diff it against until this "
+        "file is actually provided."
     )
     lines.append(
         "- D14 (per-option cost deltas), D15 (the primary EA population/generations/seed grid), and D16 "
@@ -578,6 +583,16 @@ def _section_10() -> str:
         "exact load): **roughly 6-30 hours.**"
     )
     lines.append(
+        "- **The two phases are not the same order of magnitude, and an operator watching tmux should "
+        "expect the pace to change sharply partway through:** B2 (`concurrency_sweep`, at default settings "
+        "6 levels x 24 genomes x 20,000 reduced timesteps, plus 60s inter-level cooldowns) is the cheap "
+        "phase -- on the order of **minutes to about an hour**. B3/B4/B5 (`evaluation_cost`, "
+        "`learning_curves`, `evaluation_noise`, at FULL campaign timesteps -- 1,000,000 for B3, 2,000,000 "
+        "for B4) are the expensive phases and dominate the total -- on the order of **hours**, not minutes. "
+        "If B2 finishes in the first hour and the dashboard's ETA suddenly looks far larger afterward, that "
+        "is the expected transition into B3, not a stall."
+    )
+    lines.append(
         "- This range is wide on purpose -- it exists only to plan a tmux session and disk headroom around, "
         "not to promise a duration. Treat B6's `projection.md`, produced from real B2/B3 numbers, as "
         "authoritative once available."
@@ -612,19 +627,91 @@ def _section_11() -> str:
     return "\n".join(lines)
 
 
+def _section_changes_since_previous() -> str:
+    lines = ["## Changes since the previous readiness report", ""]
+    lines.append(
+        "Closing the readiness gaps a review of the first PREFLIGHT_READINESS.md found, before the real "
+        "pre-flight runs. Each item below is a full gate from that review; see Section 9 for the detailed "
+        "write-up of the first three."
+    )
+    lines.append("")
+    lines.append("| # | gap | outcome |")
+    lines.append("|---|---|---|")
+    lines.append(
+        "| 1 | `evodevo/evaluation/ppo_runner.py` showed modified with no report (Prompt 2's own rule: "
+        "stop and report, don't change silently) | Explained, classified **behaviour-neutral** "
+        "(`_rollout_fitness()` extraction + additive `evaluate_body_with_curve()`), proven bit-identical "
+        "against HEAD across 5 bodies by a new committed test. See Section 9. |"
+    )
+    lines.append(
+        "| 2 | self-check restricted to arm=direct, task=Walker-v0 -- first contact with 5 of 6 real "
+        "combinations would happen hours into the real run | Added `--self-check-full` (same trivial "
+        "settings, full 3-arm x 2-task grid, 10-minute budget). Root cause of the original 3-minute budget "
+        "not fitting the full grid identified and fixed: `rule_based`'s decode() cost "
+        "(~232ms/call) multiplied by previously-unreduced, CLI-unexposed `t_develop_n`/`t_sentinel_n` "
+        "(now `--cost-develop-n`/`--cost-sentinel-n`, reduced to 5 for self-check). Measured at 64s "
+        "against the 600s budget, zero partial/failed combinations. See Section 7 and Section 9. |"
+    )
+    lines.append(
+        "| 3 | no gate preventing a real launch against an uncommitted tree | `python -m evodevo.preflight` "
+        "now refuses to create a run directory for a real launch when `git status --porcelain` (excluding "
+        "results/) is non-empty, unless `--allow-dirty` is passed; self-check/self-check-full are exempt "
+        "but always record `project_dirty` in their manifest. Covered by "
+        "`tests/preflight/test_dirty_check.py` and `tests/preflight/test_cli.py`. |"
+    )
+    lines.append(
+        "| 4a | Section 8 reported evogym version as \"unknown\", disagreeing with B1's own correct report "
+        "| Fixed to read the same source B1 uses (`importlib.metadata.version`, not `module.__version__`, "
+        "which evogym does not define); a regression test asserts the two agree. |"
+    )
+    lines.append(
+        "| 4b | `coretemp_readable=true` appeared to contradict ENVIRONMENT_REPORT.md's \"lm-sensors not "
+        "installed\" | Not a contradiction: both read `/sys/class/hwmon` directly via "
+        "`psutil.sensors_temperatures()`; `lm-sensors` is only the separate, optional `sensors` CLI "
+        "convenience tool. Verbatim sample confirmed non-null; all 56 samples in the checked run were "
+        "non-null. See Section 9. |"
+    )
+    lines.append(
+        "| 4c | CPU frequency policy (scaling driver, per-core EPP, turbo state) was not recorded -- a "
+        "measurement whose frequency policy is unrecorded cannot be reproduced | B1 now records "
+        "scaling_driver, energy_performance_preference for one P-core and one E-core, "
+        "intel_pstate no_turbo/status, and idle frequency per core; B7's D13 risk table surfaces all of "
+        "it with a note that it must be IDENTICAL between this pre-flight and the real campaign. |"
+    )
+    lines.append(
+        "| 4d | `results/rule_based/ORDER_INDEPENDENCE_AUDIT.md` shows modified after every full-suite run "
+        "| Confirmed deliberate: `test_order_independence_permutation_audit` documents this as an "
+        "intentional side effect in its own docstring. Reported, not changed, per this gate's own "
+        "instruction; reverted with `git checkout` after every full-suite run in this session. |"
+    )
+    lines.append(
+        "| 5 | work from Prompts 1-7 sat entirely uncommitted | Committed in 4 dependency-ordered commits "
+        "(Step 0 env setup; the ppo_runner.py change, isolated and revertible alone; evodevo/parallel; "
+        "evodevo/preflight) -- reordered from the prompt's literal (1)(2)(3)(4) numbering so the ppo_runner "
+        "commit lands before evodevo/parallel, which depends on it (evaluator_entry.py's real-mode "
+        "curve_request path), keeping every commit independently buildable. "
+        "**`docs/final_decisions.md` was NOT committed** -- despite the instruction to copy an uploaded "
+        "file there, no such file could be found anywhere on this machine or in this conversation's "
+        "accessible context; this is flagged as a genuine blocker, not silently skipped or fabricated. |"
+    )
+    lines.append("")
+    return "\n".join(lines)
+
+
 def generate_readiness_markdown(skip_full_suite: bool = False, skip_machine_profile: bool = False) -> str:
     generated_at = datetime.now(timezone.utc).isoformat()
     header = (
         f"# EvoDevo Pre-Flight Readiness\n\n"
         f"Generated {generated_at} by `python -m evodevo.preflight.readiness`.\n\n"
         f"**The real pre-flight has NOT been executed as part of producing this document.** The only "
-        f"execution performed to produce this document (besides the test suite and a live, read-only B1 "
-        f"machine query) is the bounded `--self-check` run reported in Section 7. To run the real "
-        f"pre-flight, an operator runs (from the repo root, in tmux):\n\n"
+        f"executions performed to produce this document (besides the test suite and a live, read-only B1 "
+        f"machine query) are the bounded `--self-check` and `--self-check-full` runs reported in Section "
+        f"7. To run the real pre-flight, an operator runs (from the repo root, in tmux):\n\n"
         f"```\nbash scripts/preflight/run_preflight.sh\n```\n\n"
         f"which wraps:\n\n```\npython -m evodevo.preflight\n```\n\n"
     )
     sections = [
+        _section_changes_since_previous(),
         _section_1(),
         _section_2(),
         _section_3(skip_full_suite),
