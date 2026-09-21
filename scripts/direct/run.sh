@@ -14,6 +14,10 @@
 # --overwrite).
 set -euo pipefail
 
+# Raise the open-file limit for ~28 parallel workers x per-cell JSONL handles
+# (1024 default is too low; hard limit on this machine permits 65535+).
+ulimit -n 65535
+
 DEFAULT_CONFIG="evodevo/experiments/configs/direct/walker.yaml"
 CONFIG="${1:-${DEFAULT_CONFIG}}"
 [ -z "${CONFIG}" ] && CONFIG="${DEFAULT_CONFIG}"

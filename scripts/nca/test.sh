@@ -6,6 +6,10 @@
 # Does NOT run direct's or rule_based's method-specific tests.
 set -euo pipefail
 
+# Raise the open-file limit for ~28 parallel workers x per-cell JSONL handles
+# (1024 default is too low; hard limit on this machine permits 65535+).
+ulimit -n 65535
+
 echo "=== [nca] shared-core + method-specific tests (surrogate only, no real PPO) ==="
 python3 -m pytest -m "not slow" \
     tests/core \

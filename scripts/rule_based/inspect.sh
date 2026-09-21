@@ -10,6 +10,10 @@
 # Usage: scripts/rule_based/inspect.sh [N] [SEED]
 set -euo pipefail
 
+# Raise the open-file limit for ~28 parallel workers x per-cell JSONL handles
+# (1024 default is too low; hard limit on this machine permits 65535+).
+ulimit -n 65535
+
 N="${1:-2000}"
 SEED="${2:-0}"
 OUTPUT_DIR="results/inspection/rule_based"

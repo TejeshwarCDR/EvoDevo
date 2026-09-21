@@ -9,6 +9,10 @@
 # reuses the "T10" tag's runs for that cell instead of duplicating the compute.
 set -euo pipefail
 
+# Raise the open-file limit for ~28 parallel workers x per-cell JSONL handles
+# (1024 default is too low; hard limit on this machine permits 65535+).
+ulimit -n 65535
+
 NCA_WALKER_CONFIG="evodevo/experiments/configs/nca/walker.yaml"
 DIRECT_WALKER_CONFIG="evodevo/experiments/configs/direct/walker.yaml"
 DIRECT_SECOND_TASK_CONFIG="evodevo/experiments/configs/direct/upstepper.yaml"

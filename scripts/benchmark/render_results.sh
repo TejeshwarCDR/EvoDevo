@@ -9,6 +9,10 @@
 # Usage: scripts/benchmark/render_results.sh [TASK] [RUNS_ROOT] [OUTPUT_ROOT]
 set -euo pipefail
 
+# Raise the open-file limit for ~28 parallel workers x per-cell JSONL handles
+# (1024 default is too low; hard limit on this machine permits 65535+).
+ulimit -n 65535
+
 TASK="${1:-Walker-v0}"
 RUNS_ROOT="${2:-results/runs}"
 OUTPUT_ROOT="${3:-results/media}"
