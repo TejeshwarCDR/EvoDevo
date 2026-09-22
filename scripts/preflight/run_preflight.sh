@@ -143,7 +143,7 @@ tmux send-keys -t "$SESSION_NAME:preflight" \
   "cd '$REPO_ROOT' && script -qefc \"$PREFLIGHT_CMD\" '$TRANSCRIPT'" C-m
 
 # Split: bottom-left = event-log tail, bottom-right = htop/top.
-tmux split-window -v -t "$SESSION_NAME:preflight" -p 35
+tmux split-window -v -t "$SESSION_NAME:preflight" -l 35%
 tmux send-keys -t "$SESSION_NAME:preflight" \
   "cd '$REPO_ROOT' && echo '-- tailing $EVENTS --' && tail -n 40 -f '$EVENTS'" C-m
 
