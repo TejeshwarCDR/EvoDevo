@@ -25,7 +25,7 @@ from typing import List, Optional, Union
 import numpy as np
 import yaml
 
-from evodevo.core.config import SHARED_BASE_KEYS, ConfigOverrideError, ExperimentConfig
+from evodevo.core.config import PPO_SEED_AGGREGATIONS, SHARED_BASE_KEYS, ConfigOverrideError, ExperimentConfig
 from evodevo.core.factors import ExperimentFactors, extract_factors
 from evodevo.core.provenance import DirtyTreeError, check_git_state, write_factors_json
 from evodevo.encoders import get_encoder
@@ -74,6 +74,18 @@ DEFAULT_OUTPUT_DIR = "results/runs"
 # PRIMARY_MATRIX_OPEN_FIELDS and _check_profile_ready_for_real_run below.
 FAST_DEV = "fast_dev"
 PRIMARY_MATRIX = "primary_matrix"
+# CAMPAIGN: the final campaign design, every value ACCEPTED in docs/
+# decisions.md on 2026-09-27 (D15 population/offspring/eval_budget, D6's
+# per-task ppo_timesteps, D16's per-task ppo_seeds and "max" aggregation).
+# Fields listed in PER_TASK_PROFILE_FIELDS are {task: value} mappings,
+# resolved per task in resolve_configs() -- D6 and D16 both permit values to
+# differ BETWEEN tasks, never between arms on one task (every arm on a task
+# gets the identical resolved value, so check_fairness still holds).
+CAMPAIGN = "campaign"
+PER_TASK_PROFILE_FIELDS = ("ppo_timesteps", "ppo_seeds")
+CAMPAIGN_REQUIRED_FIELDS = (
+    "population_size", "offspring_size", "eval_budget", "ppo_timesteps", "ppo_seeds", "ppo_seed_aggregation",
+)
 
 PROFILES = {
     FAST_DEV: {
@@ -84,6 +96,18 @@ PROFILES = {
     },
     PRIMARY_MATRIX: {
         "ppo_timesteps": 1_000_000,
+    },
+    CAMPAIGN: {
+        # D15: eval_budget counts GENOMES (one genome = one budget unit, however
+        # many PPO seeds it is trained with) -- 300 = 15 initial + 19 x 15 offspring.
+        "population_size": 15,
+        "offspring_size": 15,
+        "eval_budget": 300,
+        # D6 application (UpStepper-v0: registered knee; Walker-v0: fallback rule).
+        "ppo_timesteps": {"Walker-v0": 1_000_000, "UpStepper-v0": 1_200_000},
+        # D16: K PPO trainings per genome; genome fitness = aggregation over them.
+        "ppo_seeds": {"Walker-v0": 1, "UpStepper-v0": 2},
+        "ppo_seed_aggregation": "max",
     },
 }
 
@@ -101,6 +125,68 @@ class OpenProfileDecisionError(RuntimeError):
     PRIMARY_MATRIX_OPEN_FIELDS. This is a genuine open project decision
     pending the pre-flight wall-clock projection and an explicit scoping
     call, NOT a bug to route around by guessing a value."""
+
+
+class CampaignProfileError(ValueError):
+    """Raised when a profile's values fail schema validation: a missing
+    required field, a per-task mapping with no value for one of the
+    benchmark's tasks, ppo_seeds (K) < 1, or an unknown
+    ppo_seed_aggregation name. Checked before any config is resolved."""
+
+
+class PpoSeedsNotImplementedError(NotImplementedError):
+    """Raised when a run with ppo_seeds (K) > 1 is requested before the
+    evaluator supports multi-seed PPO evaluation (docs/decisions.md's D16
+    row; implemented in a later step). Without this, a K=2 config would
+    silently run as K=1."""
+
+
+def validate_profile(profile_kwargs: dict, tasks, profile_name: str = CAMPAIGN) -> None:
+    """Schema validation for a resolved profile dict (see CampaignProfileError)."""
+    if profile_name == CAMPAIGN:
+        missing = [k for k in CAMPAIGN_REQUIRED_FIELDS if k not in profile_kwargs]
+        if missing:
+            raise CampaignProfileError(f"profile '{profile_name}' is missing required field(s) {missing}")
+    for field_name in PER_TASK_PROFILE_FIELDS:
+        if field_name not in profile_kwargs:
+            continue
+        value = profile_kwargs[field_name]
+        per_task = value if isinstance(value, dict) else {t: value for t in tasks}
+        missing_tasks = [t for t in tasks if t not in per_task]
+        if missing_tasks:
+            raise CampaignProfileError(
+                f"profile '{profile_name}' field '{field_name}' has no value for task(s) {missing_tasks}"
+            )
+        for task, v in per_task.items():
+            if isinstance(v, bool) or not isinstance(v, int) or v < 1:
+                raise CampaignProfileError(
+                    f"profile '{profile_name}' field '{field_name}' for task '{task}' must be an integer "
+                    f">= 1, got {v!r}"
+                )
+    if "ppo_seed_aggregation" in profile_kwargs and profile_kwargs["ppo_seed_aggregation"] not in PPO_SEED_AGGREGATIONS:
+        raise CampaignProfileError(
+            f"profile '{profile_name}' has unknown ppo_seed_aggregation "
+            f"{profile_kwargs['ppo_seed_aggregation']!r}; allowed: {sorted(PPO_SEED_AGGREGATIONS)}"
+        )
+
+
+def _profile_kwargs_for_task(profile_kwargs: dict, task: str) -> dict:
+    """Resolves PER_TASK_PROFILE_FIELDS' {task: value} mappings to the one
+    value for `task`; every other field passes through unchanged."""
+    return {k: (v[task] if k in PER_TASK_PROFILE_FIELDS and isinstance(v, dict) else v)
+            for k, v in profile_kwargs.items()}
+
+
+def check_ppo_seeds_supported(resolved: dict) -> None:
+    """Refuses any resolved (arm, task) config with ppo_seeds > 1 until the
+    evaluator consumes it -- see PpoSeedsNotImplementedError."""
+    over = sorted({(task, cfg.ppo_seeds) for (_, task), cfg in resolved.items() if cfg.ppo_seeds > 1})
+    if over:
+        raise PpoSeedsNotImplementedError(
+            f"ppo_seeds > 1 requested for {over}, but multi-seed PPO evaluation per genome is not "
+            "implemented yet (docs/decisions.md's D16 row). Refusing to run rather than silently "
+            "evaluating each genome once."
+        )
 
 
 class FastDevRealRunGuardError(RuntimeError):
@@ -291,7 +377,9 @@ class BenchmarkConfig:
         for what resolve_configs() actually applies to a resolved config."""
         if self.profile not in PROFILES:
             raise ValueError(f"unknown profile '{self.profile}'; available: {sorted(PROFILES)}")
-        return {**PROFILES[self.profile], **self.profile_overrides}
+        resolved = {**PROFILES[self.profile], **self.profile_overrides}
+        validate_profile(resolved, self.tasks, self.profile)
+        return resolved
 
     def applied_profile_kwargs(self) -> dict:
         """What resolve_configs() actually overrides on top of each arm's
@@ -423,7 +511,7 @@ def resolve_configs(bconfig: BenchmarkConfig) -> dict:
             path = bconfig.config_path(arm.encoder, task)
             config = ExperimentConfig.from_method_yaml(path)
             resolved[(arm.arm_id, task)] = dataclasses.replace(
-                config, seed=representative_seed, **profile_kwargs
+                config, seed=representative_seed, **_profile_kwargs_for_task(profile_kwargs, task)
             )
     return resolved
 
@@ -659,6 +747,10 @@ def run_benchmark(bconfig: BenchmarkConfig, dry_run: bool = False, allow_dirty: 
 
     # 1. Fairness check FIRST, before anything is run or written.
     resolved_configs = check_fairness(bconfig)
+    # 1b. D16's K > 1 is not consumed by the evaluator yet: refuse a real
+    # execution (a dry run evaluates nothing, so it may still project costs).
+    if not dry_run:
+        check_ppo_seeds_supported(resolved_configs)
 
     factors = ExperimentFactors(seed=0, **bconfig.factors)
     write_factors_json(bconfig.output_dir, factors, commit_hash, dirty_files)

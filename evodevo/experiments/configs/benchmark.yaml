@@ -1,6 +1,6 @@
-# The primary three-way comparison: direct vs. nca vs. rule_based, on
-# Walker-v0, mutation-only (use_crossover: false in configs/shared/base.yaml),
-# identical shared config across all three arms (enforced by
+# The primary four-arm comparison: direct vs. nca vs. rule_based vs. rule_based_monotone, on
+# Walker-v0 then UpStepper-v0 (D7), mutation-only (use_crossover: false in configs/shared/base.yaml),
+# identical shared config across all four arms (enforced by
 # evodevo.experiments.benchmark.check_fairness before anything runs).
 #
 # `factors` is the P1-P7 fairness-corrected primary configuration, applied
@@ -61,22 +61,20 @@
 # resolved_config.py::MONOTONE_ABLATION via benchmark.py's
 # _BUILTIN_ARM_DEFAULT_KWARGS, not hardcoded here -- see docs/decisions.md's
 # "Wire the resolved readout policy into the primary benchmark path" row.
-# PROFILE (evodevo/experiments/benchmark.py::PROFILES): this file currently
-# targets `fast_dev` -- ppo_timesteps=5000, population_size=15,
-# offspring_size=15, eval_budget=300, the SAME pipeline-validation-scale
-# placeholder this project has always used and disclosed (docs/decisions.md's
-# "Direct-encoding real-PPO baseline budget" row). It is NOT the scientific
-# comparison budget. Launching a REAL (non-surrogate) run against this file
-# as-is requires an explicit --i-know-this-is-fast-dev acknowledgement (see
-# FastDevRealRunGuardError) -- the guard exists specifically so this file is
-# never mistaken for launch-ready as-is. To run the actual primary matrix,
-# change `profile` to `primary_matrix` below AND supply profile_overrides
-# for population_size/offspring_size/eval_budget once that open scoping
-# decision is made (see docs/PRE_PARALLELIZATION_READINESS.md's "NOT
-# covered" section) -- do not guess a value here.
-profile: fast_dev
+# PROFILE (evodevo/experiments/benchmark.py::PROFILES): `campaign` -- the
+# final campaign design, every value ACCEPTED in docs/decisions.md on
+# 2026-09-27: population_size 15, offspring_size 15, eval_budget 300 (counted
+# in GENOMES), 5 seeds, these 4 arms, tasks Walker-v0 then UpStepper-v0 (D7
+# order), per-task ppo_timesteps (D6: Walker-v0 1,000,000, UpStepper-v0
+# 1,200,000), per-task ppo_seeds K (D16: Walker-v0 1, UpStepper-v0 2) with
+# ppo_seed_aggregation "max". K > 1 is refused with NotImplementedError until
+# the evaluator supports it (see benchmark.py::PpoSeedsNotImplementedError),
+# so this file cannot silently run UpStepper-v0 at K=1. The former `fast_dev`
+# targeting (5000-timestep pipeline-validation placeholder) remains available
+# via --profile fast_dev.
+profile: campaign
 encoders: [direct, nca, rule_based, {encoder: rule_based, variant: monotone}]
-tasks: [Walker-v0]
+tasks: [Walker-v0, UpStepper-v0]
 seeds: [0, 1, 2, 3, 4]
 configs_root: evodevo/experiments/configs
 output_dir: results/runs

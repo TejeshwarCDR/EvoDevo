@@ -8,7 +8,12 @@ from __future__ import annotations
 from evodevo.core.config import ExperimentConfig
 from evodevo.experiments.lock_hash import compute_lock_hash
 
-_PINNED_HASH = "78e865e0061b5e8ebca8020c62f5f8bffff125980a384d3696e34f70e7d3c226"
+# Re-pinned 2026-09-27: ExperimentConfig gained ppo_seeds/ppo_seed_aggregation
+# (D16), so to_dict() -- step 2 of the procedure -- now serializes two more
+# keys. The procedure itself is unchanged: hashing these same fixed configs
+# with those two keys dropped still reproduces the previous pin
+# 78e865e0061b5e8ebca8020c62f5f8bffff125980a384d3696e34f70e7d3c226 exactly.
+_PINNED_HASH = "dec52f1b5606d62cba7a785915c05eee32ba3886fe047362c129902322fed231"
 
 
 def _fixed_resolved_configs():

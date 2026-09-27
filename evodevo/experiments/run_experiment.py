@@ -130,6 +130,15 @@ def run_experiment(
     config_dict["seed"] = seed
     config_dict["grid_shape"] = tuple(config_dict["grid_shape"])
     config = ExperimentConfig(**config_dict)
+    if config.ppo_seeds > 1:
+        # D16 (docs/decisions.md, 2026-09-27): multi-seed PPO evaluation per
+        # genome is decided but not yet implemented in the evaluator. Refuse
+        # here -- the single entry point every run passes through -- rather
+        # than silently evaluating each genome once.
+        raise NotImplementedError(
+            f"ppo_seeds={config.ppo_seeds} (> 1) requested for {config.encoder}/{config.task}, but "
+            "multi-seed PPO evaluation per genome is not implemented yet; refusing to run as K=1."
+        )
 
     # Fold strategy into the output-dir tag so the default (strategy="ea")
     # keeps its exact pre-existing output path -- only a non-default

@@ -28,8 +28,16 @@ SHARED_BASE_KEYS = frozenset(
         "min_voxels",
         "min_actuators",
         "use_crossover",
+        "ppo_seeds",
+        "ppo_seed_aggregation",
     }
 )
+
+# How a genome's K per-seed PPO fitness values combine into its one fitness
+# (docs/decisions.md's 2026-09-27 D16 row). "max" is the campaign's primary
+# aggregation; "mean" is the pre-registered sensitivity analysis. Any other
+# name is rejected at construction time.
+PPO_SEED_AGGREGATIONS = frozenset({"max", "mean"})
 
 
 class ConfigOverrideError(ValueError):
@@ -59,6 +67,22 @@ class ExperimentConfig:
     # a follow-up (not part of this config/tooling-only change).
     min_voxels: int = 3
     min_actuators: int = 1
+    # D16 (docs/decisions.md, 2026-09-27): PPO trainings per genome (K) and how
+    # their fitness values combine. Defaults (K=1) are exactly today's
+    # single-evaluation behaviour. K > 1 is NOT yet consumed by the evaluator
+    # -- evodevo.experiments.run_experiment refuses it with NotImplementedError
+    # until that support lands, so a K=2 config can never silently run K=1.
+    ppo_seeds: int = 1
+    ppo_seed_aggregation: str = "max"
+
+    def __post_init__(self) -> None:
+        if isinstance(self.ppo_seeds, bool) or not isinstance(self.ppo_seeds, int) or self.ppo_seeds < 1:
+            raise ValueError(f"ppo_seeds must be an integer >= 1, got {self.ppo_seeds!r}")
+        if self.ppo_seed_aggregation not in PPO_SEED_AGGREGATIONS:
+            raise ValueError(
+                f"unknown ppo_seed_aggregation {self.ppo_seed_aggregation!r}; "
+                f"allowed: {sorted(PPO_SEED_AGGREGATIONS)}"
+            )
 
     @classmethod
     def from_yaml(cls, path: str) -> "ExperimentConfig":

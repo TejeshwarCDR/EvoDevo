@@ -14,3 +14,7 @@ cache_enabled: false
 min_voxels: 3
 min_actuators: 1
 use_crossover: false
+# D16: PPO trainings per genome (K) and their aggregation. K=1 here; the
+# `campaign` profile (evodevo/experiments/benchmark.py) sets K per task.
+ppo_seeds: 1
+ppo_seed_aggregation: max

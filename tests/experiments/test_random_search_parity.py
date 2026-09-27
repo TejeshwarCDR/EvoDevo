@@ -44,6 +44,11 @@ def test_random_search_resolved_kwargs_match_ea_for_every_real_benchmark_arm():
         bconfig = dataclasses.replace(
             real_bconfig,
             seeds=[0],
+            # Walker-v0 only: the real benchmark.yaml's campaign profile sets
+            # UpStepper-v0 to ppo_seeds=2, which run_benchmark refuses until
+            # multi-seed evaluation exists (PpoSeedsNotImplementedError). This
+            # test checks per-arm kwargs parity, which is task-independent.
+            tasks=["Walker-v0"],
             strategies=["ea", "random_search"],
             output_dir=output_dir,
             surrogate=True,
