@@ -33,6 +33,19 @@ CONTROLS AGAINST CONFOUNDS, EXPLICITLY:
     and package temperature is recorded at the START and END of each
     level, so sustained heat carried over from one level into the next is
     visible rather than silently blended into the next level's numbers.
+  - A discarded WARM-UP level (--sweep-warm-up, default on) runs once,
+    BEFORE the timed/shuffled sweep, at min(levels) -- excluded from
+    level_records/optimum/knee/the figure entirely, recorded only as
+    warm_up_record for transparency. Shuffling controls for "is this a
+    concurrency effect or a time-of-day effect"; it does NOT control for
+    "is this the very first real-PPO evaluation this process tree has ever
+    run" (page cache not yet populated for torch/numpy/evogym's shared
+    libraries, CPU frequency not yet ramped from any preceding idle
+    period) -- every level in a shuffled order still benefits equally from
+    whichever level happened to go first having already paid that one-time
+    cost, so a discarded warm-up (not "run level 1 an extra time and keep
+    it") is what actually removes the confound rather than just
+    relabelling it.
 
 This stage does NOT assume the answer. Nowhere in this module is 20 or 28
 (this machine's all-physical/all-logical core counts) treated as the
@@ -59,12 +72,44 @@ from evodevo.preflight.telemetry import (
 )
 
 DEFAULT_LEVELS = (8, 12, 16, 20, 24, 28)
-DEFAULT_N_GENOMES = 24
+# D13 fix: raised from 24 -> 120 after diagnosing the original run's
+# anomaly (level 8 at 43.3 genomes/min vs. levels 12-28 all clustering
+# near 22-26 genomes/min, wall-clock LONGER at higher concurrency for a
+# fixed 24-genome workload). Instrumented directly (see
+# docs/PREFLIGHT_B2_ANOMALY.md / the D13 fix commit): pool-startup+import
+# overhead was NOT the cause -- measured at <2.1s absolute and <3.5% of
+# any level's wall_clock_s even at n_genomes=24. The real cause is this
+# machine's hybrid P/E-core topology (8 P-cores, 12 E-cores):
+# allocation_order() starts assigning E-core workers at level 12, and a
+# real, identically-configured 20000-timestep PPO evaluation measured
+# 2.14x SLOWER on an E-core than a P-core (28.9s vs 62.0s). With only 24
+# genomes spread across up to 28 workers, a single valid genome landing on
+# an E-core worker becomes a straggler the whole level waits on -- that's
+# a small-sample tail-latency effect, not a steady-state throughput
+# measurement. 120 genomes gives every worker >=4 draws even at the
+# highest level (120/28 ~ 4.3), so bin-packing approaches steady state
+# (total_work / aggregate_rate) instead of being dominated by whichever
+# single worker drew the unluckiest task; genomes_per_minute then reflects
+# what the real campaign would actually sustain at that concurrency,
+# rather than the completion time of one straggler chain. 120 keeps a
+# clean round-robin split across the 4 registered arms (30 each).
+DEFAULT_N_GENOMES = 120
 DEFAULT_TIMESTEPS = 20000
 DEFAULT_COOLDOWN_S = 60.0
 DEFAULT_TOLERANCE = 0.05
 DEFAULT_TASK = "Walker-v0"
 DEFAULT_TASK_TIMEOUT_S = 300.0
+# A discarded warm-up level, run ONCE before the timed/randomised sweep
+# and excluded from every metric (level_records, optimum, knee) -- removes
+# a residual confound this stage's shuffled-order design does not already
+# control for: the very FIRST real-PPO evaluation this process tree ever
+# runs pays a one-time cold-start cost (page cache not yet populated for
+# torch/numpy/evogym's shared libraries, CPU frequency not yet ramped up
+# from any preceding idle period) that every SUBSEQUENT level benefits
+# from regardless of visit order. Shuffling controls for "is this a
+# concurrency effect or a time-of-day effect"; it does NOT control for "is
+# this the very first level run at all" -- only a discarded warm-up does.
+DEFAULT_WARM_UP = True
 
 # evodevo/experiments/configs/shared/base.yaml's ppo_eval_episodes=1 -- a
 # SHARED_BASE_KEYS field that does NOT vary between the fast_dev/
@@ -414,6 +459,8 @@ class ConcurrencySweepStage:
         workload_seed: int = 0,
         evaluator_mode: str = "real",
         self_check_stamp: Optional[str] = None,
+        warm_up: bool = DEFAULT_WARM_UP,
+        warm_up_level: Optional[int] = None,
     ):
         if order not in VALID_ORDERS:
             raise ValueError(f"order must be one of {VALID_ORDERS}, got {order!r}")
@@ -438,6 +485,13 @@ class ConcurrencySweepStage:
         # this stage's JSON output and figure title so nobody mistakes the
         # trivial-settings self-check run for a real B2 measurement.
         self.self_check_stamp = self_check_stamp
+        # D13 fix: run one discarded warm-up level before the timed,
+        # shuffled sweep -- see DEFAULT_WARM_UP's own docstring for why
+        # shuffling alone doesn't control for this. warm_up_level=None
+        # defaults to min(levels) at run() time (the cheapest level to pay
+        # the one-time warm-up cost at).
+        self.warm_up = warm_up
+        self.warm_up_level = warm_up_level
 
     def run(self, ctx) -> dict:
         from evodevo.parallel.worker_pool import EvaluationTask
@@ -462,6 +516,15 @@ class ConcurrencySweepStage:
             self.name, "measurement",
             {"visit_order": visit_order, "workload_hash": workload_hash_value, "n_genomes": self.n_genomes},
         )
+
+        warm_up_record = None
+        if self.warm_up:
+            warm_up_level = self.warm_up_level if self.warm_up_level is not None else min(self.levels)
+            ctx.events.record(self.name, "measurement", {"warm_up_level_start": warm_up_level})
+            warm_up_record = _run_level(ctx, warm_up_level, eval_tasks, self.task_timeout_s, self.evaluator_mode)
+            ctx.events.record(self.name, "measurement", {"warm_up_level_done": warm_up_record})
+            if self.cooldown_s > 0:
+                time.sleep(self.cooldown_s)
 
         level_records = []
         for i, level in enumerate(visit_order):
@@ -507,6 +570,14 @@ class ConcurrencySweepStage:
             "cooldown_s": self.cooldown_s,
             "tolerance": self.tolerance,
             "boundaries": boundaries,
+            # Run once (at warm_up_level) and discarded BEFORE the timed
+            # sweep below -- excluded from level_records/optimum/knee/the
+            # figure. Present here only for transparency (so a reader can
+            # see the warm-up actually happened and roughly how costly it
+            # was), never as a 7th data point.
+            "warm_up": self.warm_up,
+            "warm_up_level": warm_up_record["level"] if warm_up_record else None,
+            "warm_up_record": warm_up_record,
             "levels": level_records,
             "optimum_level": optimum_and_knee["optimum_level"],
             "optimum_throughput_genomes_per_minute": optimum_and_knee["optimum_throughput"],

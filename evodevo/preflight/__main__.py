@@ -123,6 +123,7 @@ SELF_CHECK_OVERRIDES = {
     "sweep_genomes": 2,
     "sweep_timesteps": 500,
     "sweep_cooldown_s": 0.0,
+    "sweep_warm_up": False,
     "cost_reps": 1,
     "ppo_timesteps": 500,
     "cost_max_draws": 200,
@@ -219,6 +220,7 @@ def build_registry(args: argparse.Namespace, self_check_stamp: Optional[str] = N
             order=args.sweep_order,
             cooldown_s=args.sweep_cooldown_s,
             tolerance=args.sweep_tolerance,
+            warm_up=args.sweep_warm_up,
             # evaluator_mode intentionally NOT exposed as a CLI flag here -- see module docstring.
             self_check_stamp=self_check_stamp,
         )
@@ -429,8 +431,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="[B2] comma-separated worker counts to sweep (default: %(default)s)",
     )
     parser.add_argument(
-        "--sweep-genomes", type=int, default=24,
-        help="[B2] number of genomes in the fixed workload every level evaluates (default: %(default)s)",
+        "--sweep-genomes", type=int, default=120,
+        help="[B2] number of genomes in the fixed workload every level evaluates -- raised from the "
+        "original 24 after the D13 fix: 24 was too few relative to worker count once this "
+        "machine's E-cores enter the pool (level 12+), so a single straggler genome dominated a "
+        "level's wall-clock instead of measuring steady-state throughput; see b2_sweep.py's "
+        "DEFAULT_N_GENOMES docstring (default: %(default)s)",
     )
     parser.add_argument(
         "--sweep-timesteps", type=int, default=20000,
@@ -450,6 +456,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--sweep-tolerance", type=float, default=0.05,
         help="[B2] relative throughput tolerance (fraction) defining the 'knee' concurrency level "
         "(default: %(default)s)",
+    )
+    parser.add_argument(
+        "--sweep-warm-up", dest="sweep_warm_up", action="store_true", default=True,
+        help="[B2] D13 fix: run one discarded warm-up level (at the smallest --sweep-levels entry) "
+        "before the timed/shuffled sweep, to absorb the one-time cold-cache/cold-CPU-frequency "
+        "cost that shuffling alone does not control for (default: on)",
+    )
+    parser.add_argument(
+        "--no-sweep-warm-up", dest="sweep_warm_up", action="store_false",
+        help="[B2] disable the discarded warm-up level (see --sweep-warm-up)",
     )
     parser.add_argument(
         "--concurrency", type=int, default=None,

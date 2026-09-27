@@ -230,6 +230,51 @@ def test_b2_runs_with_surrogate_evaluator_and_produces_a_complete_result_and_fig
     assert reloaded["optimum_level"] == result["optimum_level"]
 
 
+def test_b2_default_n_genomes_is_120_not_24():
+    """D13 fix regression: 24 was too few relative to worker count once
+    E-cores enter the pool at level 12+ (see DEFAULT_N_GENOMES's own
+    docstring) -- a single straggler genome could dominate a level's
+    wall-clock instead of measuring steady-state throughput."""
+    from evodevo.preflight.stages.b2_sweep import DEFAULT_N_GENOMES
+
+    assert DEFAULT_N_GENOMES == 120
+    stage = ConcurrencySweepStage()
+    assert stage.n_genomes == 120
+
+
+def test_b2_warm_up_runs_once_discarded_and_is_excluded_from_levels(tmp_path):
+    ctx = _make_ctx(tmp_path)
+    stage = ConcurrencySweepStage(
+        levels=[1, 2], n_genomes=4, timesteps=0, cooldown_s=0,
+        evaluator_mode="surrogate", warm_up=True,
+    )
+
+    result = stage.run(ctx)
+
+    assert result["warm_up"] is True
+    assert result["warm_up_level"] == min(stage.levels)
+    assert result["warm_up_record"] is not None
+    assert result["warm_up_record"]["level"] == min(stage.levels)
+    # The warm-up must never appear among the timed/measured levels.
+    assert len(result["levels"]) == 2
+    assert {r["level"] for r in result["levels"]} == {1, 2}
+
+
+def test_b2_warm_up_disabled_when_requested(tmp_path):
+    ctx = _make_ctx(tmp_path)
+    stage = ConcurrencySweepStage(
+        levels=[1, 2], n_genomes=4, timesteps=0, cooldown_s=0,
+        evaluator_mode="surrogate", warm_up=False,
+    )
+
+    result = stage.run(ctx)
+
+    assert result["warm_up"] is False
+    assert result["warm_up_level"] is None
+    assert result["warm_up_record"] is None
+    assert len(result["levels"]) == 2
+
+
 def test_b2_ascending_order_visits_levels_in_order(tmp_path):
     ctx = _make_ctx(tmp_path)
     stage = ConcurrencySweepStage(
