@@ -23,3 +23,6 @@ external/evogym/
 # Agent tooling scratch state (isolated worktrees created by coding-agent
 # sessions), not project source.
 .claude/
+
+# Campaign-prep measurement output (P1/P2 prompts): generated, not source.
+results/campaign_prep/
