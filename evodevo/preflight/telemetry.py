@@ -88,6 +88,103 @@ def read_cpu_package_temp_c() -> Optional[float]:
     return None
 
 
+# Fallback critical/Tjmax threshold, ONLY used when the platform's own
+# sensor exposes neither .critical nor .high (see
+# read_cpu_package_temp_critical_c()) -- a generic, conservative value for
+# modern Intel parts. This project's own target machine reports a real
+# coretemp .critical of 100.0 via psutil, so this constant is a last
+# resort, not the primary source of truth.
+FALLBACK_CRITICAL_TEMP_C = 100.0
+
+# How far below the critical/Tjmax threshold a measured temperature must
+# still be to rule OUT genuine thermal throttling -- see
+# thermal_throttle_is_genuine()'s own docstring for why this margin exists
+# at all (kernel's package_throttle_count conflates true over-temperature
+# throttling with RAPL power/current-limit throttling, which asserts the
+# SAME hardware "Thermal Status" bit under ordinary sustained multi-core
+# load, nowhere near Tjmax).
+DEFAULT_THROTTLE_TEMP_MARGIN_C = 15.0
+
+
+def read_cpu_package_temp_critical_c() -> Optional[float]:
+    """The critical/Tjmax threshold for the SAME sensor entry
+    read_cpu_package_temp_c() reads its current value from (mirrors that
+    function's own package/coretemp preference order exactly, so the two
+    are always talking about the same physical sensor) -- psutil exposes
+    this as shwtemp.critical for platforms that report it (this project's
+    own target machine reports 100.0 C via its 'coretemp' / 'Package id 0'
+    entry). Falls back to shwtemp.high (a lower, non-critical warning
+    threshold some platforms report instead), then to None if the
+    platform's sensor exposes neither -- callers combine None with
+    FALLBACK_CRITICAL_TEMP_C rather than treating it as an error, since a
+    missing critical-temp reading must never take down a run any more than
+    a missing current-temp reading does (see this module's own docstring)."""
+    import psutil
+
+    temps = psutil.sensors_temperatures()
+    if not temps:
+        return None
+    entry = None
+    if "coretemp" in temps:
+        for candidate in temps["coretemp"]:
+            if "package" in (candidate.label or "").lower():
+                entry = candidate
+                break
+        if entry is None and temps["coretemp"]:
+            entry = temps["coretemp"][0]
+    if entry is None:
+        for entries in temps.values():
+            if entries:
+                entry = entries[0]
+                break
+    if entry is None:
+        return None
+    return entry.critical if entry.critical is not None else entry.high
+
+
+def thermal_throttle_is_genuine(
+    counter_incremented: bool,
+    max_temp_c: Optional[float],
+    critical_temp_c: Optional[float],
+    margin_c: float = DEFAULT_THROTTLE_TEMP_MARGIN_C,
+) -> Optional[bool]:
+    """Whether a kernel-reported thermal_throttle_count increment (see
+    read_thermal_throttle_count()) reflects GENUINE over-temperature
+    throttling, rather than the identical hardware "Thermal Status" bit
+    being asserted by RAPL power/current-limit enforcement under ordinary
+    sustained multi-core load -- both conditions increment the SAME sysfs
+    counter (/sys/.../thermal_throttle/package_throttle_count), and Linux
+    does not expose them separately without an MSR read (IA32_PACKAGE_
+    THERM_STATUS bit 10, "Power Limitation Status", vs. bit 0, "Thermal
+    Status") which requires root and is not available in every deployment.
+
+    Empirically diagnosed on this project's own target machine: B2's D13
+    "throttled": true fired at EVERY concurrency level, including package
+    temperatures of 40-55C -- nowhere near this machine's own measured
+    critical/Tjmax of 100C (read_cpu_package_temp_critical_c()) -- while
+    the counter itself incremented by thousands of brief (~ms-scale, see
+    package_throttle_total_time_ms / package_throttle_count) events under
+    any sustained heavy multi-core load, even well below Tjmax. That
+    pattern -- frequent, brief events, far from Tjmax -- is the signature
+    of power/current-limit throttling, not overheating.
+
+    Only returns True when the counter incremented AND the measured
+    temperature was genuinely close (within `margin_c`) to the real
+    critical/Tjmax threshold -- i.e. a throttle event that temperature
+    alone can plausibly explain. Returns False (not throttled) the moment
+    counter_incremented is False, regardless of temperature. Returns None
+    only when the counter DID increment but no temperature reading exists
+    to correlate against -- "unknown", never silently coerced to True or
+    False, consistent with every other sensor in this module degrading to
+    None rather than guessing (see the module docstring)."""
+    if not counter_incremented:
+        return False
+    if max_temp_c is None:
+        return None
+    threshold = (critical_temp_c if critical_temp_c is not None else FALLBACK_CRITICAL_TEMP_C) - margin_c
+    return max_temp_c >= threshold
+
+
 def read_thermal_throttle_count() -> Optional[int]:
     """A single point-in-time cumulative thermal-throttle event count
     (Linux's own /sys/.../thermal_throttle/package_throttle_count

@@ -6,9 +6,10 @@ import time
 
 import pytest
 
-from evodevo.preflight.telemetry import TelemetrySampler
+from evodevo.preflight.telemetry import FALLBACK_CRITICAL_TEMP_C, TelemetrySampler
 from evodevo.preflight.telemetry import percentile as _percentile
 from evodevo.preflight.telemetry import stats as _stats
+from evodevo.preflight.telemetry import thermal_throttle_is_genuine
 
 
 def test_percentile_and_stats_helpers():
@@ -115,6 +116,47 @@ def test_sampler_degrades_gracefully_when_sensors_raise(tmp_path, monkeypatch):
     # Every OTHER metric must still be recorded -- one dead sensor must not
     # take the rest of the sampler down with it.
     assert any(s["ram_used_mb"] is not None for s in samples)
+
+
+def test_throttle_flag_false_when_counter_did_not_increment():
+    """No kernel throttle event was even logged -- must be False
+    regardless of temperature (including a temperature right at Tjmax)."""
+    assert thermal_throttle_is_genuine(False, max_temp_c=99.0, critical_temp_c=100.0) is False
+    assert thermal_throttle_is_genuine(False, max_temp_c=None, critical_temp_c=100.0) is False
+
+
+def test_throttle_flag_false_at_low_temperature_even_if_counter_incremented():
+    """Regression test for the real D13 bug: package_throttle_count
+    incremented at EVERY concurrency level in the actual preflight run,
+    including package temperatures as low as 40-55C -- nowhere near any
+    real Intel thermal limit (~100C). That pattern is RAPL power/current-
+    limit throttling (normal under sustained multi-core load), not
+    overheating, and must not be reported as "throttled": true."""
+    assert thermal_throttle_is_genuine(True, max_temp_c=40.0, critical_temp_c=100.0) is False
+    assert thermal_throttle_is_genuine(True, max_temp_c=55.0, critical_temp_c=100.0) is False
+    assert thermal_throttle_is_genuine(True, max_temp_c=77.0, critical_temp_c=100.0) is False
+
+
+def test_throttle_flag_true_only_when_counter_incremented_near_the_real_limit():
+    """A genuine throttle event: the counter incremented AND the measured
+    temperature was actually close to the real critical/Tjmax threshold."""
+    assert thermal_throttle_is_genuine(True, max_temp_c=96.0, critical_temp_c=100.0) is True
+    assert thermal_throttle_is_genuine(True, max_temp_c=100.0, critical_temp_c=100.0) is True
+    # Just outside the default margin (15C) -- still not close enough to
+    # count as a genuine thermal event.
+    assert thermal_throttle_is_genuine(True, max_temp_c=84.0, critical_temp_c=100.0) is False
+
+
+def test_throttle_flag_falls_back_to_default_critical_temp_when_sensor_has_none():
+    threshold = FALLBACK_CRITICAL_TEMP_C - 15.0
+    assert thermal_throttle_is_genuine(True, max_temp_c=threshold - 1.0, critical_temp_c=None) is False
+    assert thermal_throttle_is_genuine(True, max_temp_c=threshold + 1.0, critical_temp_c=None) is True
+
+
+def test_throttle_flag_unknown_when_counter_incremented_but_no_temperature_reading():
+    """Degrades to None (unknown), never silently guessed True or False --
+    same discipline as every other sensor in this module."""
+    assert thermal_throttle_is_genuine(True, max_temp_c=None, critical_temp_c=100.0) is None
 
 
 def test_sampler_warns_only_once_per_metric(tmp_path, monkeypatch):

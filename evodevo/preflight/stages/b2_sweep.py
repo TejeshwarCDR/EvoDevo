@@ -50,7 +50,13 @@ import random
 import time
 from typing import Optional
 
-from evodevo.preflight.telemetry import read_cpu_package_temp_c, read_thermal_throttle_count, stats
+from evodevo.preflight.telemetry import (
+    read_cpu_package_temp_c,
+    read_cpu_package_temp_critical_c,
+    read_thermal_throttle_count,
+    stats,
+    thermal_throttle_is_genuine,
+)
 
 DEFAULT_LEVELS = (8, 12, 16, 20, 24, 28)
 DEFAULT_N_GENOMES = 24
@@ -244,9 +250,19 @@ def _run_level(ctx, level: int, eval_tasks: list, timeout_s: float, evaluator_mo
         cpu_percent_mean = telemetry_summary["cpu_percent_overall"]["mean"]
         cpu_percent_max = telemetry_summary["cpu_percent_overall"]["max"]
 
+    critical_temp = read_cpu_package_temp_critical_c()
     throttled = None
+    throttle_counter_incremented = None
     if throttle_start is not None and throttle_end is not None:
-        throttled = throttle_end > throttle_start
+        throttle_counter_incremented = throttle_end > throttle_start
+        max_temp = max((t for t in (temp_start, temp_end) if t is not None), default=None)
+        # See telemetry.thermal_throttle_is_genuine's own docstring: the
+        # raw counter alone conflates genuine over-temperature throttling
+        # with RAPL power/current-limit throttling, which fires the same
+        # sysfs counter under ordinary sustained multi-core load nowhere
+        # near this machine's real Tjmax -- correlate against measured
+        # temperature before calling it "throttled".
+        throttled = thermal_throttle_is_genuine(throttle_counter_incremented, max_temp, critical_temp)
 
     return {
         "level": level,
@@ -264,6 +280,8 @@ def _run_level(ctx, level: int, eval_tasks: list, timeout_s: float, evaluator_mo
         "cpu_percent_max": cpu_percent_max,
         "package_temp_start_c": temp_start,
         "package_temp_end_c": temp_end,
+        "package_temp_critical_c": critical_temp,
+        "throttle_counter_incremented": throttle_counter_incremented,
         "throttled": throttled,
         "peak_rss_mb": pool_stats["peak_rss_mb_aggregate"],
         "workers_restarted": pool_stats["workers_restarted"],
