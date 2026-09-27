@@ -19,9 +19,12 @@ from evodevo.preflight.stages.b4_learning_curves import LearningCurvesStage, sel
 from evodevo.preflight.stages.b5_noise import EvaluationNoiseStage
 from evodevo.preflight.stages.b6_projection import (
     D14_OPTIONS,
+    MEASURED_PE_RATIO,
     ProjectionStage,
     _build_projection_table,
     _expected_cost_per_eval_range,
+    _mixed_core_hours,
+    _pe_worker_split,
 )
 from evodevo.preflight.stages.b7_reliability import ReliabilityStage, _classify_error
 
@@ -284,24 +287,41 @@ def test_expected_cost_per_eval_range_matches_hand_computed_example():
 def test_projection_wall_clock_matches_hand_computed_example():
     """population=10, generations=5, seeds=2 -> evaluations_per_seed=50,
     total_evaluations=100. cost_per_eval_mean=11 (from the fixture above).
-    concurrency folded into overhead_factor=4.0 (perfect 4x scaling
-    assumed for this hand-computed check) -> parallel_s = 100*11/4 = 275s
-    = 275/3600 h."""
+
+    NAIVE column (legacy, unchanged): concurrency folded into
+    overhead_factor=4.0 (perfect 4x scaling assumed) -> parallel_s =
+    100*11/4 = 275s = 275/3600 h.
+
+    CORRECTED column (D13 follow-up fix, P/E-aware): 3 P-core workers at
+    t_p=11s/eval, 1 E-core worker at t_e=11*2=22s/eval (pe_ratio=2.0) ->
+    aggregate_rate = 3/11 + 1/22 evaluations/s -> hours =
+    (100/aggregate_rate)/3600."""
     cost_ranges = {("direct", "Walker-v0"): {"low": 6.0, "mean": 11.0, "high": 16.0}}
+    pe_split = {"n_p_workers": 3, "n_e_workers": 1}
+    pe_ratio = 2.0
     rows = _build_projection_table(
         populations=[10], generations=[5], seeds_list=[2], arms=["direct"], tasks=["Walker-v0"],
-        cost_ranges=cost_ranges, overhead_factor=4.0,
+        cost_ranges=cost_ranges, overhead_factor=4.0, pe_split=pe_split, pe_ratio=pe_ratio,
     )
     assert len(rows) == 1
     row = rows[0]
     assert row["evaluations_per_seed"] == 50
     assert row["total_evaluations"] == 100
-    expected_mean_hours = (100 * 11.0 / 4.0) / 3600.0
-    assert math.isclose(row["wall_clock_hours_mean"], expected_mean_hours, rel_tol=1e-9)
-    expected_low_hours = (100 * 6.0 / 4.0) / 3600.0
-    expected_high_hours = (100 * 16.0 / 4.0) / 3600.0
-    assert math.isclose(row["wall_clock_hours_low"], expected_low_hours, rel_tol=1e-9)
-    assert math.isclose(row["wall_clock_hours_high"], expected_high_hours, rel_tol=1e-9)
+
+    expected_naive_mean_hours = (100 * 11.0 / 4.0) / 3600.0
+    assert math.isclose(row["wall_clock_hours_naive_mean"], expected_naive_mean_hours, rel_tol=1e-9)
+    expected_naive_low_hours = (100 * 6.0 / 4.0) / 3600.0
+    expected_naive_high_hours = (100 * 16.0 / 4.0) / 3600.0
+    assert math.isclose(row["wall_clock_hours_naive_low"], expected_naive_low_hours, rel_tol=1e-9)
+    assert math.isclose(row["wall_clock_hours_naive_high"], expected_naive_high_hours, rel_tol=1e-9)
+
+    for label, cost in (("low", 6.0), ("mean", 11.0), ("high", 16.0)):
+        aggregate_rate = 3 / cost + 1 / (cost * pe_ratio)
+        expected_corrected_hours = (100 / aggregate_rate) / 3600.0
+        assert math.isclose(row[f"wall_clock_hours_{label}"], expected_corrected_hours, rel_tol=1e-9)
+    # The corrected figure must be WORSE (larger) than a naive estimate
+    # that pretends the E-core worker is P-core-fast.
+    assert row["wall_clock_hours_mean"] > (100 * 11.0 / 4.0) / 3600.0
 
 
 def test_b6_runs_end_to_end_and_produces_markdown_csv_and_figure(tmp_path):
@@ -373,6 +393,67 @@ def test_b6_never_selects_or_ranks_a_configuration(tmp_path):
     # the CLI's OWN order, never re-sorted by wall-clock cost).
     assert [r["population_size"] for r in result["rows"]] == [30, 30, 10, 10]
     assert [r["arm"] for r in result["rows"]] == ["nca", "direct", "nca", "direct"]
+
+
+# --- P/E-core-aware throughput model (D13 follow-up fix) ------------------
+
+
+def test_pe_worker_split_matches_cpu_slots_allocation():
+    """_pe_worker_split must never hand-derive the P/E split -- it has to
+    come from the SAME cpu_slots()/allocation_order() the real pool uses,
+    so the projection and the real launcher can never disagree."""
+    from evodevo.parallel.topology import cpu_slots
+
+    topology = detect_topology()
+    concurrency = min(topology.logical_count, 6)
+    plan = cpu_slots(topology, concurrency)
+    e_ids = set(topology.e_core_ids)
+    expected_n_e = sum(1 for slot in plan.slots if slot[0] in e_ids)
+
+    pe_split = _pe_worker_split(topology, concurrency)
+    assert pe_split["n_e_workers"] == expected_n_e
+    assert pe_split["n_p_workers"] + pe_split["n_e_workers"] == concurrency
+
+
+def test_mixed_core_hours_hand_computed_weighted_harmonic():
+    """4 P-core workers at 10s/eval, 2 E-core workers at 25s/eval, 100
+    evaluations total. aggregate_rate = 4/10 + 2/25 = 0.4 + 0.08 = 0.48
+    evaluations/s -> hours = (100/0.48)/3600."""
+    hours = _mixed_core_hours(total_evaluations=100, p_cost_s=10.0, e_cost_s=25.0, n_p_workers=4, n_e_workers=2)
+    expected = (100 / (4 / 10.0 + 2 / 25.0)) / 3600.0
+    assert math.isclose(hours, expected, rel_tol=1e-9)
+    # Sanity: strictly worse than if all 6 workers were P-core-fast.
+    all_p_core_hours = (100 * 10.0 / 6) / 3600.0
+    assert hours > all_p_core_hours
+
+
+def test_mixed_core_hours_with_zero_e_workers_is_pure_p_core_rate():
+    hours = _mixed_core_hours(total_evaluations=100, p_cost_s=10.0, e_cost_s=25.0, n_p_workers=4, n_e_workers=0)
+    expected = (100 * 10.0 / 4) / 3600.0
+    assert math.isclose(hours, expected, rel_tol=1e-9)
+
+
+def test_b6_pe_model_reduces_to_p_core_only_formula_at_or_below_p_core_boundary():
+    """Step 1e's correctness invariant: for any concurrency where
+    cpu_slots() places every worker on a P-core (or an unclassified core
+    on a non-hybrid machine -- see _pe_worker_split's own docstring), the
+    corrected mixed-rate model must reduce EXACTLY to the old P-core-only
+    formula (total_evaluations * p_cost_s / concurrency), not an
+    approximation of it."""
+    topology = detect_topology()
+    p_core_boundary = sum(1 for c in topology.cores if c.kind == "P" and c.is_physical_primary) or topology.logical_count
+    total_evaluations = 750
+    p_cost_s = 27.9
+    e_cost_s = p_cost_s * MEASURED_PE_RATIO
+
+    for concurrency in range(1, min(p_core_boundary, 8) + 1):
+        pe_split = _pe_worker_split(topology, concurrency)
+        assert pe_split["n_e_workers"] == 0, f"concurrency={concurrency} unexpectedly included an E-core worker"
+        corrected_hours = _mixed_core_hours(
+            total_evaluations, p_cost_s, e_cost_s, pe_split["n_p_workers"], pe_split["n_e_workers"]
+        )
+        expected_hours = (total_evaluations * p_cost_s / concurrency) / 3600.0
+        assert math.isclose(corrected_hours, expected_hours, rel_tol=1e-9)
 
 
 def test_b6_d14_options_cover_the_five_named_items():

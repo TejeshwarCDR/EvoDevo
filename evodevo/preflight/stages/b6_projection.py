@@ -39,6 +39,7 @@ import csv
 import os
 from typing import Optional
 
+from evodevo.parallel.topology import cpu_slots
 from evodevo.preflight.run_dir import read_json
 
 DEFAULT_POPULATIONS = (15,)
@@ -70,6 +71,50 @@ D14_OPTIONS = (
     {"name": "direct_repaired_arm", "description": "Add a hypothetical 'direct_repaired' arm to the arm list -- one more arm in the cross product.", "extra_arms": 1},
     {"name": "nca_compact_arm", "description": "Add a hypothetical 'nca_compact' arm to the arm list -- one more arm in the cross product.", "extra_arms": 1},
     {"name": "larger_timestep_budget", "description": "Double ppo_timesteps from the B3-measured baseline -- roughly doubles t_PPO, and therefore roughly doubles wall-clock.", "multiplier": 2.0},
+)
+
+# D13 follow-up fix (the P/E-core bias in this stage's wall-clock model):
+# B3's t_PPO was measured entirely on P-cores -- at concurrency=8,
+# cpu_slots()/allocation_order() (evodevo.parallel.topology) assign every
+# worker to a P-core physical primary on this machine's hybrid 8P/12E
+# topology, so B3 never exercised an E-core at all. A projection run at
+# any concurrency ABOVE the P-core boundary (e.g. 20, this run's own
+# corrected B2 knee) therefore cannot assume every worker is as fast as a
+# P-core -- see _pe_worker_split()/_mixed_core_hours() below for the
+# corrected model, and the module docstring's new "P/E-core bias" section
+# for why this matters.
+#
+# MEASURED_PE_RATIO's source (do not replace with a fresh literal without
+# updating this citation): a direct, targeted single-task probe, NOT
+# derived from B2's sweep throughput (that number is pool-aggregate,
+# confounded by workload mix and scheduling). Raw measurement persisted at
+# results/preflight/20260922T122730Z_4be8402b/pe_core_ratio_measurement.json.
+# Methodology: a 1-worker EvaluationPool (mode="real") pinned first to
+# cpu_id=0 (a P-core physical primary) then to cpu_id=16 (an E-core),
+# given the SAME identical valid 'nca' genome, ppo_timesteps=20000
+# (b2_sweep.DEFAULT_TIMESTEPS -- a PROBE-scale budget, NOT the campaign's
+# real ~1,000,000-timestep t_PPO; see the provenance file's own "caveat"
+# field for why extrapolating this ratio to full-length PPO training is an
+# approximation, not a certainty):
+#   P-core wall_clock_s = 28.925267219543457
+#   E-core wall_clock_s = 62.014686822891235
+#   ratio (E/P)          = 2.1439624516585556
+#
+# CORROBORATED (not superseded) at PRODUCTION scale: a direct follow-up
+# measurement at the campaign's real ppo_timesteps=1,000,000 (n=3 per core
+# class, one genome each from direct/nca/rule_based, reused from B3's own
+# evaluation_cost.json observations) found ratio_e_over_p=2.31715026119251
+# -- an 8.08% difference from this probe-scale value, within the ~15%
+# agreement threshold used to decide this ratio was fit for use, so
+# MEASURED_PE_RATIO below was deliberately left unchanged. See
+# results/preflight/20260922T122730Z_4be8402b/pe_core_ratio_measurement_
+# production_scale.json for the full raw measurement.
+MEASURED_PE_RATIO = 62.014686822891235 / 28.925267219543457
+MEASURED_PE_RATIO_SOURCE = (
+    "results/preflight/20260922T122730Z_4be8402b/pe_core_ratio_measurement.json -- single-task probe, "
+    "P-core (cpu 0) vs E-core (cpu 16), identical valid nca genome, ppo_timesteps=20000 "
+    "(b2_sweep.DEFAULT_TIMESTEPS, not the campaign's real t_PPO budget): "
+    "28.925267219543457s (P) vs 62.014686822891235s (E)"
 )
 
 
@@ -159,7 +204,120 @@ def _measured_overhead_factor(b2_output: dict, concurrency: int) -> dict:
     }
 
 
-def _build_projection_table(populations, generations, seeds_list, arms, tasks, cost_ranges, overhead_factor) -> list:
+def _pe_worker_split(topology, concurrency: int) -> dict:
+    """How many of `concurrency` workers land on P-cores vs E-cores --
+    via cpu_slots()/allocation_order() (evodevo.parallel.topology), the
+    EXACT SAME functions the real EvaluationPool (and the B2 sweep) use to
+    place workers, never hand-derived here: this projection and the real
+    launcher must never be able to disagree about which cores get used.
+
+    n_p_workers counts every worker NOT confirmed to be an E-core (i.e.
+    "P-core or unclassified"), not just cores explicitly kind=="P" --
+    on a non-hybrid machine (topology.e_core_ids empty, every core
+    kind=="unknown"), B3's own t_PPO measurement was ALSO taken on
+    "unclassified" cores via this exact same allocation order, so treating
+    them as the same speed class B3 measured is the self-consistent
+    default, not an optimistic guess. Only cores this machine's own
+    detection affirmatively classifies as "E" get the measured slowdown."""
+    plan = cpu_slots(topology, concurrency)
+    e_ids = set(topology.e_core_ids)
+    n_e = sum(1 for slot in plan.slots if slot[0] in e_ids)
+    n_p = len(plan.slots) - n_e
+    return {
+        "concurrency": concurrency,
+        "n_p_workers": n_p,
+        "n_e_workers": n_e,
+        "oversubscribed": plan.oversubscribed,
+    }
+
+
+def _mixed_core_hours(
+    total_evaluations: int,
+    p_cost_s: Optional[float],
+    e_cost_s: Optional[float],
+    n_p_workers: int,
+    n_e_workers: int,
+) -> Optional[float]:
+    """Wall-clock HOURS for `total_evaluations` independent evaluations run
+    across a MIXED pool of n_p_workers P-core workers (each completing one
+    evaluation every p_cost_s seconds) and n_e_workers E-core workers (one
+    every e_cost_s seconds) -- a workers-in-parallel throughput model, NOT
+    a simple average of the two per-core times:
+
+        aggregate_rate (evaluations/second) = n_p_workers / p_cost_s
+                                             + n_e_workers / e_cost_s
+        hours = (total_evaluations / aggregate_rate) / 3600
+
+    Every P-core worker and every E-core worker is assumed to run
+    continuously and independently (no cross-worker contention beyond
+    what's already implicit in B3's own per-core-class measurement) --
+    this is the SAME idealised full-parallelism assumption the old
+    concurrency-only divisor already made, just no longer pretending every
+    worker is P-core-fast.
+
+    INVARIANT (see test_b6_pe_model_reduces_to_p_core_only_formula_*):
+    when n_e_workers == 0 (concurrency at or below this machine's P-core
+    boundary, so cpu_slots() never assigns an E-core), this reduces
+    EXACTLY to total_evaluations * p_cost_s / n_p_workers -- the old
+    P-core-only formula -- since the second term of aggregate_rate drops
+    out entirely."""
+    if p_cost_s is None or p_cost_s <= 0:
+        return None
+    rate = 0.0
+    if n_p_workers > 0:
+        rate += n_p_workers / p_cost_s
+    if n_e_workers > 0 and e_cost_s is not None and e_cost_s > 0:
+        rate += n_e_workers / e_cost_s
+    if rate <= 0:
+        return None
+    return (total_evaluations / rate) / 3600.0
+
+
+def _build_pe_core_bias_summary(baseline_row: Optional[dict], rows: list) -> dict:
+    """Step 2 of the D13 follow-up fix: makes the SIZE of the P/E-core
+    correction visible in the report itself, not just applied silently --
+    naive (uniform P-core-speed) vs. corrected (mixed-rate) wall-clock,
+    side by side, for the reference cell and for the full campaign total
+    (sum of every row), with the percentage difference. This is the number
+    that shows how wrong the PREVIOUS projection.md for this run actually
+    was (it used the naive figures as if they were final)."""
+
+    def _pct(naive, corrected):
+        if naive is None or corrected is None or naive == 0:
+            return None
+        return (corrected - naive) / naive * 100.0
+
+    reference_cell = None
+    if baseline_row is not None:
+        naive_h = baseline_row.get("wall_clock_hours_naive_mean")
+        corrected_h = baseline_row.get("wall_clock_hours_mean")
+        reference_cell = {
+            "arm": baseline_row.get("arm"),
+            "task": baseline_row.get("task"),
+            "naive_hours": naive_h,
+            "corrected_hours": corrected_h,
+            "delta_hours": (corrected_h - naive_h) if (naive_h is not None and corrected_h is not None) else None,
+            "pct_difference": _pct(naive_h, corrected_h),
+        }
+
+    campaign_total = None
+    if rows:
+        naive_vals = [r["wall_clock_hours_naive_mean"] for r in rows if r.get("wall_clock_hours_naive_mean") is not None]
+        corrected_vals = [r["wall_clock_hours_mean"] for r in rows if r.get("wall_clock_hours_mean") is not None]
+        if naive_vals and corrected_vals:
+            naive_total = sum(naive_vals)
+            corrected_total = sum(corrected_vals)
+            campaign_total = {
+                "naive_hours": naive_total,
+                "corrected_hours": corrected_total,
+                "delta_hours": corrected_total - naive_total,
+                "pct_difference": _pct(naive_total, corrected_total),
+            }
+
+    return {"reference_cell": reference_cell, "campaign_total": campaign_total}
+
+
+def _build_projection_table(populations, generations, seeds_list, arms, tasks, cost_ranges, overhead_factor, pe_split, pe_ratio) -> list:
     """The full cross product, in a FIXED deterministic order (population,
     generations, seeds, arm, task) -- never sorted by cost, never
     annotated with a preferred row. evaluations_per_seed = population_size
@@ -168,6 +326,8 @@ def _build_projection_table(populations, generations, seeds_list, arms, tasks, c
     offspring_size/eval_budget accounting is D15's own open question, not
     reintroduced here."""
     rows = []
+    n_p_workers = pe_split["n_p_workers"]
+    n_e_workers = pe_split["n_e_workers"]
     for population in populations:
         for gens in generations:
             for seeds in seeds_list:
@@ -188,21 +348,38 @@ def _build_projection_table(populations, generations, seeds_list, arms, tasks, c
                             "cost_per_eval_mean_s": cost_range["mean"] if cost_range else None,
                             "cost_per_eval_high_s": cost_range["high"] if cost_range else None,
                             "overhead_factor": overhead_factor,
+                            "n_p_workers": n_p_workers,
+                            "n_e_workers": n_e_workers,
+                            "pe_ratio": pe_ratio,
                         }
                         for label, key in (("low", "cost_per_eval_low_s"), ("mean", "cost_per_eval_mean_s"), ("high", "cost_per_eval_high_s")):
-                            cost = row[key]
-                            if cost is None:
+                            p_cost = row[key]
+                            if p_cost is None:
+                                row[f"wall_clock_hours_naive_{label}"] = None
                                 row[f"wall_clock_hours_{label}"] = None
-                            else:
-                                serial_s = total_evaluations * cost
-                                # overhead_factor here already folds in concurrency
-                                # (see caller): parallel_s = serial_s / (concurrency * factor).
-                                # No flooring at 1.0 -- a genuinely poor
-                                # realised-throughput factor must make the
-                                # projection WORSE than naive serial, not
-                                # silently clip back to "no worse than serial".
-                                parallel_s = serial_s / overhead_factor if overhead_factor > 0 else serial_s
-                                row[f"wall_clock_hours_{label}"] = parallel_s / 3600.0
+                                continue
+
+                            # NAIVE (legacy, kept only for the Step 2
+                            # side-by-side comparison -- see
+                            # _build_pe_core_bias_summary()): assumes every
+                            # worker runs at P-core speed uniformly,
+                            # regardless of how many are actually E-cores.
+                            # No flooring at 1.0 -- a genuinely poor
+                            # realised-throughput factor must make the
+                            # projection WORSE than naive serial, not
+                            # silently clip back to "no worse than serial".
+                            serial_s = total_evaluations * p_cost
+                            naive_parallel_s = serial_s / overhead_factor if overhead_factor > 0 else serial_s
+                            row[f"wall_clock_hours_naive_{label}"] = naive_parallel_s / 3600.0
+
+                            # CORRECTED (primary, D13 follow-up fix): an
+                            # explicit P/E-aware mixed-rate model -- see
+                            # MEASURED_PE_RATIO's own citation and
+                            # _mixed_core_hours()'s docstring.
+                            e_cost = p_cost * pe_ratio
+                            row[f"wall_clock_hours_{label}"] = _mixed_core_hours(
+                                total_evaluations, p_cost, e_cost, n_p_workers, n_e_workers
+                            )
                         rows.append(row)
     return rows
 
@@ -237,6 +414,7 @@ def _build_d14_deltas(baseline_row: dict, concurrency: int, overhead_factor: flo
 
 def _write_markdown(
     path: str, rows: list, validity_sources: dict, overhead: dict, concurrency: int, deltas: list, baseline_row: dict,
+    pe_split: dict, pe_ratio: float, pe_ratio_source: str, pe_core_bias: dict,
     self_check_stamp: Optional[str] = None,
 ) -> None:
     lines = []
@@ -249,7 +427,17 @@ def _write_markdown(
         f"Every wall-clock figure below is a RANGE (low/mean/high hours), derived from B3's own "
         f"measured t_PPO spread (min/mean/max), never a single point estimate -- see D11's own "
         f"identical discipline for the campaign ETA. Concurrency: {concurrency} (B2's measured knee "
-        f"unless overridden). Overhead factor applied: {overhead['factor']:.3f} ({overhead['source']})."
+        f"unless overridden), split across {pe_split['n_p_workers']} P-core and {pe_split['n_e_workers']} "
+        f"E-core workers (via cpu_slots()/allocation_order(), the same placement the real pool uses). "
+        f"Overhead factor applied to the naive column only: {overhead['factor']:.3f} ({overhead['source']})."
+    )
+    lines.append("")
+    lines.append(
+        "**Wall-clock below is the P/E-CORE-CORRECTED figure** (D13 follow-up fix) -- it accounts for "
+        f"this machine's hybrid P/E-core topology using a measured P-core-vs-E-core speed ratio of "
+        f"{pe_ratio:.4f}x ({pe_ratio_source}), NOT a uniform-worker-speed assumption. See the "
+        "'P/E-core correction: naive vs. corrected' section below for exactly how large that correction "
+        "is."
     )
     lines.append("")
     lines.append("**This table does not pick a configuration.** It is the full candidate grid, in a fixed "
@@ -266,6 +454,37 @@ def _write_markdown(
             f"{row['total_evaluations']} | {fmt(row['wall_clock_hours_low'])} | {fmt(row['wall_clock_hours_mean'])} | "
             f"{fmt(row['wall_clock_hours_high'])} |"
         )
+    lines.append("")
+    lines.append("## P/E-core correction: naive vs. corrected")
+    lines.append("")
+    lines.append(
+        "B3's t_PPO was measured entirely on P-cores (at concurrency=8, cpu_slots() puts every worker "
+        "on a P-core physical primary on this machine). The PREVIOUS projection.md for this run "
+        f"projected wall-clock at concurrency={concurrency} assuming every worker ran at that P-core "
+        f"speed -- but {pe_split['n_p_workers']} of those {pe_split['n_p_workers'] + pe_split['n_e_workers']} "
+        f"workers are actually E-cores, measured {pe_ratio:.4f}x slower ({pe_ratio_source}). The table "
+        "below is the size of that error: 'naive' is the old uniform-speed figure, 'corrected' is the "
+        "P/E-aware mixed-rate model now used everywhere else in this document."
+    )
+    lines.append("")
+    lines.append("| scope | naive (h) | corrected (h) | delta (h) | % difference |")
+    lines.append("|---|---|---|---|---|")
+
+    def _fmt_bias_row(label: str, entry: Optional[dict]) -> str:
+        if entry is None:
+            return f"| {label} | n/a | n/a | n/a | n/a |"
+        naive = f"{entry['naive_hours']:.2f}" if entry.get("naive_hours") is not None else "n/a"
+        corrected = f"{entry['corrected_hours']:.2f}" if entry.get("corrected_hours") is not None else "n/a"
+        delta = f"{entry['delta_hours']:+.2f}" if entry.get("delta_hours") is not None else "n/a"
+        pct = f"{entry['pct_difference']:+.1f}%" if entry.get("pct_difference") is not None else "n/a"
+        return f"| {label} | {naive} | {corrected} | {delta} | {pct} |"
+
+    reference_cell = pe_core_bias.get("reference_cell")
+    ref_label = "reference cell"
+    if reference_cell:
+        ref_label = f"reference cell ({reference_cell.get('arm')}, {reference_cell.get('task')})"
+    lines.append(_fmt_bias_row(ref_label, reference_cell))
+    lines.append(_fmt_bias_row("full campaign total (sum of every row above)", pe_core_bias.get("campaign_total")))
     lines.append("")
     lines.append("## Per-arm validity rate provenance (already measured, not re-measured here)")
     lines.append("")
@@ -304,7 +523,13 @@ def _write_csv(path: str, rows: list) -> None:
     fieldnames = [
         "population_size", "generations", "seeds", "arm", "task", "evaluations_per_seed",
         "total_evaluations", "cost_per_eval_low_s", "cost_per_eval_mean_s", "cost_per_eval_high_s",
-        "overhead_factor", "wall_clock_hours_low", "wall_clock_hours_mean", "wall_clock_hours_high",
+        "overhead_factor", "n_p_workers", "n_e_workers", "pe_ratio",
+        # wall_clock_hours_* is the P/E-CORRECTED figure (primary, D13
+        # follow-up fix); wall_clock_hours_naive_* is the legacy
+        # uniform-worker-speed figure, kept for the same naive-vs-corrected
+        # comparison projection.md's own "P/E-core correction" section makes.
+        "wall_clock_hours_low", "wall_clock_hours_mean", "wall_clock_hours_high",
+        "wall_clock_hours_naive_low", "wall_clock_hours_naive_mean", "wall_clock_hours_naive_high",
     ]
     with open(path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -377,8 +602,13 @@ class ProjectionStage:
             overhead = {"factor": self.overhead, "source": "explicit --proj-overhead override"}
         else:
             overhead = _measured_overhead_factor(b2_output, concurrency)
-        # Fold concurrency into the single divisor _build_projection_table applies.
+        # Fold concurrency into the single divisor _build_projection_table applies
+        # for the legacy NAIVE column only -- see MEASURED_PE_RATIO's own citation
+        # for why the PRIMARY (corrected) wall-clock no longer uses this divisor.
         effective_overhead = concurrency * overhead["factor"]
+        # D13 follow-up fix: how many of `concurrency` workers actually land on
+        # P-cores vs E-cores, via the SAME allocation logic the real pool uses.
+        pe_split = _pe_worker_split(ctx.topology, concurrency)
 
         validity_rates, validity_sources = _load_validity_rates()
 
@@ -401,11 +631,13 @@ class ProjectionStage:
             validity_sources.setdefault(arm, {})["valid_rate"] = validity_rates.get(arm)
 
         rows = _build_projection_table(
-            self.populations, self.generations, self.seeds, self.arms, self.tasks, cost_ranges, effective_overhead
+            self.populations, self.generations, self.seeds, self.arms, self.tasks, cost_ranges, effective_overhead,
+            pe_split, MEASURED_PE_RATIO,
         )
 
         baseline_row = rows[0] if rows else None
         deltas = _build_d14_deltas(baseline_row, concurrency, overhead["factor"]) if baseline_row else []
+        pe_core_bias = _build_pe_core_bias_summary(baseline_row, rows)
 
         report_dir = ctx.run_dir.report_dir
         md_path = os.path.join(report_dir, "projection.md")
@@ -414,6 +646,7 @@ class ProjectionStage:
 
         _write_markdown(
             md_path, rows, validity_sources, overhead, concurrency, deltas, baseline_row or {},
+            pe_split, MEASURED_PE_RATIO, MEASURED_PE_RATIO_SOURCE, pe_core_bias,
             self_check_stamp=self.self_check_stamp,
         )
         _write_csv(csv_path, rows)
@@ -434,6 +667,13 @@ class ProjectionStage:
         return {
             "concurrency_used": concurrency,
             "overhead": overhead,
+            # D13 follow-up fix: the P/E-aware mixed-core throughput model's
+            # own inputs/outputs, so a reader of the JSON (not just
+            # projection.md) can see the correction and its provenance.
+            "pe_split": pe_split,
+            "pe_ratio": MEASURED_PE_RATIO,
+            "pe_ratio_source": MEASURED_PE_RATIO_SOURCE,
+            "pe_core_bias": pe_core_bias,
             "validity_rates": {arm: validity_sources.get(arm, {}).get("valid_rate") for arm in self.arms},
             "validity_sources": validity_sources,
             "cost_per_eval_ranges": {f"{arm}::{task}": r for (arm, task), r in cost_ranges.items()},

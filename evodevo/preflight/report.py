@@ -85,9 +85,24 @@ def _regenerate_b6_artifacts(run_dir: RunDir, data: dict) -> dict:
 
     rows = data.get("rows", [])
     baseline_row = rows[0] if rows else {}
+    # pe_split/pe_ratio/pe_core_bias (D13 follow-up fix) are absent from any
+    # projection.json written before that fix (e.g. runs predating it, which
+    # this module must still be able to regenerate a report for -- see this
+    # module's own docstring on running against any point in time). Fall
+    # back to "every worker treated as P-core, no correction" -- exactly
+    # that legacy run's own original naive assumption -- rather than
+    # crashing on a missing key.
+    concurrency_used = data.get("concurrency_used")
+    pe_split = data.get("pe_split") or {
+        "concurrency": concurrency_used, "n_p_workers": concurrency_used, "n_e_workers": 0, "oversubscribed": False,
+    }
+    pe_ratio = data.get("pe_ratio", 1.0)
+    pe_ratio_source = data.get("pe_ratio_source", "not recorded in this run's projection.json (predates the P/E-core fix)")
+    pe_core_bias = data.get("pe_core_bias") or {"reference_cell": None, "campaign_total": None}
     _write_markdown(
         md_path, rows, data.get("validity_sources", {}), data.get("overhead", {}),
-        data.get("concurrency_used"), data.get("d14_deltas", []), baseline_row,
+        concurrency_used, data.get("d14_deltas", []), baseline_row,
+        pe_split, pe_ratio, pe_ratio_source, pe_core_bias,
         self_check_stamp=data.get("self_check_stamp"),
     )
     _write_csv(csv_path, rows)
