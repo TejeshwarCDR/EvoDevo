@@ -85,11 +85,17 @@ and compare before citing any result as reproducible:
 python -m evodevo.experiments.lock_hash --config evodevo/experiments/configs/benchmark.yaml
 ```
 
-Current value (`fast_dev` profile, as of 2026-09-19, commit `bbe54c6`):
+Current value (`campaign` profile, as of 2026-09-27, commit `c7172d1`; re-locked after the
+campaign decisions in `docs/decisions.md`: 4 arms x 2 tasks, per-task `ppo_timesteps`
+1,000,000 / 1,200,000, per-task `ppo_seeds` 1 / 2, `ppo_seed_aggregation` max,
+population 15, offspring 15, `eval_budget` 300):
 
 ```
-c1685531d6e6543215b012b204d820c15e1a9284bbd6b0097cdc01aa1224f7ed
+e5c2aa7547d4e08e6e0dad9e57f5a6e928355b3c671606d867f7709b404af638
 ```
+
+Previous value (`fast_dev` profile, 2026-09-19, commit `bbe54c6`; Walker-v0 only, 4 arms):
+`c1685531d6e6543215b012b204d820c15e1a9284bbd6b0097cdc01aa1224f7ed`.
 
 This is **not the same value** as either historical hash recorded in earlier
 revisions of this document (`7e93f59a...`, `56b3ed67...`) — both were
@@ -97,8 +103,8 @@ computed against configurations that have since changed (the shared
 `dev_steps` alone moved `39 -> 40 -> 100` across the T_primary corrections;
 see `docs/decisions.md`). Any future change to `eval_budget`,
 `ppo_timesteps`, `population_size`, `offspring_size`, `sentinel_fitness`,
-`min_voxels`, `min_actuators`, `use_crossover`, `dev_steps`, or
-`init_condition` invalidates the value above — re-run the command, don't
+`min_voxels`, `min_actuators`, `use_crossover`, `ppo_seeds`,
+`ppo_seed_aggregation`, `dev_steps`, or `init_condition` invalidates the value above — re-run the command, don't
 assume it still matches.
 
 ## Test suite
