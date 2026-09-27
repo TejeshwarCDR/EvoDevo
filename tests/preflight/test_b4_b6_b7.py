@@ -463,6 +463,97 @@ def test_b6_d14_options_cover_the_five_named_items():
     }
 
 
+def test_b6_d14_options_produce_genuinely_different_deltas(tmp_path):
+    """Regression test for the D14 projection bug: every option used to
+    collapse to baseline_hours * 2.0 (all five identical, 2.91h/+1.45h
+    against ANY grid). Hand-computes two structurally different options
+    (more_seeds_5_to_10, a SINGLE-CELL seeds-axis change, vs
+    larger_timestep_budget, a SINGLE-CELL change that only scales t_PPO,
+    weighted by the reference arm's own validity_rate) against the
+    reference cell's own committed numbers, and checks they now differ."""
+    ctx = _make_ctx(tmp_path)
+    b2_output = {
+        "levels": [
+            {"level": 1, "genomes_per_minute": 100.0, "efficiency_genomes_per_minute_per_worker": 100.0},
+            {"level": 2, "genomes_per_minute": 150.0, "efficiency_genomes_per_minute_per_worker": 75.0},
+        ]
+    }
+    _mark_done(ctx, "concurrency_sweep", b2_output)
+    _mark_done(ctx, "evaluation_cost", _synthetic_b3_output(tasks=("Walker-v0",), concurrency=2))
+    _mark_done(ctx, "learning_curves", {})
+    _mark_done(ctx, "evaluation_noise", {})
+
+    stage = ProjectionStage(populations=[15], generations=[10], seeds=[5], arms=["direct", "nca"], tasks=["Walker-v0"])
+    result = stage.run(ctx)
+
+    deltas_by_name = {d["name"]: d for d in result["d14_deltas"]}
+
+    # None of the five may still collapse to one shared value -- the bug's
+    # own symptom (identical 2.91h / +1.45h everywhere).
+    new_hours_values = {d["new_hours"] for d in result["d14_deltas"]}
+    assert len(new_hours_values) > 1, "D14 options must not all collapse to the same new wall-clock"
+
+    # --- hand-computed reference cell: population=15, generations=10,
+    # seeds=5, arm="direct" (validity_rate=0.0215, the real committed
+    # results/inspection/direct/direct_sanity.json value), task="Walker-v0".
+    # cost_per_eval_mean = validity*t_ppo_mean + (1-validity)*t_sentinel_mean
+    #                    = 0.0215*0.02 + 0.9785*0.001 = 0.0014085
+    # total_evaluations = 15*10*5 = 750
+    #
+    # baseline_hours is the P/E-AWARE CORRECTED figure (D13 follow-up fix):
+    # at concurrency=2, cpu_slots() on this machine's own real topology
+    # places 2 workers via the exact same allocation logic the real pool
+    # uses -- reuse it here rather than assuming a P/E split by hand.
+    total_evaluations = 15 * 10 * 5
+    validity_direct = 0.0215
+    cost_per_eval_mean = validity_direct * 0.02 + (1 - validity_direct) * 0.001
+    pe_split = _pe_worker_split(detect_topology(), concurrency=2)
+    baseline_cell_hours = _mixed_core_hours(
+        total_evaluations, cost_per_eval_mean, cost_per_eval_mean * MEASURED_PE_RATIO,
+        pe_split["n_p_workers"], pe_split["n_e_workers"],
+    )
+    assert math.isclose(deltas_by_name["more_seeds_5_to_10"]["baseline_hours"], baseline_cell_hours, rel_tol=1e-9)
+
+    # more_seeds_5_to_10: doubles ONLY this cell's seeds axis (5 -> 10),
+    # so total_evaluations doubles and wall-clock exactly doubles.
+    expected_more_seeds_hours = baseline_cell_hours * 2.0
+    assert math.isclose(deltas_by_name["more_seeds_5_to_10"]["new_hours"], expected_more_seeds_hours, rel_tol=1e-9)
+    assert deltas_by_name["more_seeds_5_to_10"]["scope"] == "single_cell"
+
+    # larger_timestep_budget: doubles t_PPO ONLY (not t_sentinel), so the
+    # new cost_per_eval is validity*(t_ppo*2) + (1-validity)*t_sentinel --
+    # NOT a bare 2x of the cell, because most of direct's evaluations are
+    # invalid (validity_rate=0.0215) and pay t_sentinel, which does not
+    # grow with the timestep budget. Also P/E-aware, same pe_split.
+    expected_new_cost_per_eval = validity_direct * (0.02 * 2.0) + (1 - validity_direct) * 0.001
+    expected_timestep_hours = _mixed_core_hours(
+        total_evaluations, expected_new_cost_per_eval, expected_new_cost_per_eval * MEASURED_PE_RATIO,
+        pe_split["n_p_workers"], pe_split["n_e_workers"],
+    )
+    assert math.isclose(deltas_by_name["larger_timestep_budget"]["new_hours"], expected_timestep_hours, rel_tol=1e-9)
+    assert deltas_by_name["larger_timestep_budget"]["scope"] == "single_cell"
+
+    # The two options must now produce genuinely different deltas -- under
+    # the bug, both were baseline_hours * 2.0 and therefore identical.
+    assert not math.isclose(
+        deltas_by_name["more_seeds_5_to_10"]["delta_hours"],
+        deltas_by_name["larger_timestep_budget"]["delta_hours"],
+        rel_tol=1e-6,
+    )
+    # larger_timestep_budget's delta must be SMALLER than a bare doubling --
+    # direct's low validity_rate means most evaluations don't pay t_PPO at
+    # all, so growing the timestep budget barely moves the average cost.
+    assert deltas_by_name["larger_timestep_budget"]["delta_hours"] < deltas_by_name["more_seeds_5_to_10"]["delta_hours"]
+
+    # second_grid_size and the two new-arm options are CAMPAIGN-WIDE, not
+    # single-cell -- their baseline must be the full campaign total (sum of
+    # every row), not the one reference cell.
+    campaign_total_hours = sum(r["wall_clock_hours_mean"] for r in result["rows"])
+    for name in ("second_grid_size", "direct_repaired_arm", "nca_compact_arm"):
+        assert deltas_by_name[name]["scope"] == "campaign_total"
+        assert math.isclose(deltas_by_name[name]["baseline_hours"], campaign_total_hours, rel_tol=1e-9)
+
+
 # --- B7: reliability --------------------------------------------------------
 
 

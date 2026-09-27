@@ -73,6 +73,20 @@ D14_OPTIONS = (
     {"name": "larger_timestep_budget", "description": "Double ppo_timesteps from the B3-measured baseline -- roughly doubles t_PPO, and therefore roughly doubles wall-clock.", "multiplier": 2.0},
 )
 
+# For the two "add a hypothetical new arm" D14 options: neither
+# 'direct_repaired' nor 'nca_compact' has ever actually been measured (they
+# are hypothetical variants under consideration, not registered encoders --
+# see _load_validity_rates()'s docstring on which arms DO have real
+# measurements), so this stage costs them using their nearest already-
+# measured relative's own cost_per_eval as an explicitly-disclosed proxy,
+# rather than inventing a number. If either hypothetical arm is ever
+# actually implemented and measured, this mapping should be replaced by a
+# real cost_ranges[(arm, task)] entry for that arm instead.
+_D14_ARM_PROXY = {
+    "direct_repaired_arm": "direct",
+    "nca_compact_arm": "nca",
+}
+
 # D13 follow-up fix (the P/E-core bias in this stage's wall-clock model):
 # B3's t_PPO was measured entirely on P-cores -- at concurrency=8,
 # cpu_slots()/allocation_order() (evodevo.parallel.topology) assign every
@@ -384,29 +398,140 @@ def _build_projection_table(populations, generations, seeds_list, arms, tasks, c
     return rows
 
 
-def _build_d14_deltas(baseline_row: dict, concurrency: int, overhead_factor: float) -> list:
-    """Explicit wall-clock deltas for each named D14 option, against ONE
-    reference cell (the smallest supplied grid point -- a reference point
-    for comparison, never a recommendation; see module docstring)."""
+def _build_d14_deltas(
+    baseline_row: dict,
+    rows: list,
+    cost_ranges: dict,
+    t_ppo_stats_by_arm_task: dict,
+    t_sentinel_mean_by_arm: dict,
+    validity_rates: dict,
+    pe_split: dict,
+    pe_ratio: float,
+) -> list:
+    """Explicit wall-clock deltas for each named D14 option -- each option
+    is modeled according to WHAT it structurally changes, not by applying
+    the same multiplier to the same single cell (that was the bug: every
+    option previously collapsed to baseline_hours * 2.0, see git history /
+    D14 fix commit):
+
+      - more_seeds_5_to_10, larger_timestep_budget: SINGLE-CELL changes.
+        Only the reference (arm, task) cell is affected, so the delta is
+        against that cell's own wall_clock_hours_mean.
+          * seeds simply multiplies total_evaluations for that cell.
+          * timesteps scales t_PPO only (not t_sentinel -- an invalid
+            body's sentinel-fitness early exit doesn't run PPO longer just
+            because the budget grew), re-deriving cost_per_eval from
+            validity_rate * (t_ppo * multiplier) + (1 - validity_rate) *
+            t_sentinel, so the delta's SIZE correctly depends on that arm's
+            own validity_rate (a low-validity arm barely moves; a
+            high-validity arm moves close to the full 2x).
+
+      - second_grid_size, direct_repaired_arm, nca_compact_arm:
+        CAMPAIGN-WIDE changes. None of these affect only the reference
+        cell -- a second grid size reruns the WHOLE existing cross product
+        again, and a new arm adds ITS OWN total cost across the relevant
+        tasks. Both are deltas against the CAMPAIGN TOTAL (sum of every
+        row's wall_clock_hours_mean), not the single reference cell --
+        "add that arm/grid's own total cost to the campaign total, not
+        double an unrelated single cell."
+
+    Each returned dict carries "scope" ("single_cell" or "campaign_total")
+    so a reader knows which baseline a given delta is measured against.
+    """
+    # baseline_row/rows' own wall_clock_hours_mean is already the
+    # CORRECTED (P/E-aware) figure -- see _build_projection_table() -- so
+    # every delta below inherits the correction automatically wherever it
+    # is computed from those fields; only the two branches that derive a
+    # brand-new hours figure from scratch (larger_timestep_budget,
+    # extra_arms) need to call _mixed_core_hours() explicitly themselves.
+    baseline_cell_hours = baseline_row.get("wall_clock_hours_mean") if baseline_row else None
+    campaign_total_hours = None
+    if rows:
+        hours = [r["wall_clock_hours_mean"] for r in rows if r.get("wall_clock_hours_mean") is not None]
+        if hours:
+            campaign_total_hours = sum(hours)
+
+    n_p_workers = pe_split["n_p_workers"]
+    n_e_workers = pe_split["n_e_workers"]
+
     deltas = []
-    baseline_hours = baseline_row.get("wall_clock_hours_mean")
     for option in D14_OPTIONS:
-        if baseline_hours is None:
-            deltas.append({**option, "baseline_hours": None, "new_hours": None, "delta_hours": None})
+        if baseline_row is None or baseline_cell_hours is None:
+            deltas.append({**option, "scope": None, "baseline_hours": None, "new_hours": None, "delta_hours": None})
             continue
+
         if "to_value" in option:
+            scope = "single_cell"
             factor = option["to_value"] / baseline_row["seeds"]
+            baseline_hours = baseline_cell_hours
+            new_hours = baseline_cell_hours * factor
+
+        elif option["name"] == "larger_timestep_budget":
+            scope = "single_cell"
+            baseline_hours = baseline_cell_hours
+            arm, task = baseline_row["arm"], baseline_row["task"]
+            t_ppo_stats = t_ppo_stats_by_arm_task.get((arm, task), {})
+            t_sentinel_mean = t_sentinel_mean_by_arm.get(arm)
+            validity = validity_rates.get(arm)
+            t_ppo_mean = t_ppo_stats.get("mean")
+            if validity is None or t_ppo_mean is None or t_sentinel_mean is None:
+                new_hours = None
+            else:
+                new_p_cost_per_eval_mean = validity * (t_ppo_mean * option["multiplier"]) + (1 - validity) * t_sentinel_mean
+                new_e_cost_per_eval_mean = new_p_cost_per_eval_mean * pe_ratio
+                total_evaluations = baseline_row["total_evaluations"]
+                new_hours = _mixed_core_hours(
+                    total_evaluations, new_p_cost_per_eval_mean, new_e_cost_per_eval_mean, n_p_workers, n_e_workers
+                )
+
+        elif option["name"] == "second_grid_size":
+            # Adds one more full copy of the campaign total (a second grid
+            # size means re-running the ENTIRE existing cross product
+            # again at that size), not a multiple of one cell.
+            scope = "campaign_total"
+            baseline_hours = campaign_total_hours
+            new_hours = campaign_total_hours * option["multiplier"] if campaign_total_hours is not None else None
+
         elif "extra_arms" in option:
-            factor = (1 + option["extra_arms"]) / 1  # this option adds arms alongside a 1-arm reference cell
+            # Adds the new arm's OWN total cost (priced via its proxy arm,
+            # see _D14_ARM_PROXY) across every task this projection
+            # actually costed, at the reference cell's own population /
+            # generations / seeds -- added ON TOP of the campaign total,
+            # never multiplying an existing unrelated cell.
+            scope = "campaign_total"
+            baseline_hours = campaign_total_hours
+            proxy_arm = _D14_ARM_PROXY[option["name"]]
+            tasks_costed = sorted({task for (_arm, task) in cost_ranges})
+            new_arm_total_hours = 0.0
+            proxy_missing = False
+            for task in tasks_costed:
+                cost_range = cost_ranges.get((proxy_arm, task))
+                if cost_range is None:
+                    proxy_missing = True
+                    continue
+                total_evaluations = baseline_row["evaluations_per_seed"] * baseline_row["seeds"]
+                p_cost_mean = cost_range["mean"]
+                e_cost_mean = p_cost_mean * pe_ratio
+                task_hours = _mixed_core_hours(total_evaluations, p_cost_mean, e_cost_mean, n_p_workers, n_e_workers)
+                new_arm_total_hours += task_hours if task_hours is not None else 0.0
+            if campaign_total_hours is None or proxy_missing or not tasks_costed:
+                new_hours = None
+            else:
+                new_hours = campaign_total_hours + new_arm_total_hours
+
         else:
-            factor = option.get("multiplier", 1.0)
-        new_hours = baseline_hours * factor
+            scope = "single_cell"
+            baseline_hours = baseline_cell_hours
+            new_hours = baseline_cell_hours * option.get("multiplier", 1.0)
+
+        delta_hours = (new_hours - baseline_hours) if (new_hours is not None and baseline_hours is not None) else None
         deltas.append(
             {
                 **option,
+                "scope": scope,
                 "baseline_hours": baseline_hours,
                 "new_hours": new_hours,
-                "delta_hours": new_hours - baseline_hours,
+                "delta_hours": delta_hours,
             }
         )
     return deltas
@@ -503,16 +628,25 @@ def _write_markdown(
     lines.append("")
     baseline_hours = baseline_row.get("wall_clock_hours_mean")
     baseline_hours_str = f"{baseline_hours:.4f}" if baseline_hours is not None else "n/a"
-    lines.append(f"## D14 option costs (deltas against the reference cell: population={baseline_row['population_size']}, "
+    lines.append(f"## D14 option costs (population={baseline_row['population_size']}, "
                   f"generations={baseline_row['generations']}, seeds={baseline_row['seeds']}, arm={baseline_row['arm']}, "
-                  f"task={baseline_row['task']}, {baseline_hours_str} h)")
+                  f"task={baseline_row['task']}, reference cell = {baseline_hours_str} h)")
     lines.append("")
-    lines.append("| option | description | new wall-clock (mean h) | delta (h) |")
-    lines.append("|---|---|---|---|")
+    lines.append(
+        "Each option's baseline/delta is measured against the scope that option actually changes -- "
+        "`single_cell` options (seeds, timestep budget) change only the reference cell above; "
+        "`campaign_total` options (a new grid size, a new arm) add their own cost on top of the FULL "
+        "campaign total (the sum of every row in the table above), since they don't affect the "
+        "reference cell in isolation."
+    )
+    lines.append("")
+    lines.append("| option | description | scope | baseline (mean h) | new wall-clock (mean h) | delta (h) |")
+    lines.append("|---|---|---|---|---|---|")
     for d in deltas:
+        baseline_h = f"{d['baseline_hours']:.2f}" if d.get("baseline_hours") is not None else "n/a"
         new_h = f"{d['new_hours']:.2f}" if d["new_hours"] is not None else "n/a"
         delta_h = f"{d['delta_hours']:+.2f}" if d["delta_hours"] is not None else "n/a"
-        lines.append(f"| {d['name']} | {d['description']} | {new_h} | {delta_h} |")
+        lines.append(f"| {d['name']} | {d['description']} | {d.get('scope') or 'n/a'} | {baseline_h} | {new_h} | {delta_h} |")
     lines.append("")
 
     with open(path, "w") as f:
@@ -613,15 +747,19 @@ class ProjectionStage:
         validity_rates, validity_sources = _load_validity_rates()
 
         cost_ranges = {}
+        t_ppo_stats_by_arm_task = {}
+        t_sentinel_mean_by_arm = {}
         for arm in self.arms:
             arm_data = b3_output.get("arms", {}).get(arm)
             if not arm_data:
                 continue
             t_sentinel_stats = arm_data.get("t_sentinel", {})
+            t_sentinel_mean_by_arm[arm] = t_sentinel_stats.get("mean")
             for task in self.tasks:
                 task_data = arm_data.get("tasks", {}).get(task)
                 if not task_data:
                     continue
+                t_ppo_stats_by_arm_task[(arm, task)] = task_data.get("t_ppo", {})
                 cost_range = _expected_cost_per_eval_range(validity_rates.get(arm), task_data.get("t_ppo", {}), t_sentinel_stats)
                 if cost_range is not None:
                     cost_ranges[(arm, task)] = cost_range
@@ -636,7 +774,14 @@ class ProjectionStage:
         )
 
         baseline_row = rows[0] if rows else None
-        deltas = _build_d14_deltas(baseline_row, concurrency, overhead["factor"]) if baseline_row else []
+        deltas = (
+            _build_d14_deltas(
+                baseline_row, rows, cost_ranges, t_ppo_stats_by_arm_task, t_sentinel_mean_by_arm,
+                validity_rates, pe_split, MEASURED_PE_RATIO,
+            )
+            if baseline_row
+            else []
+        )
         pe_core_bias = _build_pe_core_bias_summary(baseline_row, rows)
 
         report_dir = ctx.run_dir.report_dir
