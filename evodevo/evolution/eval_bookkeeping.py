@@ -118,9 +118,6 @@ class EvaluationTracker:
         self._current_generation_records: list = []
 
     def evaluate(self, genome: np.ndarray, parent_id: Optional[int], generation: int) -> Individual:
-        genome_id = self.next_genome_id
-        self.next_genome_id += 1
-
         body = self.encoder.decode(genome)
 
         cache_hit = False
@@ -143,6 +140,30 @@ class EvaluationTracker:
             )
             if self.cache is not None:
                 self.cache.put(result.body_hash, result)
+
+        return self.record_result(
+            genome, parent_id, generation, result, body=body, cache_hit=cache_hit,
+        )
+
+    def record_result(
+        self,
+        genome: np.ndarray,
+        parent_id: Optional[int],
+        generation: int,
+        result,
+        *,
+        body: np.ndarray,
+        cache_hit: bool = False,
+    ) -> Individual:
+        """Record an already-obtained evaluation result.
+
+        This is the non-evaluating half of :meth:`evaluate`.  It lets a
+        search strategy propose a complete batch before an external caller
+        evaluates it, while retaining the one shared implementation of
+        counters, records, cache-hit accounting, and logging.
+        """
+        genome_id = self.next_genome_id
+        self.next_genome_id += 1
 
         # evals_spent (evaluations_used) is incremented unconditionally --
         # this is THE budget-governing counter, identical semantics for

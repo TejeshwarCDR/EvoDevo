@@ -27,6 +27,9 @@ class EvalResult:
     reason: Optional[str]
     wall_clock_s: float
     body_hash: str
+    # Assigned by the proposal dispatcher before EvolutionRun.tell(); the
+    # evaluator itself deliberately remains unaware of EA ordering.
+    eval_index: Optional[int] = None
 
 
 @dataclass
