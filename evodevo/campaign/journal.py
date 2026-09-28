@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import asdict
 
 
@@ -23,7 +24,7 @@ class ResultJournal:
         self.append({"run_key": task.run_key, "generation": task.generation,
                      "genome_id": task.genome_id, "eval_index": task.eval_index,
                      "ppo_k": task.ppo_k, "genome_hash": genome_hash,
-                     "result": asdict(result)})
+                     "completed_at": time.time(), "result": asdict(result)})
 
     def records(self):
         if not os.path.exists(self.path):

@@ -25,7 +25,10 @@ from evodevo.parallel.affinity import pin_current_process
 from evodevo.parallel.topology import allocation_order, cpu_slots, detect_topology
 
 from .checkpoint import write_checkpoint
+from .alerts import AlertManager
 from .journal import ResultJournal
+from .milestone import run_subprocess
+from .mirror import sync
 
 
 def genome_hash(encoder, genome) -> str:
@@ -35,11 +38,14 @@ def genome_hash(encoder, genome) -> str:
 
 class CampaignScheduler:
     def __init__(self, plan, campaign_id: str, output_root="results/campaign", workers=20,
-                 mode="real", grace_s=120):
+                 mode="real", grace_s=120, mirror_dir=None, no_mirror=False):
         self.plan, self.campaign_id, self.mode, self.grace_s = plan, campaign_id, mode, grace_s
         self.root = os.path.join(output_root, campaign_id)
         self.journal = ResultJournal(os.path.join(self.root, "journal.jsonl"))
+        self.alerts = AlertManager(os.path.join(self.root, "alerts.jsonl"))
+        self.mirror_dir, self.no_mirror = mirror_dir, no_mirror
         topology = detect_topology()
+        self.topology = topology
         self.affinity_plan = cpu_slots(topology, workers)
         used = {cpu for slot in self.affinity_plan.slots for cpu in slot}
         self.scheduler_cpus = [cpu for cpu in allocation_order(topology) if cpu not in used]
@@ -48,9 +54,19 @@ class CampaignScheduler:
     def _manifest(self, **extra):
         os.makedirs(self.root, exist_ok=True)
         path = os.path.join(self.root, "manifest.json")
-        current = {"campaign_id": self.campaign_id, "config_hash": self.plan.config_hash,
+        previous = {}
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as handle:
+                previous = json.load(handle)
+            if previous.get("config_hash") != self.plan.config_hash:
+                raise ValueError("campaign config-hash mismatch")
+        current = {**previous, "campaign_id": self.campaign_id, "config_hash": self.plan.config_hash,
                    "plan": self.plan.to_dict(), "scheduler_cpus": self.scheduler_cpus,
-                   "scheduler_affinity": self.scheduler_affinity, **extra}
+                   "topology": self.topology.to_dict(),
+                   "worker_slots": self.affinity_plan.to_dict(),
+                   "scheduler_affinity": dataclasses.asdict(self.scheduler_affinity)
+                   if dataclasses.is_dataclass(self.scheduler_affinity) else self.scheduler_affinity,
+                   "mirror_dir": self.mirror_dir, "no_mirror": self.no_mirror, **extra}
         temporary = path + ".tmp"
         with open(temporary, "w") as handle:
             json.dump(current, handle, indent=2, sort_keys=True)
@@ -109,10 +125,13 @@ class CampaignScheduler:
         return [results[c.eval_index] for c in candidates]
 
     def run(self):
-        self._manifest(status="running", started_at=time.time(), phases=[])
+        self._manifest(status="running", started_at=time.time(), phase_status={})
         outputs = {}
+        phase_status = {}
         for phase in self.plan.phases:  # D7 barrier: no phase interleaving.
             phase_start = time.time()
+            phase_status[phase.task] = {"status": "running", "started_at": phase_start}
+            self._manifest(phase=phase.task, phase_status=phase_status)
             active = [(rp, *self._make_run(rp)) for rp in phase.runs]
             while active:
                 next_active = []
@@ -128,7 +147,22 @@ class CampaignScheduler:
                     else:
                         next_active.append((rp, encoder, config, run, logger, directory))
                 active = next_active
-            self._manifest(status="running", phase=phase.task, phase_started_at=phase_start,
-                           phase_ended_at=time.time())
+            phase_status[phase.task] = {"status": "complete", "started_at": phase_start,
+                                        "ended_at": time.time()}
+            self._manifest(status="running", phase=phase.task, phase_status=phase_status)
+            # Package generation is isolated in a subprocess.  A report bug
+            # cannot roll back completed EvolutionRun checkpoints or logs.
+            self.alerts.phase_complete(phase.task)
+            milestone = run_subprocess(self.root, phase.task, self.alerts)
+            self._manifest(milestone_status={**self._read_manifest().get("milestone_status", {}),
+                                             phase.task: milestone})
+            if self.mirror_dir:
+                result = sync(self.root, self.mirror_dir, alert_manager=self.alerts)
+                if result["ok"]:
+                    self._manifest(last_mirror_success=result["timestamp"])
         self._manifest(status="complete", ended_at=time.time())
         return outputs
+
+    def _read_manifest(self):
+        with open(os.path.join(self.root, "manifest.json"), encoding="utf-8") as handle:
+            return json.load(handle)

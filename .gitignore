@@ -26,3 +26,5 @@ external/evogym/
 
 # Campaign-prep measurement output (P1/P2 prompts): generated, not source.
 results/campaign_prep/
+results/campaign/
+campaign.local.yaml

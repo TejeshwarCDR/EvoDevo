@@ -1,0 +1,203 @@
+"""Durable alert decisions and optional out-of-band notifications."""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shlex
+import statistics
+import subprocess
+import time
+import urllib.request
+from collections import deque
+from pathlib import Path
+
+import yaml
+
+from evodevo.preflight.telemetry import thermal_throttle_is_genuine
+
+REN_NOTIFY_S = 6 * 3600
+HEARTBEAT_S = 24 * 3600
+TEMPERATURE_SUSTAIN_S = 10 * 60
+PARTIAL_STALL_S = 3600
+
+
+def load_local_config(path="campaign.local.yaml"):
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return yaml.safe_load(handle) or {}
+    except FileNotFoundError:
+        return {}
+
+
+class Notifier:
+    def __init__(self, config=None):
+        self.config = config if config is not None else load_local_config()
+
+    def send(self, message: str):
+        url = self.config.get("ntfy_topic_url")
+        command = self.config.get("shell_command")
+        if url:
+            req = urllib.request.Request(url, data=message.encode("utf-8"), method="POST")
+            urllib.request.urlopen(req, timeout=15).close()
+        if command:
+            # Message is supplied as one argument, never interpolated into a
+            # shell script.  The operator may configure a command and args.
+            argv = shlex.split(command) if isinstance(command, str) else list(command)
+            subprocess.run([*argv, message], check=True, timeout=30)
+
+
+class AlertManager:
+    def __init__(self, path, notifier=None, now=None):
+        self.path = str(path)
+        Path(self.path).parent.mkdir(parents=True, exist_ok=True)
+        self.notifier = notifier or Notifier()
+        self.now = now or time.time
+        self._active = {}
+        self._last_notice = {}
+        self._temp_since = None
+        self._low_rate_since = None
+        self._last_heartbeat = None
+        self._last_throttle_count = None
+        self._temp_24h = deque()
+        self._restore()
+
+    def _restore(self):
+        """Keep six-hour deduplication and heartbeat timing across restarts."""
+        try:
+            with open(self.path, encoding="utf-8") as handle:
+                rows = [json.loads(line) for line in handle if line.strip()]
+        except (OSError, ValueError):
+            return
+        cutoff = self.now() - HEARTBEAT_S
+        for row in rows:
+            name = row.get("condition")
+            stamp = row.get("timestamp", 0)
+            if not name:
+                continue
+            self._active[name] = row.get("status") == "active"
+            if row.get("notified"):
+                self._last_notice[name] = stamp
+            if name == "daily_heartbeat" and row.get("notified"):
+                self._last_heartbeat = stamp
+            if name == "temperature" and stamp >= cutoff:
+                temp = row.get("details", {}).get("temperature_c")
+                if temp is not None:
+                    self._temp_24h.append((stamp, temp))
+                if temp is not None and temp >= 95:
+                    self._temp_since = self._temp_since or stamp
+                else:
+                    self._temp_since = None
+
+    def _write(self, event):
+        with open(self.path, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(event, sort_keys=True) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+
+    def evaluate(self, name: str, triggered: bool, details=None, *, informational=False):
+        """Journal every check; notify first, every 6 h, and once on clear."""
+        stamp = self.now()
+        previous = self._active.get(name, False)
+        status = "active" if triggered else "clear"
+        event = {"timestamp": stamp, "condition": name, "status": status,
+                 "details": details or {}, "notified": False}
+        should_notify = informational and triggered or (
+            triggered and (not previous or stamp - self._last_notice.get(name, float("-inf")) >= REN_NOTIFY_S)
+        ) or (not triggered and previous)
+        if should_notify:
+            label = "cleared" if not triggered else ("information" if informational else "alert")
+            message = f"[{label}] {name}: {json.dumps(details or {}, sort_keys=True)}"
+            try:
+                self.notifier.send(message)
+                event["notified"] = True
+                self._last_notice[name] = stamp
+            except Exception as exc:  # notifier failure must be visible in journal
+                event["notification_error"] = f"{type(exc).__name__}: {exc}"
+        self._active[name] = triggered
+        self._write(event)
+        return event
+
+    def inspect(self, snapshot: dict, *, p95_ecore_s: float, mirror_ok=True):
+        stamp = self.now()
+        last = snapshot.get("seconds_since_last_task")
+        self.evaluate("stall", last is not None and last > 2 * p95_ecore_s,
+                      {"seconds_since_task": last, "threshold_s": 2 * p95_ecore_s})
+        temp = snapshot.get("temperature_c")
+        if temp is not None:
+            self._temp_24h.append((stamp, temp))
+        while self._temp_24h and self._temp_24h[0][0] < stamp - HEARTBEAT_S:
+            self._temp_24h.popleft()
+        if temp is not None and temp >= 95:
+            self._temp_since = self._temp_since or stamp
+        else:
+            self._temp_since = None
+        count = snapshot.get("thermal_throttle_count")
+        incremented = count is not None and self._last_throttle_count is not None and count > self._last_throttle_count
+        if count is not None:
+            self._last_throttle_count = count
+        throttled = thermal_throttle_is_genuine(incremented, temp, snapshot.get("critical_temp_c"))
+        self.evaluate("temperature", self._temp_since is not None and stamp - self._temp_since >= TEMPERATURE_SUSTAIN_S,
+                      {"temperature_c": temp, "throttled": throttled})
+        main = snapshot.get("main_disk_free_gb")
+        mirror = snapshot.get("mirror_disk_free_gb")
+        self.evaluate("disk_main", main is not None and main < 50, {"free_gb": main})
+        self.evaluate("disk_mirror", mirror is not None and mirror < 50, {"free_gb": mirror})
+        count_ppo = snapshot.get("completed_ppo", 0)
+        failures = snapshot.get("infra_failure_count", 0)
+        self.evaluate("infra_failure_rate", count_ppo > 0 and failures / count_ppo > 0.005,
+                      {"failures": failures, "tasks": count_ppo})
+        swap = snapshot.get("swap_used_gb")
+        self.evaluate("swap", swap is not None and swap > 1, {"swap_used_gb": swap})
+        self.evaluate("mirror_failed", not mirror_ok, {"last_mirror_success": snapshot.get("last_mirror_success")})
+        rate = snapshot.get("throughput_now_per_h", 0)
+        history = snapshot.get("hourly_rates_24h", [])
+        median = statistics.median(history) if history else 0
+        if median > 0 and rate < 0.25 * median:
+            self._low_rate_since = self._low_rate_since or stamp
+        else:
+            self._low_rate_since = None
+        self.evaluate("partial_stall", self._low_rate_since is not None and stamp - self._low_rate_since >= PARTIAL_STALL_S,
+                      {"current_per_h": rate, "median_24h_per_h": median})
+        if self._last_heartbeat is None or stamp - self._last_heartbeat >= HEARTBEAT_S:
+            self.heartbeat(snapshot)
+
+    def heartbeat(self, snapshot):
+        stamp = self.now()
+        grid = snapshot.get("generation", {})
+        arms = {arm for arm, _seed in grid}
+        means = {arm: statistics.mean(g for (a, _seed), g in grid.items() if a == arm) for arm in arms}
+        details = {"phase": snapshot.get("phase"), "per_arm_mean_generation": means,
+                   "completed_evaluations": snapshot.get("completed_evaluations"),
+                   "eta_range_s": snapshot.get("campaign_eta_s"),
+                   "infra_failure_count": snapshot.get("infra_failure_count"),
+                   "max_temperature_24h_c": max((t for _, t in self._temp_24h), default=None),
+                   "main_disk_free_gb": snapshot.get("main_disk_free_gb"),
+                   "mirror_disk_free_gb": snapshot.get("mirror_disk_free_gb"),
+                   "last_mirror_success": snapshot.get("last_mirror_success")}
+        event = self.evaluate("daily_heartbeat", True, details, informational=True)
+        if event["notified"]:
+            self._last_heartbeat = stamp
+
+    def phase_complete(self, task):
+        return self.evaluate("phase_complete", True, {"task": task}, informational=True)
+
+    def milestone_failure(self, task, missing, error=None):
+        return self.evaluate(f"milestone_failure:{task}", True,
+                             {"task": task, "missing_artifacts": missing, "error": error})
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--test", action="store_true", help="send one test notification")
+    parser.add_argument("--config", default="campaign.local.yaml")
+    args = parser.parse_args(argv)
+    if args.test:
+        Notifier(load_local_config(args.config)).send("[test] EvoDevo campaign notification")
+        print("Test notification sent")
+        return
+    parser.error("use --test")
+
+
+if __name__ == "__main__":
+    main()
