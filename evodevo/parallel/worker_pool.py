@@ -384,7 +384,12 @@ class EvaluationPool:
 
     def submit_ppo_task(self, task, timeout_s: float | None = None) -> None:
         """Submit one task without waiting; completions come from next_ppo_result."""
-        if self._ppo_timeout_s is None:
+        # A timeout is uniform only within one active dispatch session.  The
+        # campaign intentionally reuses this process pool across D7 phases,
+        # whose independently measured p95 durations produce different
+        # timeout budgets.  Once every future/result from the prior phase has
+        # been consumed, the next submission starts a new session.
+        if not self._ppo_futures and not self._ppo_results:
             self._ppo_timeout_s = self.timeout_s if timeout_s is None else timeout_s
         elif timeout_s is not None and timeout_s != self._ppo_timeout_s:
             raise ValueError("a PPO dispatch session cannot mix timeout values")

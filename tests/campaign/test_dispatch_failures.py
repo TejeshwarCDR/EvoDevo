@@ -47,6 +47,22 @@ def test_hung_task_is_retried_twice_on_fresh_workers():
     assert failures == {identity(hung): 3}
 
 
+def test_consecutive_phase_sessions_can_use_distinct_timeouts():
+    """Walker and UpStepper have independently derived timeout budgets.
+
+    Reusing the campaign pool across the D7 phase boundary must not retain
+    the completed phase's timeout as though its dispatch session were active.
+    """
+    walker = task(0, sleep=0.01)
+    upstepper = task(1, sleep=0.01)
+    with EvaluationPool(1, cpu_slots(detect_topology(), 1), "real") as pool:
+        first = list(pool.map_ppo_tasks([walker], timeout_s=0.1))
+        second = list(pool.map_ppo_tasks([upstepper], timeout_s=0.2))
+
+    assert first[0][1].completed is True
+    assert second[0][1].completed is True
+
+
 def test_always_crashing_task_gets_two_retries_and_other_work_continues():
     crasher = task(0, sleep=0.05, crash=True)
     healthy = [task(i, sleep=0.1) for i in range(1, 5)]
