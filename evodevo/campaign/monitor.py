@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import os
 import time
@@ -65,7 +66,17 @@ def main(argv=None):
     args = parser.parse_args(argv)
     root = Path(args.output_root) / args.campaign
     alerts = AlertManager(root / "alerts.jsonl")
-    last_mirror = last_snapshot = 0
+    try:
+        last_mirror = float(json.loads((root / "mirror_status.json").read_text())["last_success"])
+    except (OSError, ValueError, KeyError):
+        last_mirror = 0
+    last_snapshot = 0
+    for path in (root / "milestones" / "snapshots").glob("*"):
+        try:
+            stamp = dt.datetime.strptime(path.name, "%Y%m%dT%H%M%SZ").replace(tzinfo=dt.timezone.utc)
+            last_snapshot = max(last_snapshot, stamp.timestamp())
+        except ValueError:
+            continue
     while True:
         state = monitor_once(root, alerts, p95_ecore_s=args.p95_ecore_s,
                              last_mirror=last_mirror, last_snapshot=last_snapshot)
