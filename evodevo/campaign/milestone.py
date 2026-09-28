@@ -248,6 +248,9 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
             else r["fitness"], axis=1)
         sensitivity = three_way_table(changed)
         sensitivity.to_csv(output / "stats/mean_of_2_sensitivity.csv", index=False)
+        mean_omnibus, mean_pairwise = _stats(per_seed_finals(changed))
+        _csv(output / "stats/mean_of_2_omnibus.csv", [mean_omnibus], list(mean_omnibus))
+        _csv(output / "stats/mean_of_2_pairwise.csv", mean_pairwise, fields)
     manifest = json.loads((root / "manifest.json").read_text()) if (root / "manifest.json").exists() else {}
     planned = sum(int(r["config"]["eval_budget"]) for p in manifest.get("plan", {}).get("phases", [])
                   if p["task"] == task for r in p["runs"])
@@ -265,7 +268,8 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
                "The rule_based versus rule_based_monotone contrast is in "
                "stats/rule_based_vs_monotone.csv.\n\n")
     if sensitivity is not None:
-        report += "UpStepper mean-of-2 sensitivity: stats/mean_of_2_sensitivity.csv.\n\n"
+        report += ("UpStepper mean-of-2 sensitivity: stats/mean_of_2_sensitivity.csv, "
+                   "stats/mean_of_2_omnibus.csv and stats/mean_of_2_pairwise.csv.\n\n")
     report += "Figures and best-body files are listed in package_manifest.json. Videos require a green visualisation check.\n"
     _atomic_text(output / "MILESTONE_REPORT.md", report)
     files = sorted(str(path.relative_to(output)) for path in output.rglob("*") if path.is_file())
@@ -273,8 +277,9 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
                   "completion_fraction": fraction, "files": files}, indent=2, sort_keys=True) + "\n")
     missing = [name for name in REQUIRED if not (output / name).is_file()]
     missing += [name for name in best_files if not (output / name).is_file()]
-    if task == "UpStepper-v0" and not (output / "stats/mean_of_2_sensitivity.csv").is_file():
-        missing.append("stats/mean_of_2_sensitivity.csv")
+    if task == "UpStepper-v0":
+        missing += [name for name in ("stats/mean_of_2_sensitivity.csv", "stats/mean_of_2_omnibus.csv",
+                                      "stats/mean_of_2_pairwise.csv") if not (output / name).is_file()]
     if missing:
         raise RuntimeError(f"incomplete milestone package: {missing}")
     return {"output": str(output), "files": files, "completion_fraction": fraction}
@@ -284,7 +289,13 @@ def run_subprocess(campaign_root, task, alert_manager=None, *, snapshot=False):
     argv = [sys.executable, "-m", "evodevo.campaign.milestone", "--campaign-root", str(campaign_root), "--task", task]
     if snapshot:
         argv.append("--snapshot")
-    completed = subprocess.run(argv, capture_output=True, text=True)
+    try:
+        completed = subprocess.run(argv, capture_output=True, text=True)
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"
+        if alert_manager:
+            alert_manager.milestone_failure(task, ["subprocess launch"], error)
+        return {"ok": False, "missing": ["subprocess launch"], "error": error}
     output = Path(campaign_root) / "milestones" / task
     if snapshot and completed.returncode == 0:
         try:
@@ -298,8 +309,9 @@ def run_subprocess(campaign_root, task, alert_manager=None, *, snapshot=False):
         missing.append("best_bodies/*.npz")
     if not list((output / "best_bodies").glob("*.png")):
         missing.append("best_bodies/*.png")
-    if task == "UpStepper-v0" and not (output / "stats/mean_of_2_sensitivity.csv").is_file():
-        missing.append("stats/mean_of_2_sensitivity.csv")
+    if task == "UpStepper-v0":
+        missing += [name for name in ("stats/mean_of_2_sensitivity.csv", "stats/mean_of_2_omnibus.csv",
+                                      "stats/mean_of_2_pairwise.csv") if not (output / name).is_file()]
     if completed.returncode or missing:
         if alert_manager:
             alert_manager.milestone_failure(task, missing, completed.stderr[-2000:])

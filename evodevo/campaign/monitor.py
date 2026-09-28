@@ -51,7 +51,7 @@ def monitor_once(root, alerts, *, now=None, p95_ecore_s=None, last_mirror=0,
         run_subprocess(root, snapshot["phase"], alerts, snapshot=True)
         last_snapshot = now
     alerts.inspect(snapshot, p95_ecore_s=p95_ecore_s, mirror_ok=mirror_ok)
-    return {"running": manifest.get("status") != "complete", "last_mirror": last_mirror,
+    return {"running": manifest.get("status") not in {"complete", "stopped"}, "last_mirror": last_mirror,
             "last_snapshot": last_snapshot, "snapshot": snapshot}
 
 

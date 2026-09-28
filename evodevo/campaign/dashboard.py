@@ -173,6 +173,7 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
                          r.get("completed_at", r.get("timestamp", 0)) < now - hour * 3600)
                     for hour in range(24)]
     alerts = _rows(os.path.join(root, "alerts.jsonl"))
+    dispatch = _json(os.path.join(root, "dispatch_status.json"), {})
     failures = sum(1 for r in journal if not r.get("result", {}).get("completed", True))
     mirror = manifest.get("mirror_dir")
     mirror_status = _json(os.path.join(root, "mirror_status.json"), {})
@@ -180,8 +181,8 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
     return {
         "campaign_id": manifest.get("campaign_id", os.path.basename(root)), "phase": task,
         "elapsed_s": elapsed, "phase_completed": completed_phase, "phase_total": phase_total,
-        "generation": generation, "tasks_running": manifest.get("tasks_running", 0),
-        "tasks_queued": manifest.get("tasks_queued", 0), "completed_evaluations": completed_evals,
+        "generation": generation, "tasks_running": dispatch.get("tasks_running", 0),
+        "tasks_queued": dispatch.get("tasks_queued", 0), "completed_evaluations": completed_evals,
         "total_evaluations": total_evals, "completed_ppo": completed_ppo,
         "throughput_now_per_h": recent, "throughput_average_per_h": completed_ppo * 3600 / elapsed if elapsed else 0.0,
         "hourly_rates_24h": hourly_rates,

@@ -79,6 +79,28 @@ def test_alert_test_cli_calls_configured_mock_target(tmp_path):
     assert "[test]" in output.read_text()
 
 
+def test_run_script_help_and_existing_session_attach(tmp_path):
+    import shutil
+    if shutil.which("tmux") is None:
+        return
+    script = Path("scripts/campaign/run_campaign.sh").resolve()
+    socket = f"evodevo-test-{os.getpid()}-{time.time_ns()}"
+    env = {**os.environ, "EVODEVO_TMUX_SOCKET": socket}
+    try:
+        help_result = subprocess.run(["bash", str(script), "--help"], env=env,
+                                     capture_output=True, text=True, check=True)
+        assert "Usage:" in help_result.stdout
+        assert subprocess.run(["tmux", "-L", socket, "has-session", "-t", "evodevo-campaign"],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
+        subprocess.run(["tmux", "-L", socket, "new-session", "-d", "-s", "evodevo-campaign", "sleep 30"],
+                       check=True)
+        attached = subprocess.run(["bash", str(script), "--no-mirror"], env=env,
+                                  capture_output=True, text=True, check=True)
+        assert "already running" in attached.stdout
+    finally:
+        subprocess.run(["tmux", "-L", socket, "kill-server"], capture_output=True)
+
+
 def test_dashboard_plain_and_tty_render_eta_range():
     snapshot = {"campaign_id": "x", "phase": "Walker-v0", "elapsed_s": 3600,
                 "phase_completed": 10, "phase_total": 300, "completed_evaluations": 10,
@@ -129,8 +151,11 @@ def test_milestone_package_and_subprocess_failure_isolated(tmp_path, monkeypatch
     assert len(list((folder / "best_bodies").glob("*.npz"))) == 4
     assert "figures/fitness_curves.pdf" in outcome["files"]
     pairwise = list(__import__("csv").DictReader((folder / "stats/pairwise.csv").open()))
+    omnibus = list(__import__("csv").DictReader((folder / "stats/omnibus.csv").open()))
+    assert abs(float(omnibus[0]["statistic"]) - 20 / 3) < 1e-10
     direct_nca = next(r for r in pairwise if r["arm_a"] == "direct" and r["arm_b"] == "nca")
     assert float(direct_nca["a12"]) == 0.0
+    assert abs(float(direct_nca["p_raw"]) - 1 / 3) < 1e-10
     spy = SpyNotifier()
     alerts = AlertManager(tmp_path / "alerts.jsonl", notifier=spy)
     class Failed:
