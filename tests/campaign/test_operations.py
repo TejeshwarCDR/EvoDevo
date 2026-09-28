@@ -111,6 +111,24 @@ def test_all_alert_conditions_and_daily_heartbeat(tmp_path):
     assert temp["details"]["throttled"] is True
 
 
+def test_partial_stall_one_hour_window_survives_monitor_restart(tmp_path):
+    clock = [1000.0]
+    spy = SpyNotifier()
+    path = tmp_path / "alerts.jsonl"
+    snapshot = {"throughput_now_per_h": 4, "hourly_rates_24h": [20] * 24,
+                "main_disk_free_gb": 200, "mirror_disk_free_gb": 200,
+                "swap_used_gb": 0, "completed_ppo": 100, "infra_failure_count": 0}
+    alerts = AlertManager(path, notifier=spy, now=lambda: clock[0])
+    alerts.inspect(snapshot, p95_ecore_s=100)
+    clock[0] += 1800
+    restarted = AlertManager(path, notifier=spy, now=lambda: clock[0])
+    restarted.inspect(snapshot, p95_ecore_s=100)
+    assert not any("partial_stall" in message for message in spy.messages)
+    clock[0] += 1801
+    restarted.inspect(snapshot, p95_ecore_s=100)
+    assert sum("partial_stall" in message for message in spy.messages) == 1
+
+
 def test_alert_test_cli_calls_configured_mock_target(tmp_path):
     target = tmp_path / "notifier.py"
     output = tmp_path / "received.txt"
@@ -198,6 +216,7 @@ def test_dashboard_prior_then_per_arm_core_class_measured_eta(tmp_path):
     prior = collect(str(tmp_path), now=2000, telemetry={})
     assert prior["eta_source"] == "prior"
     assert prior["seconds_since_last_task"] == 100
+    assert abs(prior["throughput_average_per_h"] - 98 * 3.6) < 1e-9
     for arm in ("direct", "nca"):
         path = tmp_path / "runs" / arm / task / "seed_0" / "run_log.jsonl"
         with path.open("a") as handle:
@@ -415,3 +434,10 @@ def test_launcher_starts_and_cleans_tiny_surrogate_campaign():
             subprocess.run(["tmux", "-L", socket, "kill-server"], capture_output=True)
         assert subprocess.run(["tmux", "-L", socket, "has-session", "-t", "evodevo-campaign"],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
+        config.write_text(config.read_text().replace("eval_budget: 2", "eval_budget: 3"))
+        mismatch = subprocess.run(["bash", "scripts/campaign/run_campaign.sh", "--resume", "smoke",
+            "--config", str(config), "--output-root", str(run_root), "--no-mirror",
+            "--workers", "1", "--mode", "surrogate"], cwd=repo, env=env,
+            capture_output=True, text=True, timeout=20)
+        assert mismatch.returncode != 0
+        assert "config-hash mismatch" in mismatch.stderr
