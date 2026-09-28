@@ -23,9 +23,23 @@ TEMPERATURE_SUSTAIN_S = 10 * 60
 PARTIAL_STALL_S = 3600
 
 
-def load_local_config(path="campaign.local.yaml"):
+DEFAULT_NOTIFY_CONFIG = "campaign.local.yaml"
+NOTIFY_CONFIG_ENV = "EVODEVO_NOTIFY_CONFIG"
+NO_NOTIFIER_MESSAGE = "NO NOTIFIER CONFIGURED - alerts go to alerts.jsonl only"
+
+
+class NotifierNotConfigured(RuntimeError):
+    """No delivery channel is configured; nothing can leave the machine."""
+
+
+def notify_config_path(path=None):
+    """Explicit path, else $EVODEVO_NOTIFY_CONFIG, else ./campaign.local.yaml."""
+    return path or os.environ.get(NOTIFY_CONFIG_ENV) or DEFAULT_NOTIFY_CONFIG
+
+
+def load_local_config(path=None):
     try:
-        with open(path, encoding="utf-8") as handle:
+        with open(notify_config_path(path), encoding="utf-8") as handle:
             return yaml.safe_load(handle) or {}
     except FileNotFoundError:
         return {}
@@ -35,17 +49,33 @@ class Notifier:
     def __init__(self, config=None):
         self.config = config if config is not None else load_local_config()
 
+    @property
+    def channels(self):
+        return [name for name in ("ntfy_topic_url", "shell_command") if self.config.get(name)]
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.channels)
+
     def send(self, message: str):
+        """Deliver on every configured channel; raise unless each one
+        verifiably succeeded (HTTP 2xx / shell exit 0). Returns channels."""
+        if not self.configured:
+            raise NotifierNotConfigured(NO_NOTIFIER_MESSAGE)
         url = self.config.get("ntfy_topic_url")
         command = self.config.get("shell_command")
         if url:
             req = urllib.request.Request(url, data=message.encode("utf-8"), method="POST")
-            urllib.request.urlopen(req, timeout=15).close()
+            with urllib.request.urlopen(req, timeout=15) as response:
+                status = getattr(response, "status", None)
+            if status is None or not 200 <= status < 300:
+                raise RuntimeError(f"ntfy delivery returned HTTP {status}")
         if command:
             # Message is supplied as one argument, never interpolated into a
             # shell script.  The operator may configure a command and args.
             argv = shlex.split(command) if isinstance(command, str) else list(command)
             subprocess.run([*argv, message], check=True, timeout=30)
+        return self.channels
 
 
 class AlertManager:
@@ -78,9 +108,13 @@ class AlertManager:
         if not name:
             return
         self._active[name] = row.get("status") == "active"
-        if row.get("notified"):
+        # "journal_only" (no notifier configured, i.e. --no-notify) still
+        # counts for de-duplication timing: the notice WAS emitted, to
+        # alerts.jsonl, which is the only channel that exists.
+        emitted = row.get("notified") or row.get("delivery") == "journal_only"
+        if emitted:
             self._last_notice[name] = stamp
-        if name == "daily_heartbeat" and row.get("notified"):
+        if name == "daily_heartbeat" and emitted:
             self._last_heartbeat = stamp
         if not restore_timers:
             return
@@ -135,11 +169,15 @@ class AlertManager:
             if should_notify:
                 label = "cleared" if not triggered else ("information" if informational else "alert")
                 message = f"[{label}] {name}: {json.dumps(details or {}, sort_keys=True)}"
-                try:
-                    self.notifier.send(message)
-                    event["notified"] = True
-                except Exception as exc:  # notifier failure must be visible in journal
-                    event["notification_error"] = f"{type(exc).__name__}: {exc}"
+                event["message"] = message
+                if not getattr(self.notifier, "configured", True):
+                    event["delivery"] = "journal_only"
+                else:
+                    try:
+                        self.notifier.send(message)
+                        event["notified"] = True
+                    except Exception as exc:  # notifier failure must be visible in journal
+                        event["notification_error"] = f"{type(exc).__name__}: {exc}"
             handle.seek(0, os.SEEK_END)
             handle.write(json.dumps(event, sort_keys=True) + "\n")
             handle.flush()
@@ -207,7 +245,7 @@ class AlertManager:
                    "mirror_disk_free_gb": snapshot.get("mirror_disk_free_gb"),
                    "last_mirror_success": snapshot.get("last_mirror_success")}
         event = self.evaluate("daily_heartbeat", True, details, informational=True)
-        if event["notified"]:
+        if event["notified"] or event.get("delivery") == "journal_only":
             self._last_heartbeat = stamp
 
     def phase_complete(self, task):
@@ -222,15 +260,25 @@ class AlertManager:
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--test", action="store_true", help="send one test notification")
-    parser.add_argument("--config", default="campaign.local.yaml")
+    parser.add_argument("--test", action="store_true",
+                        help="send one test notification; exit 0 only after verified delivery")
+    parser.add_argument("--config", default=None,
+                        help=f"notifier config (default ${NOTIFY_CONFIG_ENV} or {DEFAULT_NOTIFY_CONFIG})")
     args = parser.parse_args(argv)
-    if args.test:
-        Notifier(load_local_config(args.config)).send("[test] EvoDevo campaign notification")
-        print("Test notification sent")
-        return
-    parser.error("use --test")
+    if not args.test:
+        parser.error("use --test")
+    notifier = Notifier(load_local_config(args.config))
+    if not notifier.configured:
+        print(NO_NOTIFIER_MESSAGE)
+        return 2
+    try:
+        channels = notifier.send("[test] EvoDevo campaign notification")
+    except Exception as exc:
+        print(f"NOTIFICATION DELIVERY FAILED: {type(exc).__name__}: {exc}")
+        return 1
+    print(f"Test notification delivered via {', '.join(channels)}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

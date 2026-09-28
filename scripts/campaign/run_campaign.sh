@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: scripts/campaign/run_campaign.sh [--resume ID|latest] [--campaign-id ID] [--config FILE] [--output-root DIR] [--mirror-dir DIR|--no-mirror] [--workers N] [--mode real|surrogate] [--grace-s SEC]"
+  echo "Usage: scripts/campaign/run_campaign.sh [--resume ID|latest] [--campaign-id ID] [--config FILE] [--output-root DIR] [--mirror-dir DIR|--no-mirror] [--workers N] [--mode real|surrogate] [--grace-s SEC] [--no-notify]"
 }
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -16,6 +16,7 @@ NO_MIRROR=0
 WORKERS=20
 MODE=real
 GRACE_S=120
+NO_NOTIFY=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --help|-h) usage; exit 0 ;;
@@ -28,6 +29,7 @@ while [[ $# -gt 0 ]]; do
     --workers) WORKERS="$2"; shift 2 ;;
     --mode) MODE="$2"; shift 2 ;;
     --grace-s) GRACE_S="$2"; shift 2 ;;
+    --no-notify) NO_NOTIFY=1; shift ;;
     *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
@@ -59,30 +61,22 @@ if [[ -z "$RESUME" && -e "$OUTPUT_ROOT/$CAMPAIGN_ID/manifest.json" ]]; then
   echo "Campaign $CAMPAIGN_ID already exists; use --resume $CAMPAIGN_ID" >&2; exit 1
 fi
 
-if .venv/bin/python -c 'from evodevo.preflight.dirty_check import project_is_dirty; import os,sys; sys.exit(project_is_dirty(os.getcwd()))'; then
-  :
-else
-  echo "Refusing to start on a dirty working tree" >&2; exit 1
-fi
-if [[ -n "$RESUME" ]]; then
-  .venv/bin/python - "$CONFIG" "$OUTPUT_ROOT" "$RESUME" <<'PY'
-import json, sys
-from pathlib import Path
-from evodevo.campaign.plan import CampaignPlan
-from evodevo.experiments.benchmark import BenchmarkConfig
-config, root, campaign = sys.argv[1:]
-manifest = json.loads((Path(root) / campaign / "manifest.json").read_text())
-expected = CampaignPlan.from_benchmark(BenchmarkConfig.from_yaml(config)).config_hash
-if manifest["config_hash"] != expected:
-    raise SystemExit("Refusing config-hash mismatch")
-PY
-fi
 ulimit -n 65535
 RUN_DIR="$OUTPUT_ROOT/$CAMPAIGN_ID"
-mkdir -p "$RUN_DIR"
-CMD=(.venv/bin/python -m evodevo.campaign --config "$CONFIG" --output-root "$OUTPUT_ROOT" --workers "$WORKERS" --mode "$MODE" --grace-s "$GRACE_S")
+NOTIFY_CONFIG="${EVODEVO_NOTIFY_CONFIG:-$REPO_ROOT/campaign.local.yaml}"
+CMD=(env "EVODEVO_NOTIFY_CONFIG=$NOTIFY_CONFIG" .venv/bin/python -m evodevo.campaign --config "$CONFIG" --output-root "$OUTPUT_ROOT" --workers "$WORKERS" --mode "$MODE" --grace-s "$GRACE_S")
 if [[ -n "$RESUME" ]]; then CMD+=(--resume "$RESUME"); else CMD+=(--campaign-id "$CAMPAIGN_ID"); fi
 if [[ "$NO_MIRROR" -eq 1 ]]; then CMD+=(--no-mirror); else CMD+=(--mirror-dir "$MIRROR_DIR"); fi
+if [[ "$NO_NOTIFY" -eq 1 ]]; then CMD+=(--no-notify); fi
+# Every refusal (dirty tree, config-hash mismatch on resume, notifier, mirror
+# disk) is decided by the Python entry point itself; run it here, before any
+# tmux session exists, so the operator sees the reason.
+if ! "${CMD[@]}" --check-only; then
+  echo "Launch refused; nothing was started." >&2
+  exit 1
+fi
+mkdir -p "$RUN_DIR"
+printf -v NOTIFY_QUOTED '%q' "$NOTIFY_CONFIG"
 printf -v CMD_QUOTED '%q ' "${CMD[@]}"
 printf -v TRANSCRIPT_QUOTED '%q' "$RUN_DIR/transcript.log"
 tmux "${TMUX_ARGS[@]}" new-session -d -s evodevo-campaign -n dashboard
@@ -95,6 +89,6 @@ tmux "${TMUX_ARGS[@]}" split-window -v -l 15 -t evodevo-campaign:dashboard.1 "to
 tmux "${TMUX_ARGS[@]}" new-window -d -t evodevo-campaign -n scheduler \
   "script -q -f $TRANSCRIPT_QUOTED -c 'setsid $CMD_QUOTED'"
 tmux "${TMUX_ARGS[@]}" new-window -d -t evodevo-campaign -n monitor \
-  ".venv/bin/python -m evodevo.campaign.monitor --campaign '$CAMPAIGN_ID' --output-root '$OUTPUT_ROOT'"
+  "env EVODEVO_NOTIFY_CONFIG=$NOTIFY_QUOTED .venv/bin/python -m evodevo.campaign.monitor --campaign '$CAMPAIGN_ID' --output-root '$OUTPUT_ROOT'"
 echo "Started campaign $CAMPAIGN_ID in tmux session evodevo-campaign."
 if [[ -t 0 && -t 1 ]]; then tmux "${TMUX_ARGS[@]}" attach-session -t evodevo-campaign; fi

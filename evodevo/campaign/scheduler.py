@@ -297,6 +297,8 @@ def resume_command(args, campaign_id):
                "--workers", str(args.workers), "--mode", args.mode,
                "--grace-s", str(args.grace_s)]
     command.extend(["--no-mirror"] if args.no_mirror else ["--mirror-dir", args.mirror_dir])
+    if getattr(args, "no_notify", False):
+        command.append("--no-notify")
     return shlex.join(command)
 
 
@@ -313,6 +315,11 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
     parser.add_argument("--mirror-dir")
     parser.add_argument("--no-mirror", action="store_true")
     parser.add_argument("--grace-s", type=float, default=120)
+    parser.add_argument("--no-notify", action="store_true",
+                        help="explicitly run a REAL campaign with no out-of-band notifier "
+                             "(recorded in the manifest; permanent dashboard warning)")
+    parser.add_argument("--check-only", action="store_true",
+                        help="run every launch refusal check, print the result, start nothing")
     args = parser.parse_args(argv)
     if not args.mirror_dir and not args.no_mirror:
         parser.error("--mirror-dir is required unless --no-mirror is explicitly set")
@@ -322,8 +329,7 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
         parser.error("--resume and --campaign-id are mutually exclusive")
     from evodevo.preflight.dirty_check import project_is_dirty
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-    if project_is_dirty(repo_root):
-        parser.error("refusing a dirty working tree")
+    refusals = ["refusing a dirty working tree (commit first)"] if project_is_dirty(repo_root) else []
     campaign_id = args.resume or args.campaign_id or time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     if campaign_id == "latest":
         root = args.output_root
@@ -343,12 +349,23 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
         if current.config_hash != plan.config_hash or current.config_hash != manifest.get("config_hash"):
             parser.error("campaign config-hash mismatch")
     else:
+        if os.path.isfile(manifest_path):
+            parser.error(f"campaign {campaign_id} already exists; use --resume {campaign_id}")
         from evodevo.experiments.benchmark import BenchmarkConfig
         plan = CampaignPlan.from_benchmark(BenchmarkConfig.from_yaml(args.config))
+    from .launch_checks import launch_refusals
+    more, launch_record = launch_refusals(args)
+    refusals += more
+    if refusals:
+        parser.error("refusing to start:\n  - " + "\n  - ".join(refusals))
+    if args.check_only:
+        print(f"launch checks passed for {campaign_id}: {json.dumps(launch_record, sort_keys=True)}")
+        return 0
     scheduler = CampaignScheduler(plan, campaign_id, args.output_root, args.workers,
         args.mode, args.grace_s, args.mirror_dir, args.no_mirror)
     scheduler._manifest(git_commit=subprocess.check_output(["git", "rev-parse", "HEAD"],
-        cwd=repo_root, text=True).strip())
+        cwd=repo_root, text=True).strip(), launch_checks=launch_record,
+        no_notify=bool(args.no_notify))
     with open(os.path.join(scheduler.root, "scheduler.pgid"), "w", encoding="ascii") as handle:
         handle.write(str(os.getpgrp()) + "\n")
     scheduler.run()

@@ -139,7 +139,10 @@ def test_real_ppo_cli_smoke(tmp_path):
     15, ppo_timesteps 500, 4 workers."""
     config = smoke_config(tmp_path / "smoke.yaml")
     root = tmp_path / "campaigns"
-    env = dict(os.environ)
+    delivered = tmp_path / "notifications.log"
+    notify = tmp_path / "notify.yaml"
+    notify.write_text(f"shell_command: [sh, -c, 'printf \"%s\\n\" \"$0\" >> {delivered}']\n")
+    env = dict(os.environ, EVODEVO_NOTIFY_CONFIG=str(notify))
     for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
         env.pop(var, None)
     command = [sys.executable, "-m", "evodevo.campaign", "--config", str(config), "--output-root", str(root),
