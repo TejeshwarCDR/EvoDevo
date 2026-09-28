@@ -111,6 +111,21 @@ def test_all_alert_conditions_and_daily_heartbeat(tmp_path):
     assert temp["details"]["throttled"] is True
 
 
+def test_temperature_throttle_requires_tjmax_proximity(tmp_path):
+    clock = [1000.0]
+    alerts = AlertManager(tmp_path / "alerts.jsonl", notifier=SpyNotifier(), now=lambda: clock[0])
+    snapshot = {"temperature_c": 60, "critical_temp_c": 100,
+                "thermal_throttle_count": 100, "main_disk_free_gb": 200,
+                "mirror_disk_free_gb": 200}
+    alerts.inspect(snapshot, p95_ecore_s=100)
+    clock[0] += 60
+    snapshot["thermal_throttle_count"] = 101
+    alerts.inspect(snapshot, p95_ecore_s=100)
+    rows = [json.loads(line) for line in (tmp_path / "alerts.jsonl").read_text().splitlines()]
+    temperature = [row for row in rows if row["condition"] == "temperature"]
+    assert temperature[-1]["details"]["throttled"] is False
+
+
 def test_partial_stall_one_hour_window_survives_monitor_restart(tmp_path):
     clock = [1000.0]
     spy = SpyNotifier()
