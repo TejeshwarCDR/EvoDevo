@@ -17,6 +17,7 @@ import signal
 import subprocess
 import sys
 import time
+from collections import deque
 
 from evodevo.core.config import ExperimentConfig
 from evodevo.core.factors import extract_factors
@@ -33,6 +34,7 @@ from evodevo.morphology.metrics import body_hash as compute_body_hash
 from evodevo.morphology.validate import validate_body
 
 from .checkpoint import latest_checkpoint, write_checkpoint
+from .dispatch import DispatchCore, DispatchItem
 from .alerts import AlertManager
 from .journal import ResultJournal
 from .milestone import run_subprocess
@@ -57,13 +59,14 @@ def cpu_placement(topology, workers):
 class CampaignScheduler:
     def __init__(self, plan, campaign_id: str, output_root="results/campaign", workers=20,
                  mode="real", grace_s=120, mirror_dir=None, no_mirror=False,
-                 allow_same_disk_mirror=False):
+                 allow_same_disk_mirror=False, prefetch=4):
         self.plan, self.campaign_id, self.mode, self.grace_s = plan, campaign_id, mode, grace_s
         self.allow_same_disk_mirror = allow_same_disk_mirror
         self.root = os.path.join(output_root, campaign_id)
         self.journal = ResultJournal(os.path.join(self.root, "journal.jsonl"))
         self.alerts = AlertManager(os.path.join(self.root, "alerts.jsonl"))
         self.mirror_dir, self.no_mirror = mirror_dir, no_mirror
+        self.prefetch = prefetch
         topology = detect_topology()
         self.topology = topology
         self.affinity_plan, self.scheduler_cpus = cpu_placement(topology, workers)
@@ -90,7 +93,8 @@ class CampaignScheduler:
                    "scheduler_affinity": dataclasses.asdict(self.scheduler_affinity)
                    if dataclasses.is_dataclass(self.scheduler_affinity) else self.scheduler_affinity,
                    "mirror_dir": self.mirror_dir, "no_mirror": self.no_mirror,
-                   "allow_same_disk_mirror": self.allow_same_disk_mirror, **extra}
+                   "allow_same_disk_mirror": self.allow_same_disk_mirror,
+                   "prefetch": self.prefetch, **extra}
         temporary = path + ".tmp"
         with open(temporary, "w") as handle:
             json.dump(current, handle, indent=2, sort_keys=True)
@@ -140,13 +144,27 @@ class CampaignScheduler:
         run.tracker.logger = logger
         return encoder, config, run, logger, directory
 
-    def _phase_round(self, active, pool, timeout_s):
-        """Propose all active runs before any PPO dispatch; tell in plan order."""
+    def _run_phase(self, active, pool, phase, outputs):
+        """Continuously dispatch one D7 phase with per-run generation barriers."""
         journaled = self.journal.indexed()
-        batches, outcomes, work = {}, {}, []
-        for rp, encoder, config, run, _logger, directory in active:
+        core = DispatchCore(self.affinity_plan.n_workers, self.prefetch)
+        core.begin_phase(phase.task, (ctx[0].run_key for ctx in active))
+        by_run = {ctx[0].run_key: ctx for ctx in active}
+        generations = {}
+        barriers = deque()
+        arm_order = {}
+        for rp, *_rest in active:
+            arm_order.setdefault(rp.arm, len(arm_order))
+
+        def prepare(ctx):
+            rp, encoder, config, run, _logger, directory = ctx
             candidates = run.propose()
-            batches[rp.run_key] = candidates
+            generations[rp.run_key] = {
+                "generation": candidates[0].generation if candidates else run.generation,
+                "candidates": candidates,
+                "outcomes": {},
+            }
+            work = []
             for candidate in candidates:
                 identity = (rp.run_key, candidate.eval_index)
                 h = genome_hash(encoder, candidate.genome)
@@ -158,11 +176,11 @@ class CampaignScheduler:
                 if self.mode == "surrogate":
                     result = evaluate_body_surrogate(candidate.body, task=config.task, seed=config.seed)
                     result.eval_index = candidate.eval_index
-                    outcomes[identity] = result
+                    generations[rp.run_key]["outcomes"][identity] = result
                     continue
                 validation = validate_body(candidate.body)
                 if not validation.valid:
-                    outcomes[identity] = EvalResult(config.sentinel_fitness, False,
+                    generations[rp.run_key]["outcomes"][identity] = EvalResult(config.sentinel_fitness, False,
                         "; ".join(validation.reasons), 0.0, compute_body_hash(candidate.body),
                         eval_index=candidate.eval_index, per_seed_fitness=[], per_seed_completed=[],
                         aggregation=config.ppo_seed_aggregation, policy_paths=[], training_log_paths=[])
@@ -174,68 +192,107 @@ class CampaignScheduler:
                         candidate.generation, candidate.genome_id, candidate.eval_index, k,
                         candidate.body, connections, config.ppo_timesteps, config.ppo_eval_episodes, directory)
                     if (rp.run_key, candidate.eval_index, k) not in journaled:
-                        work.append((task, h))
-        arm_order = {rp.arm: index for index, (rp, *_rest) in enumerate(active)}
-        task_name = active[0][0].task
-        run_generations = {rp.run_key: batches[rp.run_key][0].generation
-                           for rp, *_rest in active if batches[rp.run_key]}
-        work.sort(key=lambda pair: (pair[0].generation, arm_order[pair[0].run_key.split('/')[0]],
-                                    int(pair[0].run_key.rsplit('_', 1)[1]), pair[0].eval_index, pair[0].ppo_k))
-        if work:
-            remaining = len(work)
-            self._dispatch_status(min(remaining, self.affinity_plan.n_workers),
-                                  max(0, remaining - self.affinity_plan.n_workers),
-                                  task_name, run_generations)
-            hashes = {(t.run_key, t.eval_index, t.ppo_k): h for t, h in work}
-            for task, result in pool.map_ppo_tasks((t for t, _ in work), timeout_s=timeout_s,
-                                                    should_stop=lambda: self.stop_requested,
-                                                    grace_s=self.grace_s):
-                h = hashes[(task.run_key, task.eval_index, task.ppo_k)]
-                self.journal.append_task(task, result, h)
-                journaled[(task.run_key, task.eval_index, task.ppo_k)] = {
-                    "genome_hash": h, "result": dataclasses.asdict(result)}
-                remaining -= 1
-                running = min(remaining, pool._ppo_inflight)
-                self._dispatch_status(running, max(0, remaining - running),
-                                      task_name, run_generations)
-            if remaining:
-                if self.stop_requested:
-                    self._dispatch_status(0, remaining, task_name, run_generations)
-                    return False
-                raise RuntimeError(f"PPO pool returned with {remaining} tasks incomplete")
-        else:
-            self._dispatch_status(0, 0, task_name, run_generations)
-        for rp, encoder, config, run, _logger, _directory in active:
+                        work.append(DispatchItem(
+                            task_id=(task.run_key, task.eval_index, task.ppo_k),
+                            phase=phase.task, run_key=rp.run_key,
+                            generation=candidate.generation,
+                            tie_key=(arm_order[rp.arm], rp.seed, candidate.eval_index, k),
+                            payload=(task, h),
+                        ))
+            barrier = core.report_ready(rp.run_key, generations[rp.run_key]["generation"], work)
+            if barrier is not None:
+                barriers.append(barrier)
+
+        def finish_generation(barrier):
+            rp, encoder, config, run, _logger, directory = by_run[barrier.run_key]
+            state = generations.pop(rp.run_key)
+            if state["generation"] != barrier.generation:
+                raise AssertionError("completed generation does not match scheduler state")
             by_index = {}
             results = []
-            for candidate in batches[rp.run_key]:
+            for candidate in state["candidates"]:
                 identity = (rp.run_key, candidate.eval_index)
                 if candidate.cached_result is not None:
                     result = candidate.cached_result
                 elif candidate.cache_source_eval_index is not None:
                     result = by_index[candidate.cache_source_eval_index]
-                elif identity in outcomes:
-                    result = outcomes[identity]
+                elif identity in state["outcomes"]:
+                    result = state["outcomes"][identity]
                 else:
                     seeds = [PPOTaskResult(**journaled[(rp.run_key, candidate.eval_index, k)]["result"])
                              for k in range(config.ppo_seeds)]
                     fitness, completed, partial = aggregate_seed_results(seeds, config.ppo_seed_aggregation)
+                    infra_failures = sum(str(seed.reason).startswith("infra_failure:") for seed in seeds)
                     result = EvalResult(fitness if completed else config.sentinel_fitness, completed,
-                        "partial_completion" if completed and partial else (None if completed else "simulation_instability"),
+                        "partial_completion" if completed and partial else
+                        (None if completed else ("infra_failure" if infra_failures else "simulation_instability")),
                         sum(seed.wall_clock_s for seed in seeds), compute_body_hash(candidate.body),
                         per_seed_fitness=[seed.fitness for seed in seeds],
                         per_seed_completed=[seed.completed for seed in seeds],
                         aggregation=config.ppo_seed_aggregation,
                         policy_paths=[seed.policy_path for seed in seeds if seed.policy_path],
                         training_log_paths=[seed.training_log_path for seed in seeds if seed.training_log_path],
-                        infra_failure_count=sum(not seed.completed for seed in seeds))
+                        infra_failure_count=infra_failures)
                 dispatched = copy.copy(result)
                 dispatched.eval_index = candidate.eval_index
                 by_index[candidate.eval_index] = result
                 results.append(dispatched)
             run.tell(results)
-            write_checkpoint(run, os.path.join(_directory, "checkpoint"))
-        return True
+            write_checkpoint(run, os.path.join(directory, "checkpoint"))
+            if run.done:
+                outputs[rp.run_key] = run.result()
+                _logger.close()
+                core.mark_run_complete(rp.run_key)
+            else:
+                prepare(by_run[rp.run_key])
+
+        def refill():
+            if pool is not None and not self.stop_requested:
+                while (dispatch_item := core.next_task()) is not None:
+                    task, _hash = dispatch_item.payload
+                    pool.submit_ppo_task(task, timeout_s=phase.timeout_s)
+            self._dispatch_status(core.inflight_count, core.ready_count, phase.task,
+                                  {key: ctx[3].generation for key, ctx in by_run.items()
+                                   if not ctx[3].done})
+
+        for ctx in active:
+            if ctx[3].done:
+                outputs[ctx[0].run_key] = ctx[3].result()
+                ctx[4].close()
+                core.mark_run_complete(ctx[0].run_key)
+            else:
+                prepare(ctx)
+            refill()
+
+        while not core.phase_complete:
+            while barriers:
+                finish_generation(barriers.popleft())
+            refill()
+            if core.phase_complete:
+                break
+            if self.stop_requested and core.inflight_count == 0:
+                break
+            if pool is None:
+                if not barriers:
+                    raise RuntimeError("surrogate dispatch stalled before its phase barrier")
+                continue
+            completed = pool.next_ppo_result(should_stop=lambda: self.stop_requested,
+                                             grace_s=self.grace_s)
+            if completed is None:
+                break
+            task, result = completed
+            identity = (task.run_key, task.eval_index, task.ppo_k)
+            state = generations[task.run_key]
+            candidate = next(c for c in state["candidates"] if c.eval_index == task.eval_index)
+            h = genome_hash(by_run[task.run_key][1], candidate.genome)
+            self.journal.append_task(task, result, h)
+            journaled[identity] = {"genome_hash": h, "result": dataclasses.asdict(result)}
+            barrier = core.complete(identity)
+            if barrier is not None:
+                barriers.append(barrier)
+            else:
+                refill()
+        return core.phase_complete
 
     def run(self):
         prior = self._read_manifest() if os.path.isfile(os.path.join(self.root, "manifest.json")) else {}
@@ -256,23 +313,11 @@ class CampaignScheduler:
                 phase_status[phase.task] = {"status": "running", "started_at": phase_start}
                 self._manifest(phase=phase.task, phase_status=phase_status)
                 active = [(rp, *self._make_run(rp)) for rp in phase.runs]
-                while active and not self.stop_requested:
-                    lowest = min((item[3].generation for item in active if not item[3].done), default=None)
-                    live = [item for item in active if not item[3].done and item[3].generation == lowest]
-                    if live:
-                        if not self._phase_round(live, pool, phase.timeout_s):
-                            break
-                    next_active = []
-                    for rp, encoder, config, run, logger, directory in active:
-                        if run.done:
-                            outputs[rp.run_key] = run.result()
+                phase_complete = self._run_phase(active, pool, phase, outputs)
+                if not phase_complete:
+                    for _rp, _encoder, _config, run, logger, _directory in active:
+                        if not run.done:
                             logger.close()
-                        else:
-                            next_active.append((rp, encoder, config, run, logger, directory))
-                    active = next_active
-                if self.stop_requested:
-                    for _rp, _encoder, _config, _run, logger, _directory in active:
-                        logger.close()
                     self._manifest(status="stopped", stopped_at=time.time())
                     break
                 phase_status[phase.task] = {"status": "complete", "started_at": phase_start,
@@ -308,6 +353,8 @@ def resume_command(args, campaign_id):
                "--config", args.config, "--output-root", args.output_root,
                "--workers", str(args.workers), "--mode", args.mode,
                "--grace-s", str(args.grace_s)]
+    if getattr(args, "prefetch", 4) != 4:
+        command.extend(["--prefetch", str(args.prefetch)])
     command.extend(["--no-mirror"] if args.no_mirror else ["--mirror-dir", args.mirror_dir])
     if getattr(args, "no_notify", False):
         command.append("--no-notify")
@@ -331,6 +378,8 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
     parser.add_argument("--mirror-dir")
     parser.add_argument("--no-mirror", action="store_true")
     parser.add_argument("--grace-s", type=float, default=120)
+    parser.add_argument("--prefetch", type=int, default=4,
+                        help="PPO tasks submitted beyond worker slots (default: 4)")
     parser.add_argument("--no-notify", action="store_true",
                         help="explicitly run a REAL campaign with no out-of-band notifier "
                              "(recorded in the manifest; permanent dashboard warning)")
@@ -347,6 +396,8 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
     parser.add_argument("--check-only", action="store_true",
                         help="run every launch refusal check, print the result, start nothing")
     args = parser.parse_args(argv)
+    if args.prefetch < 0:
+        parser.error("--prefetch must be >= 0")
     if not args.mirror_dir and not args.no_mirror:
         parser.error("--mirror-dir is required unless --no-mirror is explicitly set")
     if args.mirror_dir and args.no_mirror:
@@ -398,7 +449,7 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
         return 0
     scheduler = CampaignScheduler(plan, campaign_id, args.output_root, args.workers,
         args.mode, args.grace_s, args.mirror_dir, args.no_mirror,
-        allow_same_disk_mirror=args.allow_same_disk_mirror)
+        allow_same_disk_mirror=args.allow_same_disk_mirror, prefetch=args.prefetch)
     scheduler._manifest(git_commit=subprocess.check_output(["git", "rev-parse", "HEAD"],
         cwd=repo_root, text=True).strip(), launch_checks=launch_record,
         no_notify=bool(args.no_notify))

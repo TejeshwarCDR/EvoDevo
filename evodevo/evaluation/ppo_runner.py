@@ -56,6 +56,10 @@ class PPOTask:
     timesteps: int
     eval_episodes: int
     artifact_dir: Optional[str]
+    # Private process-pool test hook. Production tasks always leave this None;
+    # keeping it on the task makes spawned-worker crash/timeout tests exercise
+    # the real attribution path without importing PPO.
+    debug_meta: Optional[dict] = None
 
 
 @dataclass
