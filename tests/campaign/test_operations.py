@@ -712,3 +712,35 @@ def test_dashboard_shows_walker_milestone_time_after_the_phase_ends(tmp_path):
     snapshot = collect(str(tmp_path), now=ended + 60)
     assert snapshot["walker_milestone_reached"] is True
     assert f"Walker milestone (reached): {_when(ended)}" in render(snapshot)
+
+
+def test_artifact_stamp_reaches_every_milestone_artifact(tmp_path, monkeypatch):
+    task, stamp = "Walker-v0", "VALIDATION - NOT A RESULT"
+    body = [[0] * 5 for _ in range(5)]
+    body[2][2] = 3
+    for arm_index, arm in enumerate(["direct", "nca"]):
+        for seed in (0, 1):
+            directory = tmp_path / "runs" / arm / task / f"seed_{seed}"
+            directory.mkdir(parents=True)
+            (directory / "run_log.jsonl").write_text(json.dumps(
+                {"eval_index": 0, "generation": 0, "fitness": arm_index + seed / 10, "valid": True,
+                 "body_hash": f"{arm}-{seed}", "cache_hit": False, "wall_clock_s": 1.0, "body": body}) + "\n")
+    (tmp_path / "manifest.json").write_text(json.dumps({"artifact_stamp": stamp, "plan": {"phases": [
+        {"task": task, "runs": [{"config": {"eval_budget": 1}} for _ in range(4)]}]}}))
+    titles = []
+    import matplotlib.figure
+    real_savefig = matplotlib.figure.Figure.savefig
+
+    def capture(fig, *args, **kwargs):
+        texts = [fig._suptitle.get_text()] if fig._suptitle else []
+        texts += [ax.get_title() for ax in fig.axes]
+        titles.append(" | ".join(texts))
+        return real_savefig(fig, *args, **kwargs)
+    monkeypatch.setattr(matplotlib.figure.Figure, "savefig", capture)
+    folder = Path(build(tmp_path, task)["output"])
+    assert titles and all(stamp in title for title in titles), titles
+    assert (folder / "STAMP.txt").read_text().strip() == stamp
+    assert (folder / "MILESTONE_REPORT.md").read_text().startswith(f"> **{stamp}**")
+    assert (folder / "stats/tables.md").read_text().startswith(f"**{stamp}**")
+    assert stamp in (folder / "stats/final_fitness_summary.csv").read_text()
+    assert json.loads((folder / "package_manifest.json").read_text())["artifact_stamp"] == stamp

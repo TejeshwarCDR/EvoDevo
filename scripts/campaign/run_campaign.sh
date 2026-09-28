@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: scripts/campaign/run_campaign.sh [--resume ID|latest] [--campaign-id ID] [--config FILE] [--output-root DIR] [--mirror-dir DIR|--no-mirror] [--workers N] [--mode real|surrogate] [--grace-s SEC] [--no-notify] [--allow-same-disk-mirror] [--dry-run [--launch-at ISO]]"
+  echo "Usage: scripts/campaign/run_campaign.sh [--resume ID|latest] [--campaign-id ID] [--config FILE] [--output-root DIR] [--mirror-dir DIR|--no-mirror] [--workers N] [--mode real|surrogate] [--grace-s SEC] [--no-notify] [--allow-same-disk-mirror] [--dry-run [--launch-at ISO]] [--stamp TEXT]"
 }
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -20,6 +20,7 @@ NO_NOTIFY=0
 ALLOW_SAME_DISK=0
 DRY_RUN=0
 LAUNCH_AT=""
+STAMP=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --help|-h) usage; exit 0 ;;
@@ -36,6 +37,7 @@ while [[ $# -gt 0 ]]; do
     --allow-same-disk-mirror) ALLOW_SAME_DISK=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     --launch-at) LAUNCH_AT="$2"; shift 2 ;;
+    --stamp) STAMP="$2"; shift 2 ;;
     *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
@@ -87,6 +89,7 @@ if [[ -n "$RESUME" ]]; then CMD+=(--resume "$RESUME"); else CMD+=(--campaign-id 
 if [[ "$NO_MIRROR" -eq 1 ]]; then CMD+=(--no-mirror); else CMD+=(--mirror-dir "$MIRROR_DIR"); fi
 if [[ "$NO_NOTIFY" -eq 1 ]]; then CMD+=(--no-notify); fi
 if [[ "$ALLOW_SAME_DISK" -eq 1 ]]; then CMD+=(--allow-same-disk-mirror); fi
+if [[ -n "$STAMP" ]]; then CMD+=(--stamp "$STAMP"); fi
 # Every refusal (dirty tree, config-hash mismatch on resume, notifier, mirror
 # disk) is decided by the Python entry point itself; run it here, before any
 # tmux session exists, so the operator sees the reason.

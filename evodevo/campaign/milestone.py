@@ -275,6 +275,12 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
                   if p["task"] == task for r in p["runs"])
     fraction = len(data) / planned if planned else None
     status = "PARTIAL" if snapshot or fraction is None or fraction < 1 else "COMPLETE"
+    # Validation runs carry an artifact stamp (e.g. "VALIDATION - NOT A
+    # RESULT") into every title, the report, the tables and a STAMP.txt.
+    stamp = manifest.get("artifact_stamp")
+    mark = f" — {stamp}" if stamp else ""
+    if stamp:
+        _atomic_text(output / "STAMP.txt", stamp + "\n")
     for (_, _), indices in data.groupby(["encoder", "seed"]).groups.items():
         ordered = data.loc[indices].sort_values("eval_index")
         data.loc[ordered.index, "evals_spent"] = ordered["eval_index"].to_numpy() + 1
@@ -302,12 +308,14 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
         summary["n_seeds"] = summary["encoder"].map({arm: len(values) for arm, values in finals.items()})
     summary.to_csv(output / "stats/summary.csv", index=False)
     primary = pd.DataFrame(_primary_summary(finals, status, fraction))
+    if stamp:
+        primary["artifact_stamp"] = stamp
     primary.to_csv(output / "stats/final_fitness_summary.csv", index=False)
     try:
         markdown = primary.to_markdown(index=False)
     except ImportError:
         markdown = primary.to_csv(index=False)
-    _atomic_text(output / "stats/tables.md", markdown + "\n")
+    _atomic_text(output / "stats/tables.md", (f"**{stamp}**\n\n" if stamp else "") + markdown + "\n")
     _atomic_text(output / "stats/tables.tex", primary.to_latex(index=False))
     generation_rows = _secondary_tables(data, output, finals, status, fraction)
     import matplotlib
@@ -323,7 +331,7 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
         ax.plot(x, np.median(matrix, axis=0), label=arm)
         ax.fill_between(x, np.quantile(matrix, .25, axis=0), np.quantile(matrix, .75, axis=0), alpha=.2)
     ax.set(xlabel="Genomes evaluated", ylabel="Median best fitness (IQR band)",
-           title=f"{task}: evolutionary progress" + (f" — PARTIAL {fraction:.1%}" if status == "PARTIAL" and fraction is not None else ""))
+           title=f"{task}: evolutionary progress" + (f" — PARTIAL {fraction:.1%}" if status == "PARTIAL" and fraction is not None else "") + mark)
     ax.legend()
     (output / "figures").mkdir(exist_ok=True)
     fig.savefig(output / "figures/fitness_curves.png", dpi=160, bbox_inches="tight")
@@ -331,7 +339,7 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
     plt.close(fig)
     fig, _ = plot_two_panel_comparison(data)
     fig.suptitle(f"{task}: spent versus valid evaluations" +
-                 (f" — PARTIAL {fraction:.1%}" if status == "PARTIAL" and fraction is not None else ""))
+                 (f" — PARTIAL {fraction:.1%}" if status == "PARTIAL" and fraction is not None else "") + mark)
     fig.savefig(output / "figures/budget_curves.png", dpi=160, bbox_inches="tight")
     fig.savefig(output / "figures/budget_curves.pdf", bbox_inches="tight")
     plt.close(fig)
@@ -348,7 +356,7 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
     axes[1].set(xlabel="Generation", ylabel="Unique valid bodies / valid evaluations")
     axes[0].legend()
     fig.suptitle(f"{task}: validity and diversity" +
-                 (f" — PARTIAL {fraction:.1%}" if status == "PARTIAL" and fraction is not None else ""))
+                 (f" — PARTIAL {fraction:.1%}" if status == "PARTIAL" and fraction is not None else "") + mark)
     fig.savefig(output / "figures/validity_diversity.png", dpi=160, bbox_inches="tight")
     fig.savefig(output / "figures/validity_diversity.pdf", bbox_inches="tight")
     plt.close(fig)
@@ -364,7 +372,7 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
         np.savez(npz, body=body, fitness=float(best["fitness"]), seed=int(best["seed"]),
                  status=status, completion_fraction=fraction if fraction is not None else np.nan)
         axes = plot_body(body, title=f"{arm}, {task}, fitness {best['fitness']:.3f}" +
-                         (f", PARTIAL {fraction:.1%}" if status == "PARTIAL" and fraction is not None else ""))
+                         (f", PARTIAL {fraction:.1%}" if status == "PARTIAL" and fraction is not None else "") + mark)
         image = best_dir / f"{arm}.png"
         axes.figure.savefig(image, dpi=160, bbox_inches="tight")
         plt.close(axes.figure)
@@ -456,9 +464,12 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
     report += "Figures and best-body files are listed in package_manifest.json. Videos require a green visualisation check.\n"
     if video_notes:
         report += "\n" + "\n".join(video_notes) + "\n"
+    if stamp:
+        report = f"> **{stamp}**\n\n" + report
     _atomic_text(output / "MILESTONE_REPORT.md", report)
     files = sorted(str(path.relative_to(output)) for path in output.rglob("*") if path.is_file())
     _atomic_text(output / "package_manifest.json", json.dumps({"task": task, "snapshot": snapshot,
+                  "artifact_stamp": stamp,
                   "status": status,
                   "completion_fraction": fraction, "generated_at": time.time(),
                   "files": files}, indent=2, sort_keys=True) + "\n")

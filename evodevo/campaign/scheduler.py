@@ -312,6 +312,8 @@ def resume_command(args, campaign_id):
         command.append("--no-notify")
     if getattr(args, "allow_same_disk_mirror", False):
         command.append("--allow-same-disk-mirror")
+    if getattr(args, "stamp", None):
+        command.extend(["--stamp", args.stamp])
     return shlex.join(command)
 
 
@@ -334,6 +336,8 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
     parser.add_argument("--allow-same-disk-mirror", action="store_true",
                         help="explicitly accept a mirror on the SAME physical disk as the results "
                              "(recorded in the manifest; permanent dashboard warning)")
+    parser.add_argument("--stamp", help="label stamped on every artifact, e.g. 'VALIDATION - NOT A RESULT' "
+                        "(manifest, STAMP.txt, milestone figures/report/tables); never result-affecting")
     parser.add_argument("--dry-run", action="store_true",
                         help="print the plan, calendar estimate, disk projection and every launch "
                              "check; write nothing, start nothing")
@@ -397,6 +401,11 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
     scheduler._manifest(git_commit=subprocess.check_output(["git", "rev-parse", "HEAD"],
         cwd=repo_root, text=True).strip(), launch_checks=launch_record,
         no_notify=bool(args.no_notify))
+    stamp = args.stamp or scheduler._read_manifest().get("artifact_stamp")
+    if stamp:
+        scheduler._manifest(artifact_stamp=stamp)
+        with open(os.path.join(scheduler.root, "STAMP.txt"), "w", encoding="utf-8") as handle:
+            handle.write(stamp + "\n")
     with open(os.path.join(scheduler.root, "scheduler.pgid"), "w", encoding="ascii") as handle:
         handle.write(str(os.getpgrp()) + "\n")
     scheduler.run()
