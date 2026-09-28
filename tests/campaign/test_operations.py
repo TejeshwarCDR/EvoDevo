@@ -205,3 +205,50 @@ def test_stop_script_kills_process_group_and_tmux_session(tmp_path):
             process.wait()
         subprocess.run(["tmux", "-L", socket, "kill-server"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def test_launcher_starts_and_cleans_tiny_surrogate_campaign():
+    import shutil
+    import tempfile
+    if shutil.which("tmux") is None:
+        return
+    repo = Path(__file__).resolve().parents[2]
+    with tempfile.TemporaryDirectory(prefix="evodevo-launch-") as directory:
+        root = Path(directory)
+        config = root / "benchmark.yaml"
+        config.write_text(
+            "profile: campaign\n"
+            "encoders: [direct]\n"
+            "tasks: [Walker-v0]\n"
+            "seeds: [0]\n"
+            f"configs_root: {repo / 'evodevo/experiments/configs'}\n"
+            "output_dir: results/runs\n"
+            "surrogate: true\n"
+            "factors: {dev_steps: 100, init_condition: center_seed}\n"
+            "profile_overrides: {population_size: 2, offspring_size: 2, eval_budget: 2, "
+            "ppo_timesteps: {Walker-v0: 2000}, ppo_seeds: {Walker-v0: 1}}\n")
+        socket = f"evodevo-launch-test-{os.getpid()}-{time.time_ns()}"
+        env = {**os.environ, "EVODEVO_TMUX_SOCKET": socket}
+        run_root = root / "campaigns"
+        try:
+            started = subprocess.run(["bash", "scripts/campaign/run_campaign.sh", "--campaign-id", "smoke",
+                "--config", str(config), "--output-root", str(run_root), "--no-mirror",
+                "--workers", "1", "--mode", "surrogate"], cwd=repo, env=env,
+                capture_output=True, text=True, timeout=20)
+            assert started.returncode == 0, started.stderr + started.stdout
+            deadline = time.monotonic() + 30
+            manifest = run_root / "smoke" / "manifest.json"
+            while time.monotonic() < deadline:
+                if manifest.exists() and json.loads(manifest.read_text()).get("status") == "complete":
+                    break
+                time.sleep(0.1)
+            else:
+                raise AssertionError(f"surrogate launcher did not finish: {started.stdout}")
+            assert (run_root / "smoke" / "runs" / "direct" / "Walker-v0" / "seed_0" / "run_log.jsonl").exists()
+        finally:
+            subprocess.run(["bash", "scripts/campaign/stop_campaign.sh", "--campaign", "smoke",
+                "--output-root", str(run_root), "--grace-s", "0"], cwd=repo, env=env,
+                capture_output=True, text=True, timeout=20)
+            subprocess.run(["tmux", "-L", socket, "kill-server"], capture_output=True)
+        assert subprocess.run(["tmux", "-L", socket, "has-session", "-t", "evodevo-campaign"],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
