@@ -43,7 +43,8 @@ def monitor_once(root, alerts, *, now=None, p95_ecore_s=None, last_mirror=0,
     mirror_dir = manifest.get("mirror_dir")
     mirror_ok = manifest.get("no_mirror", False) or bool(mirror_dir and Path(mirror_dir).is_dir())
     if mirror_dir and now - last_mirror >= INTERVAL_S:
-        result = sync(root, mirror_dir, alert_manager=alerts)
+        result = sync(root, mirror_dir, alert_manager=alerts,
+                      location_policy={"allow_same_disk": manifest.get("allow_same_disk_mirror", False)})
         mirror_ok = result["ok"]
         if mirror_ok:
             last_mirror = now

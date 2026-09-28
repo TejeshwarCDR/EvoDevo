@@ -277,6 +277,7 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
         "last_alert": alerts[-1] if alerts else None,
         "mirror_disabled": manifest.get("no_mirror", False),
         "notify_disabled": manifest.get("no_notify", False),
+        "same_disk_mirror": manifest.get("allow_same_disk_mirror", False),
         "last_mirror_success": mirror_status.get("last_success", manifest.get("last_mirror_success")),
         **info,
     }
@@ -302,6 +303,8 @@ def render(snapshot: dict, tty: bool = False) -> str:
         lines.append("WARNING: mirror explicitly disabled; results have no second copy")
     if snapshot.get("notify_disabled"):
         lines.append("WARNING: --no-notify: no out-of-band notifier; alerts go to alerts.jsonl only")
+    if snapshot.get("same_disk_mirror"):
+        lines.append("WARNING: --allow-same-disk-mirror: the mirror shares a physical disk with the results")
     return "\n".join(lines) + "\n"
 
 

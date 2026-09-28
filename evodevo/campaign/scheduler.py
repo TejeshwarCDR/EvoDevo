@@ -47,8 +47,10 @@ def genome_hash(encoder, genome) -> str:
 
 class CampaignScheduler:
     def __init__(self, plan, campaign_id: str, output_root="results/campaign", workers=20,
-                 mode="real", grace_s=120, mirror_dir=None, no_mirror=False):
+                 mode="real", grace_s=120, mirror_dir=None, no_mirror=False,
+                 allow_same_disk_mirror=False):
         self.plan, self.campaign_id, self.mode, self.grace_s = plan, campaign_id, mode, grace_s
+        self.allow_same_disk_mirror = allow_same_disk_mirror
         self.root = os.path.join(output_root, campaign_id)
         self.journal = ResultJournal(os.path.join(self.root, "journal.jsonl"))
         self.alerts = AlertManager(os.path.join(self.root, "alerts.jsonl"))
@@ -80,7 +82,8 @@ class CampaignScheduler:
                    "worker_slots": self.affinity_plan.to_dict(),
                    "scheduler_affinity": dataclasses.asdict(self.scheduler_affinity)
                    if dataclasses.is_dataclass(self.scheduler_affinity) else self.scheduler_affinity,
-                   "mirror_dir": self.mirror_dir, "no_mirror": self.no_mirror, **extra}
+                   "mirror_dir": self.mirror_dir, "no_mirror": self.no_mirror,
+                   "allow_same_disk_mirror": self.allow_same_disk_mirror, **extra}
         temporary = path + ".tmp"
         with open(temporary, "w") as handle:
             json.dump(current, handle, indent=2, sort_keys=True)
@@ -274,7 +277,8 @@ class CampaignScheduler:
                 self._manifest(milestone_status={**self._read_manifest().get("milestone_status", {}),
                                              phase.task: milestone})
                 if self.mirror_dir:
-                    result = sync(self.root, self.mirror_dir, alert_manager=self.alerts)
+                    result = sync(self.root, self.mirror_dir, alert_manager=self.alerts,
+                                  location_policy={"allow_same_disk": self.allow_same_disk_mirror})
                     if result["ok"]:
                         self._manifest(last_mirror_success=result["timestamp"])
             if not self.stop_requested:
@@ -299,6 +303,8 @@ def resume_command(args, campaign_id):
     command.extend(["--no-mirror"] if args.no_mirror else ["--mirror-dir", args.mirror_dir])
     if getattr(args, "no_notify", False):
         command.append("--no-notify")
+    if getattr(args, "allow_same_disk_mirror", False):
+        command.append("--allow-same-disk-mirror")
     return shlex.join(command)
 
 
@@ -318,6 +324,9 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
     parser.add_argument("--no-notify", action="store_true",
                         help="explicitly run a REAL campaign with no out-of-band notifier "
                              "(recorded in the manifest; permanent dashboard warning)")
+    parser.add_argument("--allow-same-disk-mirror", action="store_true",
+                        help="explicitly accept a mirror on the SAME physical disk as the results "
+                             "(recorded in the manifest; permanent dashboard warning)")
     parser.add_argument("--check-only", action="store_true",
                         help="run every launch refusal check, print the result, start nothing")
     args = parser.parse_args(argv)
@@ -325,6 +334,8 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
         parser.error("--mirror-dir is required unless --no-mirror is explicitly set")
     if args.mirror_dir and args.no_mirror:
         parser.error("--mirror-dir and --no-mirror are mutually exclusive")
+    if args.allow_same_disk_mirror and args.no_mirror:
+        parser.error("--allow-same-disk-mirror requires --mirror-dir")
     if args.resume and args.campaign_id:
         parser.error("--resume and --campaign-id are mutually exclusive")
     from evodevo.preflight.dirty_check import project_is_dirty
@@ -362,7 +373,8 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
         print(f"launch checks passed for {campaign_id}: {json.dumps(launch_record, sort_keys=True)}")
         return 0
     scheduler = CampaignScheduler(plan, campaign_id, args.output_root, args.workers,
-        args.mode, args.grace_s, args.mirror_dir, args.no_mirror)
+        args.mode, args.grace_s, args.mirror_dir, args.no_mirror,
+        allow_same_disk_mirror=args.allow_same_disk_mirror)
     scheduler._manifest(git_commit=subprocess.check_output(["git", "rev-parse", "HEAD"],
         cwd=repo_root, text=True).strip(), launch_checks=launch_record,
         no_notify=bool(args.no_notify))

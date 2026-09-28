@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: scripts/campaign/run_campaign.sh [--resume ID|latest] [--campaign-id ID] [--config FILE] [--output-root DIR] [--mirror-dir DIR|--no-mirror] [--workers N] [--mode real|surrogate] [--grace-s SEC] [--no-notify]"
+  echo "Usage: scripts/campaign/run_campaign.sh [--resume ID|latest] [--campaign-id ID] [--config FILE] [--output-root DIR] [--mirror-dir DIR|--no-mirror] [--workers N] [--mode real|surrogate] [--grace-s SEC] [--no-notify] [--allow-same-disk-mirror]"
 }
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -17,6 +17,7 @@ WORKERS=20
 MODE=real
 GRACE_S=120
 NO_NOTIFY=0
+ALLOW_SAME_DISK=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --help|-h) usage; exit 0 ;;
@@ -30,6 +31,7 @@ while [[ $# -gt 0 ]]; do
     --mode) MODE="$2"; shift 2 ;;
     --grace-s) GRACE_S="$2"; shift 2 ;;
     --no-notify) NO_NOTIFY=1; shift ;;
+    --allow-same-disk-mirror) ALLOW_SAME_DISK=1; shift ;;
     *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
@@ -68,6 +70,7 @@ CMD=(env "EVODEVO_NOTIFY_CONFIG=$NOTIFY_CONFIG" .venv/bin/python -m evodevo.camp
 if [[ -n "$RESUME" ]]; then CMD+=(--resume "$RESUME"); else CMD+=(--campaign-id "$CAMPAIGN_ID"); fi
 if [[ "$NO_MIRROR" -eq 1 ]]; then CMD+=(--no-mirror); else CMD+=(--mirror-dir "$MIRROR_DIR"); fi
 if [[ "$NO_NOTIFY" -eq 1 ]]; then CMD+=(--no-notify); fi
+if [[ "$ALLOW_SAME_DISK" -eq 1 ]]; then CMD+=(--allow-same-disk-mirror); fi
 # Every refusal (dirty tree, config-hash mismatch on resume, notifier, mirror
 # disk) is decided by the Python entry point itself; run it here, before any
 # tmux session exists, so the operator sees the reason.

@@ -25,9 +25,20 @@ def notifier_refusals(args, status: dict) -> list:
             "--test`), or pass --no-notify explicitly."]
 
 
+def mirror_check(args) -> tuple:
+    if args.no_mirror:
+        return [], {"no_mirror": True}
+    from .mirror import check_mirror_location
+    return check_mirror_location(args.output_root, args.mirror_dir,
+                                 allow_same_disk=bool(getattr(args, "allow_same_disk_mirror", False)))
+
+
 def launch_refusals(args):
     """-> (refusals, record). Empty refusals means the launch may proceed."""
     notifier = notifier_status()
     refusals = notifier_refusals(args, notifier)
-    record = {"notifier": notifier, "no_notify": bool(args.no_notify), "mode": args.mode}
+    mirror_refusals, mirror_record = mirror_check(args)
+    refusals += mirror_refusals
+    record = {"notifier": notifier, "no_notify": bool(args.no_notify), "mode": args.mode,
+              "mirror": mirror_record}
     return refusals, record
