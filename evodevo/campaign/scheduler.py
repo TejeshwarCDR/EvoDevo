@@ -45,6 +45,15 @@ def genome_hash(encoder, genome) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
+def cpu_placement(topology, workers):
+    """(worker AffinityPlan, scheduler CPUs): workers take allocation_order
+    (P-core primaries, then E-cores, then P-core siblings) one CPU each; the
+    scheduler gets every CPU no worker uses. Pure: nothing is pinned here."""
+    affinity_plan = cpu_slots(topology, workers)
+    used = {cpu for slot in affinity_plan.slots for cpu in slot}
+    return affinity_plan, [cpu for cpu in allocation_order(topology) if cpu not in used]
+
+
 class CampaignScheduler:
     def __init__(self, plan, campaign_id: str, output_root="results/campaign", workers=20,
                  mode="real", grace_s=120, mirror_dir=None, no_mirror=False,
@@ -57,9 +66,7 @@ class CampaignScheduler:
         self.mirror_dir, self.no_mirror = mirror_dir, no_mirror
         topology = detect_topology()
         self.topology = topology
-        self.affinity_plan = cpu_slots(topology, workers)
-        used = {cpu for slot in self.affinity_plan.slots for cpu in slot}
-        self.scheduler_cpus = [cpu for cpu in allocation_order(topology) if cpu not in used]
+        self.affinity_plan, self.scheduler_cpus = cpu_placement(topology, workers)
         self.scheduler_affinity = pin_current_process(self.scheduler_cpus) if self.scheduler_cpus else None
         self.stop_requested = False
 
@@ -327,6 +334,11 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
     parser.add_argument("--allow-same-disk-mirror", action="store_true",
                         help="explicitly accept a mirror on the SAME physical disk as the results "
                              "(recorded in the manifest; permanent dashboard warning)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="print the plan, calendar estimate, disk projection and every launch "
+                             "check; write nothing, start nothing")
+    parser.add_argument("--launch-at", help="dry-run calendar start, ISO local time "
+                        "(e.g. 2026-10-01T00:00); default now")
     parser.add_argument("--check-only", action="store_true",
                         help="run every launch refusal check, print the result, start nothing")
     args = parser.parse_args(argv)
@@ -338,6 +350,13 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
         parser.error("--allow-same-disk-mirror requires --mirror-dir")
     if args.resume and args.campaign_id:
         parser.error("--resume and --campaign-id are mutually exclusive")
+    if args.dry_run:
+        from evodevo.experiments.benchmark import BenchmarkConfig
+        from .dry_run import render
+        plan = CampaignPlan.from_benchmark(BenchmarkConfig.from_yaml(args.config))
+        campaign_id = args.resume or args.campaign_id or time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+        print(render(args, plan, campaign_id), end="", flush=True)
+        return 0
     from evodevo.preflight.dirty_check import project_is_dirty
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
     refusals = ["refusing a dirty working tree (commit first)"] if project_is_dirty(repo_root) else []

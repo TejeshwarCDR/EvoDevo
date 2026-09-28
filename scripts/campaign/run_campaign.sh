@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: scripts/campaign/run_campaign.sh [--resume ID|latest] [--campaign-id ID] [--config FILE] [--output-root DIR] [--mirror-dir DIR|--no-mirror] [--workers N] [--mode real|surrogate] [--grace-s SEC] [--no-notify] [--allow-same-disk-mirror]"
+  echo "Usage: scripts/campaign/run_campaign.sh [--resume ID|latest] [--campaign-id ID] [--config FILE] [--output-root DIR] [--mirror-dir DIR|--no-mirror] [--workers N] [--mode real|surrogate] [--grace-s SEC] [--no-notify] [--allow-same-disk-mirror] [--dry-run [--launch-at ISO]]"
 }
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -18,6 +18,8 @@ MODE=real
 GRACE_S=120
 NO_NOTIFY=0
 ALLOW_SAME_DISK=0
+DRY_RUN=0
+LAUNCH_AT=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --help|-h) usage; exit 0 ;;
@@ -32,10 +34,24 @@ while [[ $# -gt 0 ]]; do
     --grace-s) GRACE_S="$2"; shift 2 ;;
     --no-notify) NO_NOTIFY=1; shift ;;
     --allow-same-disk-mirror) ALLOW_SAME_DISK=1; shift ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    --launch-at) LAUNCH_AT="$2"; shift 2 ;;
     *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
 
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  # Writes nothing: no run directory, tmux session, mirror copy or bytecode.
+  DRY=(env PYTHONDONTWRITEBYTECODE=1 "EVODEVO_NOTIFY_CONFIG=${EVODEVO_NOTIFY_CONFIG:-$REPO_ROOT/campaign.local.yaml}"
+       .venv/bin/python -m evodevo.campaign --dry-run --config "$CONFIG" --output-root "$OUTPUT_ROOT"
+       --workers "$WORKERS" --mode "$MODE")
+  if [[ -n "$RESUME" ]]; then DRY+=(--resume "$RESUME"); elif [[ -n "$CAMPAIGN_ID" ]]; then DRY+=(--campaign-id "$CAMPAIGN_ID"); fi
+  if [[ "$NO_MIRROR" -eq 1 ]]; then DRY+=(--no-mirror); elif [[ -n "$MIRROR_DIR" ]]; then DRY+=(--mirror-dir "$MIRROR_DIR"); fi
+  if [[ "$NO_NOTIFY" -eq 1 ]]; then DRY+=(--no-notify); fi
+  if [[ "$ALLOW_SAME_DISK" -eq 1 ]]; then DRY+=(--allow-same-disk-mirror); fi
+  if [[ -n "$LAUNCH_AT" ]]; then DRY+=(--launch-at "$LAUNCH_AT"); fi
+  exec "${DRY[@]}"
+fi
 TMUX_ARGS=()
 if [[ -n "${EVODEVO_TMUX_SOCKET:-}" ]]; then TMUX_ARGS=(-L "$EVODEVO_TMUX_SOCKET"); fi
 if tmux "${TMUX_ARGS[@]}" has-session -t evodevo-campaign 2>/dev/null; then

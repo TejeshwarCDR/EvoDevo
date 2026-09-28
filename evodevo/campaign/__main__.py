@@ -44,6 +44,8 @@ run `python -m evodevo.campaign --help` for scheduler options."""
 
 def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
+    if "--dry-run" in argv:
+        sys.dont_write_bytecode = True  # a dry run writes NOTHING, not even __pycache__
     if argv and argv[0] == "status":
         from evodevo.campaign.dashboard import main as dashboard_main
         return dashboard_main(argv[1:])
