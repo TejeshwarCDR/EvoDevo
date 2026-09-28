@@ -16,6 +16,7 @@ import numpy as np
 
 from evodevo.analysis.aggregate import load_runs, per_seed_finals, three_way_table
 from evodevo.visualization.morphology import plot_body
+from evodevo.morphology.validate import validate_body
 
 REQUIRED = ("figures/fitness_curves.png", "figures/fitness_curves.pdf",
             "stats/omnibus.csv", "stats/pairwise.csv", "stats/tables.md",
@@ -227,6 +228,8 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
     fig.savefig(output / "figures/fitness_curves.pdf", bbox_inches="tight")
     plt.close(fig)
     best_files = []
+    video_notes = []
+    visualization_green = None
     for arm, group in data.groupby("encoder"):
         best = group.loc[group["fitness"].idxmax()]
         body = np.asarray(best["body"], dtype=int)
@@ -239,6 +242,29 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
         axes.figure.savefig(image, dpi=160, bbox_inches="tight")
         plt.close(axes.figure)
         best_files.extend((str(npz.relative_to(output)), str(image.relative_to(output))))
+        # Only a *trained* controller produces paper-facing video. The
+        # repository's visualisation self-test gates rollout rendering; a
+        # failed gate or renderer never invalidates the statistics package.
+        policies = best.get("policy_paths")
+        if not snapshot and validate_body(body).valid and isinstance(policies, list) and policies:
+            if visualization_green is None:
+                from evodevo.visualization.check import run_all
+                visualization_green = all(check.ok for check in run_all())
+            if visualization_green:
+                try:
+                    from evodevo.visualization.render import render_body_rollout
+                    policy = str(policies[0])
+                    if not os.path.isfile(policy):
+                        raise FileNotFoundError(policy)
+                    rollout = render_body_rollout(body, policy, task, 200,
+                        str(best_dir / f"{arm}_rollout"), seed=int(best["seed"]))
+                    best_files.extend((str(Path(rollout.mp4_path).relative_to(output.resolve())),
+                                       str(Path(rollout.gif_path).relative_to(output.resolve()))))
+                    video_notes.append(f"{arm}: trained-controller MP4 and GIF saved.")
+                except Exception as exc:
+                    video_notes.append(f"{arm}: video unavailable ({type(exc).__name__}: {exc}).")
+            else:
+                video_notes.append(f"{arm}: video omitted because the visualisation self-test failed.")
     sensitivity = None
     if task == "UpStepper-v0" and "per_seed_fitness" in data:
         changed = data.copy()
@@ -271,6 +297,8 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
         report += ("UpStepper mean-of-2 sensitivity: stats/mean_of_2_sensitivity.csv, "
                    "stats/mean_of_2_omnibus.csv and stats/mean_of_2_pairwise.csv.\n\n")
     report += "Figures and best-body files are listed in package_manifest.json. Videos require a green visualisation check.\n"
+    if video_notes:
+        report += "\n" + "\n".join(video_notes) + "\n"
     _atomic_text(output / "MILESTONE_REPORT.md", report)
     files = sorted(str(path.relative_to(output)) for path in output.rglob("*") if path.is_file())
     _atomic_text(output / "package_manifest.json", json.dumps({"task": task, "snapshot": snapshot,
