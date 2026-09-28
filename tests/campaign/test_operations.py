@@ -175,16 +175,28 @@ def test_stop_script_kills_process_group_and_tmux_session(tmp_path):
     socket = f"evodevo-test-{os.getpid()}"
     subprocess.run(["tmux", "-L", socket, "new-session", "-d", "-s", "evodevo-campaign",
                     "sleep 300"], check=True)
-    process = subprocess.Popen(["setsid", "sleep", "300"])
+    process = subprocess.Popen(["setsid", sys.executable, "-m", "evodevo.campaign.monitor",
+                                "--campaign", campaign, "--output-root", str(tmp_path),
+                                "--interval-s", "1"])
     (folder / "scheduler.pgid").write_text(str(process.pid))
     environment = {**os.environ, "EVODEVO_TMUX_SOCKET": socket}
     try:
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            if subprocess.run(["pgrep", "-af", f"evodevo.campaign.monitor.*{campaign}"],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+                break
+            time.sleep(0.05)
+        else:
+            raise AssertionError("surrogate monitor did not start")
         stopped = subprocess.run(["bash", "scripts/campaign/stop_campaign.sh", "--campaign",
                                   campaign, "--output-root", str(tmp_path), "--grace-s", "0"],
                                  env=environment, capture_output=True, text=True, timeout=20)
         assert stopped.returncode == 0, stopped.stderr + stopped.stdout
         process.wait(timeout=5)
         assert process.returncode != 0
+        assert subprocess.run(["pgrep", "-af", f"evodevo.campaign.monitor.*{campaign}"],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
         assert subprocess.run(["tmux", "-L", socket, "has-session", "-t", "evodevo-campaign"],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
     finally:
