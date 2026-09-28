@@ -123,7 +123,7 @@ def _measured_phase_eta(runs, task, logged, journaled, durations, worker_slots, 
         pending = (budget - spent) * valid_fraction * k
         # Completed seed tasks for a generation not yet told are already
         # durable in the journal and should not be projected a second time.
-        pending = max(0, pending - max(0, journaled[(arm, run["seed"])] - valid * k))
+        pending = max(0, pending - max(0, journaled[(arm, task, run["seed"])] - valid * k))
         samples = {core: durations[(arm, task, core)] for core in ("P", "E", "unknown")}
         if not any(samples.values()):
             return None
@@ -185,7 +185,7 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
         if len(parts) >= 2:
             if len(parts) >= 3:
                 try:
-                    journaled_by_run[(parts[0], int(parts[2].removeprefix("seed_")))] += 1
+                    journaled_by_run[(parts[0], parts[1], int(parts[2].removeprefix("seed_")))] += 1
                 except ValueError:
                     pass
             duration = row.get("result", {}).get("wall_clock_s")
@@ -231,6 +231,18 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
                     for hour in range(min(24, max(1, math.ceil(elapsed / 3600))))]
     alerts = _rows(os.path.join(root, "alerts.jsonl"))
     dispatch = _json(os.path.join(root, "dispatch_status.json"), {})
+    if dispatch.get("task") == task:
+        for run_key, proposed_generation in dispatch.get("run_generations", {}).items():
+            parts = run_key.split("/")
+            if len(parts) == 3 and parts[1] == task:
+                try:
+                    key = (parts[0], int(parts[2].removeprefix("seed_")))
+                except ValueError:
+                    continue
+                if key in generation:
+                    generation[key] = max(generation[key], int(proposed_generation))
+    else:
+        dispatch = {}
     failures = sum(1 for r in journal if not r.get("result", {}).get("completed", True))
     mirror = manifest.get("mirror_dir")
     mirror_status = _json(os.path.join(root, "mirror_status.json"), {})

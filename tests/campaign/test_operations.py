@@ -225,11 +225,21 @@ def test_dashboard_prior_then_per_arm_core_class_measured_eta(tmp_path):
                      "ppo_k": 0, "completed_at": 1900,
                      "result": {"wall_clock_s": (100 if arm == "direct" else 200) * 2,
                                 "cpu_ids": [1], "completed": True}})
+        # A prior phase's journal entries must never be mistaken for current
+        # UpStepper/Walker work already completed for this run.
+        rows.append({"run_key": f"{arm}/UpStepper-v0/seed_0", "eval_index": 0,
+                     "ppo_k": 0, "completed_at": 900,
+                     "result": {"wall_clock_s": 300, "cpu_ids": [0], "completed": True}})
     journal.write_text("".join(json.dumps(row) + "\n" for row in rows))
+    (tmp_path / "dispatch_status.json").write_text(json.dumps(
+        {"task": task, "run_generations": {f"direct/{task}/seed_0": 10},
+         "tasks_running": 1, "tasks_queued": 3}))
     measured = collect(str(tmp_path), now=2000, telemetry={})
     assert measured["eta_source"] == "measured"
     assert measured["phase_eta_s"] == (10000.0, 10000.0)
     assert measured["projection_total_h"][0] == measured["projection_total_h"][1]
+    assert measured["generation"][("direct", 0)] == 10
+    assert measured["tasks_running"] == 1 and measured["tasks_queued"] == 3
 
 
 def test_stall_timer_starts_before_first_completed_task_and_ecore_threshold(tmp_path):

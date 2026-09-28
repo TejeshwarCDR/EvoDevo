@@ -85,11 +85,12 @@ class CampaignScheduler:
             json.dump(current, handle, indent=2, sort_keys=True)
         os.replace(temporary, path)
 
-    def _dispatch_status(self, running: int, queued: int):
+    def _dispatch_status(self, running: int, queued: int, task=None, generations=None):
         path = os.path.join(self.root, "dispatch_status.json")
         temporary = path + ".tmp"
         with open(temporary, "w", encoding="utf-8") as handle:
             json.dump({"tasks_running": running, "tasks_queued": queued,
+                       "task": task, "run_generations": generations or {},
                        "updated_at": time.time()}, handle)
         os.replace(temporary, path)
 
@@ -164,12 +165,16 @@ class CampaignScheduler:
                     if (rp.run_key, candidate.eval_index, k) not in journaled:
                         work.append((task, h))
         arm_order = {rp.arm: index for index, (rp, *_rest) in enumerate(active)}
+        task_name = active[0][0].task
+        run_generations = {rp.run_key: batches[rp.run_key][0].generation
+                           for rp, *_rest in active if batches[rp.run_key]}
         work.sort(key=lambda pair: (pair[0].generation, arm_order[pair[0].run_key.split('/')[0]],
                                     int(pair[0].run_key.rsplit('_', 1)[1]), pair[0].eval_index, pair[0].ppo_k))
         if work:
             remaining = len(work)
             self._dispatch_status(min(remaining, self.affinity_plan.n_workers),
-                                  max(0, remaining - self.affinity_plan.n_workers))
+                                  max(0, remaining - self.affinity_plan.n_workers),
+                                  task_name, run_generations)
             hashes = {(t.run_key, t.eval_index, t.ppo_k): h for t, h in work}
             for task, result in pool.map_ppo_tasks((t for t, _ in work), timeout_s=timeout_s,
                                                     should_stop=lambda: self.stop_requested,
@@ -179,15 +184,16 @@ class CampaignScheduler:
                 journaled[(task.run_key, task.eval_index, task.ppo_k)] = {
                     "genome_hash": h, "result": dataclasses.asdict(result)}
                 remaining -= 1
-                self._dispatch_status(min(remaining, self.affinity_plan.n_workers),
-                                      max(0, remaining - self.affinity_plan.n_workers))
+                running = min(remaining, pool._ppo_inflight)
+                self._dispatch_status(running, max(0, remaining - running),
+                                      task_name, run_generations)
             if remaining:
                 if self.stop_requested:
-                    self._dispatch_status(0, remaining)
+                    self._dispatch_status(0, remaining, task_name, run_generations)
                     return False
                 raise RuntimeError(f"PPO pool returned with {remaining} tasks incomplete")
         else:
-            self._dispatch_status(0, 0)
+            self._dispatch_status(0, 0, task_name, run_generations)
         for rp, encoder, config, run, _logger, _directory in active:
             by_index = {}
             results = []
