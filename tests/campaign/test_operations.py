@@ -698,3 +698,17 @@ def test_launcher_starts_and_cleans_tiny_surrogate_campaign():
             capture_output=True, text=True, timeout=20)
         assert mismatch.returncode != 0
         assert "config-hash mismatch" in mismatch.stderr
+
+
+def test_dashboard_shows_walker_milestone_time_after_the_phase_ends(tmp_path):
+    ended = 1_900_000_000.0
+    (tmp_path / "manifest.json").write_text(json.dumps({
+        "campaign_id": "c", "started_at": ended - 3600, "status": "running",
+        "phase_status": {"Walker-v0": {"status": "complete", "started_at": ended - 3600, "ended_at": ended},
+                         "UpStepper-v0": {"status": "running", "started_at": ended}},
+        "plan": {"phases": [
+            {"task": "Walker-v0", "runs": [{"arm": "direct", "seed": 0, "config": {"eval_budget": 2, "ppo_seeds": 1}}]},
+            {"task": "UpStepper-v0", "runs": [{"arm": "direct", "seed": 0, "config": {"eval_budget": 2, "ppo_seeds": 2}}]}]}}))
+    snapshot = collect(str(tmp_path), now=ended + 60)
+    assert snapshot["walker_milestone_reached"] is True
+    assert f"Walker milestone (reached): {_when(ended)}" in render(snapshot)
