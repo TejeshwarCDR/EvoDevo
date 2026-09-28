@@ -17,6 +17,7 @@ D7: the Walker-v0 phase fully completes before the UpStepper-v0 phase starts.
 Common random numbers: both modes consume the SAME per-trial duration draws.
 """
 import heapq, itertools, json, math, os, sys, time
+from collections import deque
 import numpy as np
 
 sys.path.insert(0, os.getcwd())
@@ -285,6 +286,177 @@ def run_interleaved(run_durs, run_oh, factors, ready0=0.0, policy="fifo", trace=
     if policy == "fifo":
         return _run_interleaved_fifo(run_durs, run_oh, factors, ready0, trace, inline_masks)
     raise ValueError(f"unknown dispatch policy {policy!r}")
+
+
+def run_continuous_dispatch(run_durs, factors, serial_costs, *, ready0=0.0,
+                            prefetch=4, trace=None, inline_masks=None):
+    """Production DispatchCore policy with a single blocking scheduler server.
+
+    ``serial_costs`` contains per-run ``prepare_s`` (propose/decode/validate),
+    per-run ``finish_s`` (tell/log/checkpoint), and per-PPO-task ``journal_s``.
+    Prefetched tasks are already in ProcessPoolExecutor's call queue, so an
+    idle worker can take one while the scheduler is busy handling a result.
+    """
+    n_runs = len(run_durs)
+    n_workers = len(factors)
+    prepare = list(serial_costs["prepare_s"])
+    finish_cost = list(serial_costs["finish_s"])
+    journal_cost = float(serial_costs["journal_s"])
+    if len(prepare) != n_runs or len(finish_cost) != n_runs:
+        raise ValueError("serial cost vectors must match run_durs")
+    core = DispatchCore(n_workers, prefetch=prefetch)
+    run_keys = tuple(str(run) for run in range(n_runs))
+    core.begin_phase("simulation", run_keys)
+    idle = list(range(n_workers))
+    heapq.heapify(idle)
+    submitted = deque()
+    events = []
+    sequence = itertools.count()
+    finish = [0.0] * n_runs
+    busy_worker_s = 0.0
+    scheduler_busy_s = 0.0
+    server_free = ready0
+
+    def push(at, kind, payload):
+        heapq.heappush(events, (at, next(sequence), kind, payload))
+
+    def request_server(at, cost, kind, payload):
+        nonlocal server_free, scheduler_busy_s
+        start = max(at, server_free)
+        end = start + cost
+        server_free = end
+        scheduler_busy_s += cost
+        push(end, kind, payload)
+
+    def start_submitted(at):
+        nonlocal busy_worker_s
+        while idle and submitted:
+            worker = heapq.heappop(idle)
+            dispatch_item = submitted.popleft()
+            run, generation, index = dispatch_item.payload
+            duration = float(run_durs[run][generation, index]) * factors[worker]
+            busy_worker_s += duration
+            push(at + duration, "worker_done", (worker, dispatch_item))
+
+    def refill(at):
+        while (dispatch_item := core.next_task()) is not None:
+            submitted.append(dispatch_item)
+        start_submitted(at)
+
+    def report_batch(at, run, generation):
+        if inline_masks is None:
+            indexes = range(np.shape(run_durs[run])[1])
+        else:
+            indexes = np.flatnonzero(inline_masks[run][generation]).tolist()
+        tasks = [DispatchItem(
+            task_id=(run, generation, index), phase="simulation", run_key=str(run),
+            generation=generation, tie_key=(run, index), payload=(run, generation, index),
+        ) for index in indexes]
+        barrier = core.report_ready(str(run), generation, tasks)
+        if barrier is not None:
+            transition(at, run, generation)
+        else:
+            refill(at)
+
+    def transition(at, run, generation):
+        next_generation = generation + 1
+        cost = finish_cost[run]
+        if next_generation < GENS:
+            cost += prepare[run]
+            request_server(at, cost, "batch_ready", (run, next_generation))
+        else:
+            request_server(at, cost, "run_done", (run, generation))
+
+    # The real scheduler prepares initial runs in plan order and refills after
+    # each one, without polling completions until all initial runs are ready.
+    for run in range(n_runs):
+        request_server(ready0, prepare[run], "batch_ready", (run, 0))
+
+    now = ready0
+    while events:
+        now, _seq, kind, payload = heapq.heappop(events)
+        if kind == "batch_ready":
+            report_batch(now, *payload)
+        elif kind == "worker_done":
+            worker, dispatch_item = payload
+            heapq.heappush(idle, worker)
+            # A queued future starts without scheduler participation.
+            start_submitted(now)
+            request_server(now, journal_cost, "journal_done", dispatch_item)
+        elif kind == "journal_done":
+            dispatch_item = payload
+            barrier = core.complete(dispatch_item.task_id)
+            if barrier is not None:
+                transition(now, int(barrier.run_key), barrier.generation)
+            else:
+                refill(now)
+        elif kind == "run_done":
+            run, generation = payload
+            if trace is not None:
+                trace.append((run, generation, now))
+            finish[run] = now
+            core.mark_run_complete(str(run))
+            refill(now)
+        else:
+            raise AssertionError(f"unknown virtual event {kind!r}")
+    if not core.phase_complete:
+        raise AssertionError("continuous simulation ended before its phase barrier")
+    makespan = max(finish, default=ready0) - ready0
+    return makespan, finish, {
+        "worker_utilization": busy_worker_s / (n_workers * makespan) if makespan else 0.0,
+        "scheduler_busy_fraction": scheduler_busy_s / makespan if makespan else 0.0,
+        "worker_busy_s": busy_worker_s,
+        "scheduler_busy_s": scheduler_busy_s,
+    }
+
+
+def run_global_wave_dispatch(run_durs, factors, serial_costs, *, ready0=0.0,
+                             inline_masks=None, assignment_rng=None):
+    """Historical global generation barrier with fully drained waves."""
+    n_runs = len(run_durs)
+    n_workers = len(factors)
+    prepare = list(serial_costs["prepare_s"])
+    finish_cost = list(serial_costs["finish_s"])
+    journal_cost = float(serial_costs["journal_s"])
+    now = ready0
+    busy_worker_s = 0.0
+    scheduler_busy_s = 0.0
+    for generation in range(GENS):
+        preparation = sum(prepare)
+        now += preparation
+        scheduler_busy_s += preparation
+        work = []
+        for run in range(n_runs):
+            indexes = (range(np.shape(run_durs[run])[1]) if inline_masks is None else
+                       np.flatnonzero(inline_masks[run][generation]).tolist())
+            work.extend((run, index) for index in indexes)
+        for offset in range(0, len(work), n_workers):
+            wave = work[offset:offset + n_workers]
+            worker_order = np.arange(n_workers)
+            if assignment_rng is not None:
+                assignment_rng.shuffle(worker_order)
+            completions = []
+            for worker, (run, index) in enumerate(wave):
+                duration = (float(run_durs[run][generation, index])
+                            * factors[int(worker_order[worker])])
+                busy_worker_s += duration
+                completions.append(now + duration)
+            journal_free = now
+            for completed_at in sorted(completions):
+                journal_free = max(journal_free, completed_at) + journal_cost
+                scheduler_busy_s += journal_cost
+            now = max(completions, default=now, )
+            now = max(now, journal_free)
+        finishing = sum(finish_cost)
+        now += finishing
+        scheduler_busy_s += finishing
+    makespan = now - ready0
+    return makespan, [now] * n_runs, {
+        "worker_utilization": busy_worker_s / (n_workers * makespan) if makespan else 0.0,
+        "scheduler_busy_fraction": scheduler_busy_s / makespan if makespan else 0.0,
+        "worker_busy_s": busy_worker_s,
+        "scheduler_busy_s": scheduler_busy_s,
+    }
 
 
 def one_trial(model, rng, factors20, factors15):

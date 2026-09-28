@@ -36,7 +36,7 @@ Budget guard (docs/decisions.md, 2026-09-27), applied mechanically on the p95 to
   > 432 h -> (a) rule_based_monotone on Walker-v0 only; still over -> (b) drop rule_based_monotone
   entirely; still over -> (c) UpStepper-v0 K=1 (noise disclosed as a limitation).
 """
-import json, math, os, sys, time
+import copy, json, math, os, sys, time
 import numpy as np
 
 sys.path.insert(0, os.getcwd()); sys.path.insert(0, os.path.dirname(__file__))
@@ -67,7 +67,9 @@ def load_measured():
     c = anchor["Walker-v0"] / b3_obs["Walker-v0"][ANCHOR_SEED]
     raw_up = anchor["UpStepper-v0"] / b3_obs["UpStepper-v0"][ANCHOR_SEED]
     s = raw_up / c
-    return dict(ec=ec, cpu=cpu, b3_obs=b3_obs, anchor=anchor, mono=mono, c=c, raw_up_ratio=raw_up, s=s)
+    scheduler = json.load(open(f"{OUT}/scheduler_costs.json"))
+    return dict(ec=ec, cpu=cpu, b3_obs=b3_obs, anchor=anchor, mono=mono, c=c,
+                raw_up_ratio=raw_up, s=s, scheduler=scheduler)
 
 
 def build_inputs(m, s, c):
@@ -91,7 +93,16 @@ def build_inputs(m, s, c):
     tdev[a] = mt["t_develop"]["mean"]
     orch[a] = orch["rule_based"]
     ratio = json.load(open(f"{RUN}/pe_core_ratio_measurement_production_scale.json"))["ratio_e_over_p"]
-    return dict(ppo=ppo, sent=sent, tdev=tdev, orch=orch, ratio=ratio, valid={x: 0.0 for x in ARMS})
+    scheduler = {
+        arm: {
+            "prepare_s": m["scheduler"]["arms"][arm]["per_generation"]["prepare_s"]["mean"],
+            "finish_s": m["scheduler"]["arms"][arm]["per_generation"]["finish_s"]["mean"],
+        } for arm in ARMS
+    }
+    return dict(ppo=ppo, sent=sent, tdev=tdev, orch=orch, ratio=ratio,
+                scheduler=scheduler,
+                journal_s=m["scheduler"]["journal"]["append_fsync_s"]["mean"],
+                valid={x: 0.0 for x in ARMS})
 
 
 def validity_inputs(cpu):
@@ -127,12 +138,18 @@ def draw_run(rng, inp, arm, task, k, vprob):
     return durs.reshape(sc.GENS, sc.POP * k), mask.reshape(sc.GENS, sc.POP * k)
 
 
-def overhead(inp, arm):
-    return inp["orch"][arm] + sc.POP * inp["tdev"][arm]     # launcher decodes every genome to validate it
+def scheduler_costs(inp, keys):
+    return {
+        "prepare_s": [inp["scheduler"][arm]["prepare_s"] for arm, _seed in keys],
+        "finish_s": [inp["scheduler"][arm]["finish_s"] for arm, _seed in keys],
+        "journal_s": inp["journal_s"],
+    }
 
 
-def trial(rng, inp, curves, trajs, factors, design, resample):
+def trial(rng, inp, curves, trajs, factors, design, resample, policy="continuous",
+          assignment_rng=None):
     phases = {}
+    operational = {}
     for task in TASKS:
         keys = [(a, s_) for a in design["arms"][task] for s_ in range(5)]
         durs, masks = [], []
@@ -143,22 +160,57 @@ def trial(rng, inp, curves, trajs, factors, design, resample):
                 vprob = np.asarray(curves[a], float)
             d, mk = draw_run(rng, inp, a, task, design["K"][task], vprob)
             durs.append(d); masks.append(mk)
-        ms, _ = sc.run_interleaved(durs, [overhead(inp, a) for a, _ in keys], factors, policy="lgf", inline_masks=masks)
+        costs = scheduler_costs(inp, keys)
+        if policy == "continuous":
+            ms, _, metrics = sc.run_continuous_dispatch(
+                durs, factors, costs, prefetch=4, inline_masks=masks)
+        elif policy == "global_waves":
+            ms, _, metrics = sc.run_global_wave_dispatch(
+                durs, factors, costs, inline_masks=masks,
+                assignment_rng=assignment_rng)
+        else:
+            raise ValueError(policy)
         phases[task] = ms / 3600.0
-    return phases
+        operational[task] = metrics
+    return phases, operational
 
 
-def simulate(inp, curves, trajs, factors, design, resample=False, n=N_TRIALS, seed=SEED):
+def simulate(inp, curves, trajs, factors, design, resample=False, n=N_TRIALS,
+             seed=SEED, policy="continuous"):
     rng = np.random.default_rng(seed)
-    rows = [trial(rng, inp, curves, trajs, factors, design, resample) for _ in range(n)]
-    W = np.array([r["Walker-v0"] for r in rows]); U = np.array([r["UpStepper-v0"] for r in rows]); T = W + U
+    assignment_rng = np.random.default_rng(seed + 1)
+    rows = [trial(rng, inp, curves, trajs, factors, design, resample, policy,
+                  assignment_rng) for _ in range(n)]
+    W = np.array([r[0]["Walker-v0"] for r in rows]); U = np.array([r[0]["UpStepper-v0"] for r in rows]); T = W + U
 
     def st(x):
         return dict(mean=float(x.mean()), p5=float(np.percentile(x, 5)), median=float(np.median(x)),
                     p95=float(np.percentile(x, 95)), sd=float(x.std(ddof=1)), n_trials=len(x))
-    return dict(walker_phase_h=st(W), upstepper_phase_h=st(U), total_h=st(T),
+    worker_util = []
+    scheduler_util = []
+    phase_worker_util = {task: [] for task in TASKS}
+    for phases, metrics in rows:
+        worker_busy = sum(metrics[task]["worker_busy_s"] for task in TASKS)
+        scheduler_busy = sum(metrics[task]["scheduler_busy_s"] for task in TASKS)
+        total_s = 3600.0 * sum(phases.values())
+        worker_util.append(worker_busy / (len(factors) * total_s))
+        scheduler_util.append(scheduler_busy / total_s)
+        for task in TASKS:
+            phase_worker_util[task].append(metrics[task]["worker_utilization"])
+    return dict(policy=policy, walker_phase_h=st(W), upstepper_phase_h=st(U), total_h=st(T),
                 walker_milestone_pct_of_total=dict(of_means=float(100 * W.mean() / T.mean()),
-                                                   per_trial=st(100 * W / T)))
+                                                   per_trial=st(100 * W / T)),
+                worker_utilization=st(np.asarray(worker_util)),
+                scheduler_busy_fraction=st(np.asarray(scheduler_util)),
+                phase_worker_utilization={task: st(np.asarray(values))
+                                          for task, values in phase_worker_util.items()})
+
+
+def scale_ppo(inp, factor):
+    scaled = copy.deepcopy(inp)
+    scaled["ppo"] = {key: (mean * factor, sd * factor)
+                     for key, (mean, sd) in inp["ppo"].items()}
+    return scaled
 
 
 def design(monotone_tasks=TASKS, k_up=2):
@@ -188,7 +240,9 @@ def main():
                       "monotone_raw_wall_s": m["mono"],
                       "t_ppo_mean_sd_at_b3_footing": {f"{a}|{t}": v for (a, t), v in inp["ppo"].items()},
                       "t_sentinel_mean_sd": inp["sent"], "t_develop_mean": inp["tdev"], "orch_per_gen_s": inp["orch"],
+                      "scheduler_serial_costs": inp["scheduler"], "journal_append_fsync_s": inp["journal_s"],
                       "validity_curves": curves, "pe_ratio": inp["ratio"],
+                      "prefetch": 4,
                       "workers": {"n": 20, "n_P": sum(1 for f in factors if f == 1.0), "n_E": sum(1 for f in factors if f != 1.0)}},
            "guard_threshold_h": GUARD_H, "guard_sequence": [], "n_trials": N_TRIALS, "mc_seed": SEED}
     applied = None
@@ -198,22 +252,36 @@ def main():
                                           over_threshold=r["total_h"]["p95"] > GUARD_H))
         print(f"{name}: total mean {r['total_h']['mean']:.1f} h [p5 {r['total_h']['p5']:.1f}, p95 {r['total_h']['p95']:.1f}]  "
               f"Walker {r['walker_phase_h']['mean']:.1f} h  UpStepper {r['upstepper_phase_h']['mean']:.1f} h  "
-              f"milestone {r['walker_milestone_pct_of_total']['of_means']:.1f}%", flush=True)
+              f"milestone {r['walker_milestone_pct_of_total']['of_means']:.1f}%  "
+              f"util {100*r['worker_utilization']['mean']:.1f}%", flush=True)
         if r["total_h"]["p95"] <= GUARD_H:
             applied = name
             break
     out["guard_outcome"] = applied or "all_steps_exhausted_still_over"
     final = out["guard_sequence"][-1]
     out["final_configuration"] = dict(step=final["step"], design=final["design"])
+    out["old_global_barrier_drained_waves"] = simulate(
+        inp, curves, trajs, factors, design(), policy="global_waves")
+    old = out["old_global_barrier_drained_waves"]
+    print(f"old global waves: total mean {old['total_h']['mean']:.1f} h "
+          f"[p5 {old['total_h']['p5']:.1f}, p95 {old['total_h']['p95']:.1f}]  "
+          f"util {100*old['worker_utilization']['mean']:.1f}%", flush=True)
     # sensitivities on the final configuration
     fz = final["design"]
     sens = {}
     sens["linear_scaling_s_1_2"] = simulate(build_inputs(m, 1.2, m["c"]), curves, trajs, factors, fz)
     sens["no_condition_correction_c_1"] = simulate(build_inputs(m, m["raw_up_ratio"], 1.0), curves, trajs, factors, fz)
+    sens["e_over_p_ratio_2_1"] = simulate(inp, curves, trajs,
+        sc.speed_factors(sc.worker_speeds(20), 2.1), fz)
+    sens["e_over_p_ratio_2_5"] = simulate(inp, curves, trajs,
+        sc.speed_factors(sc.worker_speeds(20), 2.5), fz)
+    sens["t_ppo_plus_10pct"] = simulate(scale_ppo(inp, 1.1), curves, trajs, factors, fz)
     sens["resampled_validity_trajectories"] = simulate(inp, curves, trajs, factors, fz, resample=True)
     out["sensitivities"] = sens
     for k_, r in sens.items():
         print(f"  sens {k_}: total mean {r['total_h']['mean']:.1f} h [p5 {r['total_h']['p5']:.1f}, p95 {r['total_h']['p95']:.1f}]")
+    worst_name, worst = max(sens.items(), key=lambda item: item[1]["total_h"]["p95"])
+    out["worst_sensitivity"] = {"name": worst_name, "p95_total_h": worst["total_h"]["p95"]}
     out["sim_wall_s"] = time.time() - t0
     json.dump(out, open(f"{OUT}/final_estimate.json", "w"), indent=1, default=float)
     print("guard outcome:", out["guard_outcome"], "| wall", round(out["sim_wall_s"]), "s")

@@ -17,6 +17,12 @@ import numpy as np
 PRIOR_PATH = Path(__file__).resolve().parents[2] / "results/campaign_prep/final_estimate/final_estimate.json"
 P2_MEAN_H = 403.2
 P2_P95_H = 406.0
+# Exact registered joint-total quantiles used by the initial dashboard prior.
+# Keep these independent of PRIOR_PATH: Step 4 legitimately regenerates that
+# artifact, while the dashboard explicitly reports the locked P2 prior until
+# enough campaign measurements exist to replace it.
+P2_TOTAL_P5_H = 400.5636689293408
+P2_TOTAL_P95_H = 405.9615436943582
 GUARD_H = 432.0
 E_CORE_FACTOR = 2.3172
 
@@ -226,10 +232,9 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
         # Preserve the P2 simulator's *joint* total distribution at campaign
         # start. Summing marginal phase quantiles would discard its observed
         # phase correlation and misstate the registered 400.6–406.0 h band.
-        if eta_source == "prior" and task == "Walker-v0" and "total_h" in prior:
-            total = prior["total_h"]
-            future_low = float(total["p5"]) * 3600 - prior_phase_low
-            future_high = float(total["p95"]) * 3600 - prior_phase_high
+        if eta_source == "prior" and task == "Walker-v0":
+            future_low = P2_TOTAL_P5_H * 3600 - prior_phase_low
+            future_high = P2_TOTAL_P95_H * 3600 - prior_phase_high
     campaign_eta = (phase_eta[0] + future_low, phase_eta[1] + future_high)
     last_task = max((r.get("completed_at", r.get("timestamp", 0)) for r in journal), default=None)
     if last_task is None and manifest.get("status") == "running":
