@@ -169,7 +169,9 @@ def _run_dirs(root, task):
 
 
 def build(campaign_root, task, *, snapshot=False, timestamp=None):
-    root = Path(campaign_root)
+    # EvoGym's rendering path can change cwd as a side effect; every package
+    # path must be absolute before the visualisation gate is exercised.
+    root = Path(campaign_root).resolve()
     runs = _run_dirs(root, task)
     if not runs:
         raise RuntimeError(f"no run logs for {task} under {root}")
@@ -247,13 +249,17 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
         # failed gate or renderer never invalidates the statistics package.
         policies = best.get("policy_paths")
         if not snapshot and validate_body(body).valid and isinstance(policies, list) and policies:
+            policy = str(Path(str(policies[0])).resolve())
             if visualization_green is None:
-                from evodevo.visualization.check import run_all
-                visualization_green = all(check.ok for check in run_all())
+                try:
+                    from evodevo.visualization.check import run_all
+                    visualization_green = all(check.ok for check in run_all())
+                except Exception as exc:
+                    visualization_green = False
+                    video_notes.append(f"Visualisation self-test raised {type(exc).__name__}: {exc}.")
             if visualization_green:
                 try:
                     from evodevo.visualization.render import render_body_rollout
-                    policy = str(policies[0])
                     if not os.path.isfile(policy):
                         raise FileNotFoundError(policy)
                     rollout = render_body_rollout(body, policy, task, 200,
