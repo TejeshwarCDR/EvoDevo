@@ -16,11 +16,12 @@ Two scheduling modes over the D15 grid (pop 15, 20 gens, 5 seeds, 3 arms, 2 task
 D7: the Walker-v0 phase fully completes before the UpStepper-v0 phase starts.
 Common random numbers: both modes consume the SAME per-trial duration draws.
 """
-import heapq, json, math, os, sys, time
+import heapq, itertools, json, math, os, sys, time
 import numpy as np
 
 sys.path.insert(0, os.getcwd())
 from evodevo.parallel.topology import detect_topology, cpu_slots
+from evodevo.campaign.dispatch import DispatchCore, DispatchItem
 
 RUN = "results/preflight/20260922T122730Z_4be8402b"
 OUT = f"{RUN}/report/capacity_planning"
@@ -123,7 +124,7 @@ def run_serial(durs, oh, factors_w15):
     return float(spans.sum() + oh * len(spans)), spans
 
 
-def run_interleaved(run_durs, run_oh, factors, ready0=0.0, policy="fifo", trace=None, inline_masks=None):
+def _run_interleaved_fifo(run_durs, run_oh, factors, ready0=0.0, trace=None, inline_masks=None):
     """Greedy list-scheduling of many runs on len(factors) workers.
     run_durs: list of (GENS,POP) arrays; run_oh: per-run inter-generation overhead.
     Returns (makespan, per-run finish times). Idle workers: fastest (lowest index) first;
@@ -169,9 +170,7 @@ def run_interleaved(run_durs, run_oh, factors, ready0=0.0, policy="fifo", trace=
                     heapq.heappush(events, (t, seq, 2, r, 0)); seq += 1
                 inline_pending[r] = inline_cost
                 for i in idxs:
-                    # fifo: oldest-ready first (default, used for every prior result);
-                    # lgf : lowest generation index first (keeps all runs in lock-step progress)
-                    heapq.heappush(ready, (t, r, g, i) if policy == "fifo" else (g, t, r, i))
+                    heapq.heappush(ready, (t, r, g, i))
             else:
                 r, w = a, b
                 if kind == 1:
@@ -190,10 +189,102 @@ def run_interleaved(run_durs, run_oh, factors, ready0=0.0, policy="fifo", trace=
         while idle and ready:
             w = heapq.heappop(idle)
             it = heapq.heappop(ready)
-            r, g, i = (it[1], it[2], it[3]) if policy == "fifo" else (it[2], it[0], it[3])
+            r, g, i = it[1], it[2], it[3]
             dt = run_durs[r][g, i] * factors[w]
             heapq.heappush(events, (t + dt, seq, 1, r, w)); seq += 1
     return last - ready0, finish
+
+
+def _run_interleaved_lgf(run_durs, run_oh, factors, ready0=0.0, trace=None,
+                         inline_masks=None):
+    """Virtual-clock execution of the production DispatchCore policy."""
+    n_runs = len(run_durs)
+    core = DispatchCore(slots=len(factors))
+    run_keys = tuple(str(r) for r in range(n_runs))
+    core.begin_phase("simulation", run_keys)
+    idle = list(range(len(factors)))
+    heapq.heapify(idle)
+    events = []  # (time, sequence, kind, payload); kind 0 ready, kind 1 task complete
+    sequence = itertools.count()
+    inline_pending = [0.0] * n_runs
+    finish = [0.0] * n_runs
+    last = ready0
+
+    def push_ready(at, run, generation):
+        heapq.heappush(events, (at, next(sequence), 0, (run, generation)))
+
+    def generation_complete(at, run, generation):
+        nonlocal last
+        if trace is not None:
+            trace.append((run, generation, at))
+        next_generation = generation + 1
+        after_serial = at + run_oh[run] + inline_pending[run]
+        if next_generation < GENS:
+            push_ready(after_serial, run, next_generation)
+        else:
+            finish[run] = after_serial
+            last = max(last, after_serial)
+            core.mark_run_complete(str(run))
+
+    for run in range(n_runs):
+        push_ready(ready0, run, 0)
+
+    now = ready0
+    while events or core.ready_count or core.inflight_count:
+        if events:
+            now = events[0][0]
+        while events and events[0][0] <= now:
+            _at, _seq, kind, payload = heapq.heappop(events)
+            if kind == 0:
+                run, generation = payload
+                if inline_masks is None:
+                    indexes = list(range(np.shape(run_durs[run])[1]))
+                    inline_pending[run] = 0.0
+                else:
+                    mask = inline_masks[run][generation]
+                    indexes = [index for index in range(len(mask)) if mask[index]]
+                    inline_pending[run] = float(run_durs[run][generation][~mask].sum())
+                tasks = [DispatchItem(
+                    task_id=(run, generation, index), phase="simulation", run_key=str(run),
+                    generation=generation, tie_key=(run, index), payload=(run, generation, index),
+                ) for index in indexes]
+                barrier = core.report_ready(str(run), generation, tasks)
+                if barrier is not None:
+                    generation_complete(now, run, generation)
+            else:
+                worker, dispatch_item = payload
+                heapq.heappush(idle, worker)
+                barrier = core.complete(dispatch_item.task_id)
+                if barrier is not None:
+                    generation_complete(now, int(barrier.run_key), barrier.generation)
+
+        while idle:
+            dispatch_item = core.next_task()
+            if dispatch_item is None:
+                break
+            worker = heapq.heappop(idle)
+            run, generation, index = dispatch_item.payload
+            duration = run_durs[run][generation, index] * factors[worker]
+            heapq.heappush(events, (now + duration, next(sequence), 1,
+                                    (worker, dispatch_item)))
+
+    if not core.phase_complete:
+        raise AssertionError("simulated dispatch ended before its phase barrier")
+    return last - ready0, finish
+
+
+def run_interleaved(run_durs, run_oh, factors, ready0=0.0, policy="fifo", trace=None,
+                    inline_masks=None):
+    """Run a virtual interleaved phase under a named dispatch policy.
+
+    ``lgf`` is the production policy and uses the shared DispatchCore. ``fifo``
+    remains solely to reproduce the historical comparison artifacts.
+    """
+    if policy == "lgf":
+        return _run_interleaved_lgf(run_durs, run_oh, factors, ready0, trace, inline_masks)
+    if policy == "fifo":
+        return _run_interleaved_fifo(run_durs, run_oh, factors, ready0, trace, inline_masks)
+    raise ValueError(f"unknown dispatch policy {policy!r}")
 
 
 def one_trial(model, rng, factors20, factors15):
