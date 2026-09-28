@@ -26,36 +26,32 @@ if [[ "$CAMPAIGN_ID" == "latest" ]]; then
 fi
 RUN_DIR="$OUTPUT_ROOT/$CAMPAIGN_ID"
 PID_FILE="$RUN_DIR/scheduler.pgid"
-if [[ ! -f "$PID_FILE" ]]; then
-  echo "No scheduler process-group file at $PID_FILE"
-  exit 0
-fi
-PGID="$(<"$PID_FILE")"
-if [[ ! "$PGID" =~ ^[0-9]+$ || "$PGID" -le 1 ]]; then
+PGID=""
+if [[ -f "$PID_FILE" ]]; then PGID="$(<"$PID_FILE")"; fi
+if [[ -n "$PGID" && ( ! "$PGID" =~ ^[0-9]+$ || "$PGID" -le 1 ) ]]; then
   echo "Invalid scheduler process group: $PGID" >&2
   exit 1
 fi
-if [[ "$(ps -o pgid= -p "$PGID" 2>/dev/null | tr -d ' ')" != "$PGID" ]]; then
-  echo "Scheduler process group $PGID is no longer live"
-  exit 0
-fi
 
 group_live() {
+  [[ -n "$PGID" ]] || return 1
   ps -eo pgid=,stat= | awk -v group="$PGID" '$1 == group && $2 !~ /^Z/ { found=1 } END { exit !found }'
 }
 
-kill -INT -- "-$PGID" 2>/dev/null || true
-deadline=$((SECONDS + GRACE_S))
-while (( SECONDS < deadline )); do
-  if ! group_live; then break; fi
-  sleep 1
-done
 if group_live; then
-  kill -TERM -- "-$PGID" 2>/dev/null || true
-  sleep 3
-fi
-if group_live; then
-  kill -KILL -- "-$PGID" 2>/dev/null || true
+  kill -INT -- "-$PGID" 2>/dev/null || true
+  deadline=$((SECONDS + GRACE_S))
+  while (( SECONDS < deadline )); do
+    if ! group_live; then break; fi
+    sleep 1
+  done
+  if group_live; then
+    kill -TERM -- "-$PGID" 2>/dev/null || true
+    sleep 3
+  fi
+  if group_live; then
+    kill -KILL -- "-$PGID" 2>/dev/null || true
+  fi
 fi
 TMUX_ARGS=()
 if [[ -n "${EVODEVO_TMUX_SOCKET:-}" ]]; then
