@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 from evodevo.campaign.alerts import AlertManager, REN_NOTIFY_S
-from evodevo.campaign.dashboard import collect, render
+from evodevo.campaign.dashboard import _when, collect, render
 from evodevo.campaign.monitor import SNAPSHOT_S, monitor_once, slowest_ecore_p95_s
 from evodevo.campaign.mirror import sync, verify_mirror, verify_checksum_manifest
 from evodevo.campaign.milestone import build, REQUIRED, run_subprocess
@@ -223,6 +223,24 @@ def test_run_script_help_and_existing_session_attach(tmp_path):
         subprocess.run(["tmux", "-L", socket, "kill-server"], capture_output=True)
 
 
+def test_status_script_is_one_shot_plain_text(tmp_path):
+    root = tmp_path / "campaigns" / "status-test"
+    root.mkdir(parents=True)
+    (root / "manifest.json").write_text(json.dumps({
+        "campaign_id": "status-test", "started_at": time.time(), "status": "running",
+        "phase_status": {"Walker-v0": {"status": "running", "started_at": time.time()}},
+        "plan": {"phases": [{"task": "Walker-v0", "runs": [{"arm": "direct", "seed": 0,
+            "config": {"eval_budget": 2, "ppo_seeds": 1}}]}]}}))
+    result = subprocess.run(["bash", "scripts/campaign/status_campaign.sh", "--campaign",
+                             "status-test", "--output-root", str(tmp_path / "campaigns")],
+                            capture_output=True, text=True, timeout=20)
+    assert result.returncode == 0, result.stderr
+    assert "Campaign status-test" in result.stdout
+    assert "s0:g0" in result.stdout
+    assert "ETA (prior)" in result.stdout
+    assert "\x1b[" not in result.stdout
+
+
 def test_dashboard_plain_and_tty_render_eta_range():
     snapshot = {"campaign_id": "x", "phase": "Walker-v0", "elapsed_s": 3600,
                 "phase_completed": 10, "phase_total": 300, "completed_evaluations": 10,
@@ -230,7 +248,7 @@ def test_dashboard_plain_and_tty_render_eta_range():
                 "generation": {("direct", 0): 2}, "tasks_running": 1, "tasks_queued": 5,
                 "throughput_now_per_h": 10, "throughput_average_per_h": 10,
                 "phase_eta_s": (100, 200), "campaign_eta_s": (300, 400),
-                "eta_source": "prior", "walker_milestone_epoch": None,
+                "eta_source": "prior", "walker_milestone_epoch": 2_000_000_000,
                 "p2_mean_h": 403.2, "p2_p95_h": 406, "projection_exceeds_432h": False,
                 "infra_failure_count": 0, "last_error": None, "seconds_since_last_task": 5,
                 "projection_total_h": (402, 407), "mirror_disabled": True}
@@ -238,6 +256,7 @@ def test_dashboard_plain_and_tty_render_eta_range():
     assert "phase 0.0 h–0.1 h" in render(snapshot, tty=True)
     assert "projected total 402.0–407.0 h" in render(snapshot)
     assert "mirror explicitly disabled" in render(snapshot)
+    assert _when(2_000_000_000) in render(snapshot)
 
 
 def test_dashboard_prior_then_per_arm_core_class_measured_eta(tmp_path):
@@ -293,6 +312,11 @@ def test_dashboard_prior_then_per_arm_core_class_measured_eta(tmp_path):
     assert measured["projection_total_h"][0] == measured["projection_total_h"][1]
     assert measured["generation"][("direct", 0)] == 10
     assert measured["tasks_running"] == 1 and measured["tasks_queued"] == 3
+    for row in rows:
+        row["result"]["wall_clock_s"] *= 1000
+    journal.write_text("".join(json.dumps(row) + "\n" for row in rows))
+    over_budget = collect(str(tmp_path), now=2000, telemetry={})
+    assert over_budget["projection_exceeds_432h"] is True
 
 
 def test_initial_campaign_prior_uses_joint_p2_total_band(tmp_path):
@@ -436,6 +460,11 @@ def test_milestone_package_and_subprocess_failure_isolated(tmp_path, monkeypatch
     direct_nca = next(r for r in pairwise if r["arm_a"] == "direct" and r["arm_b"] == "nca")
     assert float(direct_nca["a12"]) == 0.0
     assert abs(float(direct_nca["p_raw"]) - 1 / 3) < 1e-10
+    snapshot_outcome = build(tmp_path, task, snapshot=True, timestamp="20260928T000000Z")
+    assert snapshot_outcome["completion_fraction"] == 1.0
+    assert "milestones/snapshots/20260928T000000Z" in snapshot_outcome["output"]
+    assert json.loads((Path(snapshot_outcome["output"]) / "package_manifest.json").read_text())[
+        "completion_fraction"] == 1.0
     spy = SpyNotifier()
     alerts = AlertManager(tmp_path / "alerts.jsonl", notifier=spy)
     class Stale:
@@ -454,6 +483,72 @@ def test_milestone_package_and_subprocess_failure_isolated(tmp_path, monkeypatch
     result = run_subprocess(tmp_path, "UpStepper-v0", alerts)
     assert not result["ok"]
     assert any("milestone_failure" in message for message in spy.messages)
+
+
+def test_upstepper_mean_of_two_sensitivity_tables(tmp_path):
+    task = "UpStepper-v0"
+    arms = ["direct", "nca", "rule_based", "rule_based_monotone"]
+    body = [[0] * 5 for _ in range(5)]
+    body[2][2] = 3
+    for arm_index, arm in enumerate(arms):
+        for seed in (0, 1):
+            directory = tmp_path / "runs" / arm / task / f"seed_{seed}"
+            directory.mkdir(parents=True)
+            primary = arm_index + seed / 10
+            row = {"eval_index": 0, "generation": 0, "fitness": primary,
+                   "valid": True, "body_hash": f"{arm}-{seed}", "cache_hit": False,
+                   "wall_clock_s": 1.0, "body": body,
+                   "per_seed_fitness": [primary, primary + 2]}
+            (directory / "run_log.jsonl").write_text(json.dumps(row) + "\n")
+    (tmp_path / "manifest.json").write_text(json.dumps({"plan": {"phases": [{"task": task,
+        "runs": [{"config": {"eval_budget": 1}} for _ in range(8)]}]}}))
+    outcome = build(tmp_path, task)
+    folder = Path(outcome["output"])
+    assert all((folder / name).is_file() for name in (
+        "stats/mean_of_2_sensitivity.csv", "stats/mean_of_2_omnibus.csv",
+        "stats/mean_of_2_pairwise.csv"))
+    import csv
+    summary = list(csv.DictReader((folder / "stats/mean_of_2_sensitivity.csv").open()))
+    direct = next(row for row in summary if row["encoder"] == "direct")
+    assert abs(float(direct["final_best_fitness_mean"]) - 1.05) < 1e-9
+
+
+def test_milestone_video_requires_green_visualisation_check(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    task = "Walker-v0"
+    body = [[0, 0, 0, 0, 0], [0, 1, 1, 1, 0], [0, 3, 0, 3, 0],
+            [0, 3, 0, 3, 0], [0, 0, 0, 0, 0]]
+
+    def prepare(root):
+        directory = root / "runs" / "direct" / task / "seed_0"
+        directory.mkdir(parents=True)
+        policy = root / "policy.zip"
+        policy.write_bytes(b"test-only policy marker")
+        row = {"eval_index": 0, "generation": 0, "fitness": 1.0,
+               "valid": True, "body_hash": "valid", "cache_hit": False,
+               "wall_clock_s": 1.0, "body": body, "policy_paths": [str(policy)]}
+        (directory / "run_log.jsonl").write_text(json.dumps(row) + "\n")
+        (root / "manifest.json").write_text(json.dumps({"plan": {"phases": [{"task": task,
+            "runs": [{"config": {"eval_budget": 1}}]}]}}))
+
+    def fake_rollout(_body, _policy, _task, _steps, output_path, **_kwargs):
+        mp4, gif = Path(output_path + ".mp4"), Path(output_path + ".gif")
+        mp4.write_bytes(b"mp4")
+        gif.write_bytes(b"gif")
+        return SimpleNamespace(mp4_path=str(mp4), gif_path=str(gif))
+
+    monkeypatch.setattr("evodevo.visualization.render.render_body_rollout", fake_rollout)
+    green = tmp_path / "green"
+    prepare(green)
+    monkeypatch.setattr("evodevo.visualization.check.run_all", lambda: [SimpleNamespace(ok=True)])
+    green_package = build(green, task)
+    assert "best_bodies/direct_rollout.mp4" in green_package["files"]
+    assert "best_bodies/direct_rollout.gif" in green_package["files"]
+    red = tmp_path / "red"
+    prepare(red)
+    monkeypatch.setattr("evodevo.visualization.check.run_all", lambda: [SimpleNamespace(ok=False)])
+    red_package = build(red, task)
+    assert not any(name.endswith((".mp4", ".gif")) for name in red_package["files"])
 
 
 def test_stop_script_kills_process_group_and_tmux_session(tmp_path):

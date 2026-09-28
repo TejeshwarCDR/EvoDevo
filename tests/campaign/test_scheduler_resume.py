@@ -93,3 +93,17 @@ def test_resume_repairs_log_rows_not_covered_by_checkpoint(tmp_path, monkeypatch
     for rp in plan.phases[0].runs:
         relative = Path("runs") / rp.arm / rp.task / f"seed_{rp.seed}" / "run_log.jsonl"
         assert _records(tmp_path / "resumed" / relative) == _records(tmp_path / "baseline" / relative)
+
+
+def test_milestone_failure_cannot_abort_completed_phase(tmp_path, monkeypatch):
+    plan = _plan(tmp_path)
+    monkeypatch.setattr("evodevo.campaign.scheduler.run_subprocess", lambda *a, **k:
+                        {"ok": False, "missing": ["figures/fitness_curves.pdf"]})
+    scheduler = CampaignScheduler(plan, "milestone-failure", output_root=tmp_path,
+                                  workers=2, mode="surrogate", no_mirror=True)
+    outputs = scheduler.run()
+    manifest = json.loads((tmp_path / "milestone-failure" / "manifest.json").read_text())
+    assert manifest["status"] == "complete"
+    assert manifest["phase_status"]["Walker-v0"]["status"] == "complete"
+    assert manifest["milestone_status"]["Walker-v0"]["ok"] is False
+    assert len(outputs) == len(plan.phases[0].runs)
