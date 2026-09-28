@@ -178,15 +178,8 @@ def _profile_kwargs_for_task(profile_kwargs: dict, task: str) -> dict:
 
 
 def check_ppo_seeds_supported(resolved: dict) -> None:
-    """Refuses any resolved (arm, task) config with ppo_seeds > 1 until the
-    evaluator consumes it -- see PpoSeedsNotImplementedError."""
-    over = sorted({(task, cfg.ppo_seeds) for (_, task), cfg in resolved.items() if cfg.ppo_seeds > 1})
-    if over:
-        raise PpoSeedsNotImplementedError(
-            f"ppo_seeds > 1 requested for {over}, but multi-seed PPO evaluation per genome is not "
-            "implemented yet (docs/decisions.md's D16 row). Refusing to run rather than silently "
-            "evaluating each genome once."
-        )
+    """Compatibility hook retained now that the evaluator supports all K >= 1."""
+    return None
 
 
 class FastDevRealRunGuardError(RuntimeError):

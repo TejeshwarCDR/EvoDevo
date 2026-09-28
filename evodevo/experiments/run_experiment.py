@@ -130,16 +130,6 @@ def run_experiment(
     config_dict["seed"] = seed
     config_dict["grid_shape"] = tuple(config_dict["grid_shape"])
     config = ExperimentConfig(**config_dict)
-    if config.ppo_seeds > 1:
-        # D16 (docs/decisions.md, 2026-09-27): multi-seed PPO evaluation per
-        # genome is decided but not yet implemented in the evaluator. Refuse
-        # here -- the single entry point every run passes through -- rather
-        # than silently evaluating each genome once.
-        raise NotImplementedError(
-            f"ppo_seeds={config.ppo_seeds} (> 1) requested for {config.encoder}/{config.task}, but "
-            "multi-seed PPO evaluation per genome is not implemented yet; refusing to run as K=1."
-        )
-
     # Fold strategy into the output-dir tag so the default (strategy="ea")
     # keeps its exact pre-existing output path -- only a non-default
     # strategy (random_search) disambiguates the path, keeping this a
@@ -172,6 +162,14 @@ def run_experiment(
     meta_config["tag"] = tag
     meta_config["strategy"] = strategy
     meta_config["arm_id"] = arm_id or config.encoder
+    policy_sizes = [size for record in result.records for size in record.get("policy_file_sizes", [])]
+    log_sizes = [size for record in result.records for size in record.get("training_log_file_sizes", [])]
+    meta_config["artifact_size_averages"] = {
+        "policy_bytes": (sum(policy_sizes) / len(policy_sizes)) if policy_sizes else None,
+        "training_log_bytes": (sum(log_sizes) / len(log_sizes)) if log_sizes else None,
+        "policy_count": len(policy_sizes),
+        "training_log_count": len(log_sizes),
+    }
     logger.write_meta(meta_config, encoder.describe(), cache_hit_rate=result.cache_hit_rate,
                        resolved_policy=result.resolved_policy)
 

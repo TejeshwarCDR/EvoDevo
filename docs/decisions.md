@@ -95,3 +95,17 @@ Unit of analysis: one EA run (one arm × one task × one replicate seed). Arms: 
 - NCA development does not settle.
 - The validity proxy assumes random fitness.
 - n = 5 seeds per arm per task.
+
+### D16 implementation note (2026-09-28)
+
+PPO seed index `k=0` uses the historical evaluation seed exactly.  Each
+additional training uses `np.random.SeedSequence([base_seed, k]).generate_state(1)[0]`.
+This preserves K=1 bit identity while making K>1 deterministic and distinct.
+Genome fitness is the selected max/mean over completed trainings; a partial
+completion is retained and flagged, while no completed training is the normal
+`simulation_instability` sentinel result.  One genome remains one EA budget slot.
+The real 2,000-step UpStepper probe measured policy files of 207,102 and
+207,111 bytes (mean 207,106.5 bytes) and JSON training logs of 65 and 74
+bytes (mean 69.5 bytes).  At 18,000 policies this is about 3.73 GB raw policy
+storage (about 11.2 GB at the project 3× margin), so P2's 32.9 GB conservative
+disk estimate remains sufficient against 302 GB free.

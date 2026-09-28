@@ -217,7 +217,12 @@ def run_ea(encoder: Encoder, evaluator: Callable, config, logger: Optional[RunLo
             else:
                 result = evaluator(c.body, task=config.task,
                     ppo_timesteps=config.ppo_timesteps, eval_episodes=config.ppo_eval_episodes,
-                    seed=config.seed, sentinel_fitness=getattr(config, "sentinel_fitness", -10.0))
+                    seed=config.seed, sentinel_fitness=getattr(config, "sentinel_fitness", -10.0),
+                    ppo_seeds=getattr(config, "ppo_seeds", 1),
+                    ppo_seed_aggregation=getattr(config, "ppo_seed_aggregation", "max"),
+                    output_dir=logger.output_dir if logger is not None else None,
+                    arm=getattr(config, "encoder", ""), generation=c.generation,
+                    genome_id=c.genome_id, eval_index=c.eval_index)
             # A cache hit can share the exact stored EvalResult with an
             # earlier slot; copy before attaching dispatch metadata so each
             # slot keeps its own eval_index without mutating cache contents.

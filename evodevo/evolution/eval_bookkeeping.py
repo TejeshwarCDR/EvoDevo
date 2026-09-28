@@ -12,6 +12,7 @@ evaluator callable it is given, exactly like evodevo.evolution.ea itself.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import os
 from typing import Callable, List, Optional
 
 import numpy as np
@@ -137,6 +138,12 @@ class EvaluationTracker:
                 eval_episodes=self.config.ppo_eval_episodes,
                 seed=self.config.seed,
                 sentinel_fitness=getattr(self.config, "sentinel_fitness", -10.0),
+                ppo_seeds=getattr(self.config, "ppo_seeds", 1),
+                ppo_seed_aggregation=getattr(self.config, "ppo_seed_aggregation", "max"),
+                output_dir=self.logger.output_dir if self.logger is not None else None,
+                generation=generation,
+                genome_id=self.next_genome_id,
+                eval_index=self.evaluations_used,
             )
             if self.cache is not None:
                 self.cache.put(result.body_hash, result)
@@ -194,6 +201,16 @@ class EvaluationTracker:
             "body_hash": result.body_hash,
             "wall_clock_s": result.wall_clock_s,
             "cache_hit": cache_hit,
+            "per_seed_fitness": result.per_seed_fitness,
+            "per_seed_completed": result.per_seed_completed,
+            "aggregation": result.aggregation,
+            "policy_paths": result.policy_paths or [],
+            "policy_file_sizes": [os.path.getsize(p) for p in (result.policy_paths or []) if os.path.exists(p)],
+            "training_log_paths": result.training_log_paths or [],
+            "training_log_file_sizes": [os.path.getsize(p) for p in (result.training_log_paths or []) if os.path.exists(p)],
+            "infra_failure_count": result.infra_failure_count,
+            "body": np.asarray(body, dtype=int).tolist(),
+            "genome": self.encoder.serialize_genome(genome),
             # Budget-vs-real-attempt bookkeeping (P6/P7's whole point):
             # evals_spent is THE budget-governing counter; evals_valid_cumulative
             # is how many of those spent slots reached a real (decode-and-

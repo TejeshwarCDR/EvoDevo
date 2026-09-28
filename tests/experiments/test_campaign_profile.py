@@ -128,10 +128,9 @@ def test_experiment_config_itself_rejects_bad_k_and_aggregation():
         ExperimentConfig(**base, ppo_seed_aggregation="median")
 
 
-def test_k_above_one_is_refused_by_the_benchmark_guard():
+def test_k_above_one_is_accepted_by_the_benchmark_guard():
     resolved = resolve_configs(BenchmarkConfig.from_yaml(REAL_BENCHMARK_YAML))
-    with pytest.raises(PpoSeedsNotImplementedError, match="UpStepper-v0"):
-        check_ppo_seeds_supported(resolved)
+    check_ppo_seeds_supported(resolved)
     assert issubclass(PpoSeedsNotImplementedError, NotImplementedError)
 
 
@@ -140,15 +139,7 @@ def test_k_of_one_everywhere_passes_the_guard():
     check_ppo_seeds_supported(resolved)  # Walker-v0 is K=1: must not raise
 
 
-def test_run_benchmark_refuses_k_above_one_before_running_anything():
-    with tempfile.TemporaryDirectory() as output_dir:
-        bconfig = _campaign_bconfig(seeds=[0], output_dir=output_dir)
-        with pytest.raises(NotImplementedError):
-            run_benchmark(bconfig, dry_run=False, allow_dirty=True)
-        assert not os.path.exists(os.path.join(output_dir, "benchmark_manifest.json"))
-
-
-def test_run_experiment_refuses_k_above_one():
+def test_run_experiment_accepts_k_above_one_in_surrogate_mode():
     """The second, entry-point-level guard: a resolved config with K=2
     reaching run_experiment() directly (bypassing run_benchmark) is refused,
     never silently evaluated once."""
@@ -158,7 +149,6 @@ def test_run_experiment_refuses_k_above_one():
         cfg = dataclasses.replace(cfg, output_dir=tmp)
         path = os.path.join(tmp, "resolved.yaml")
         cfg.to_yaml(path)
-        with pytest.raises(NotImplementedError, match="ppo_seeds=2"):
-            run_experiment(path, seed=0, surrogate=True, overwrite=True,
-                           encoder_kwargs={"dev_steps": 5, "init_condition": "center_seed"}, allow_dirty=True)
+        run_experiment(path, seed=0, surrogate=True, overwrite=True,
+                       encoder_kwargs={"dev_steps": 5, "init_condition": "center_seed"}, allow_dirty=True)
         assert yaml.safe_load(open(path))["ppo_seeds"] == 2
