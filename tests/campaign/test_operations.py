@@ -676,6 +676,11 @@ def test_launcher_starts_and_cleans_tiny_surrogate_campaign():
             assert (run_root / "smoke" / "runs" / "direct" / "Walker-v0" / "seed_0" / "run_log.jsonl").exists()
             completed_manifest = json.loads(manifest.read_text())
             assert completed_manifest["no_mirror"] is True
+            inhibit_ok = shutil.which("systemd-inhibit") and subprocess.run(
+                ["systemd-inhibit", "--what=sleep:idle:handle-lid-switch", "--why=probe", "true"],
+                capture_output=True).returncode == 0
+            assert completed_manifest["launch_checks"]["sleep_inhibitor"] == (
+                "systemd-inhibit" if inhibit_ok else "none")
             assert completed_manifest["milestone_status"]["Walker-v0"]["ok"] is True
             assert (run_root / "smoke" / "milestones" / "Walker-v0" / "MILESTONE_REPORT.md").is_file()
             assert collect(str(run_root / "smoke"), telemetry={})["mirror_disabled"] is True

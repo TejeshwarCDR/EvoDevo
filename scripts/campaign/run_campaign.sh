@@ -96,6 +96,19 @@ if ! "${CMD[@]}" --check-only; then
 fi
 mkdir -p "$RUN_DIR"
 printf -v NOTIFY_QUOTED '%q' "$NOTIFY_CONFIG"
+# Keep the machine awake for a multi-day run: hold a logind inhibitor lock
+# (no sudo needed for an active local session) around the scheduler. The
+# probe confirms polkit actually grants the lock before relying on it.
+INHIBIT=()
+INHIBITOR=none
+if command -v systemd-inhibit >/dev/null 2>&1 && \
+   systemd-inhibit --what=sleep:idle:handle-lid-switch --why="EvoDevo probe" true >/dev/null 2>&1; then
+  INHIBIT=(systemd-inhibit --what=sleep:idle:handle-lid-switch "--why=EvoDevo campaign $CAMPAIGN_ID" --mode=block)
+  INHIBITOR=systemd-inhibit
+else
+  echo "WARNING: systemd-inhibit unavailable or not permitted; the machine may sleep/idle during the campaign." >&2
+fi
+CMD=("${INHIBIT[@]}" env "EVODEVO_SLEEP_INHIBITOR=$INHIBITOR" "${CMD[@]:1}")
 printf -v CMD_QUOTED '%q ' "${CMD[@]}"
 printf -v TRANSCRIPT_QUOTED '%q' "$RUN_DIR/transcript.log"
 tmux "${TMUX_ARGS[@]}" new-session -d -s evodevo-campaign -n dashboard

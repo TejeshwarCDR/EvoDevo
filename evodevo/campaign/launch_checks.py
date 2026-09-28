@@ -8,6 +8,8 @@ scheduler writes into the manifest (`launch_checks`).
 """
 from __future__ import annotations
 
+import os
+
 from .alerts import NO_NOTIFIER_MESSAGE, Notifier, load_local_config, notify_config_path
 
 
@@ -40,5 +42,7 @@ def launch_refusals(args):
     mirror_refusals, mirror_record = mirror_check(args)
     refusals += mirror_refusals
     record = {"notifier": notifier, "no_notify": bool(args.no_notify), "mode": args.mode,
-              "mirror": mirror_record}
+              "mirror": mirror_record,
+              # set by run_campaign.sh: "systemd-inhibit" when the sleep/idle/lid lock is held
+              "sleep_inhibitor": os.environ.get("EVODEVO_SLEEP_INHIBITOR", "none")}
     return refusals, record
