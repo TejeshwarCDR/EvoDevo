@@ -113,6 +113,8 @@ def test_launch_scripts_use_the_package_entry_point():
         assert "evodevo.campaign.dashboard" not in text, name
     assert "-m evodevo.campaign --config" in (Path(REPO_ROOT) / "scripts/campaign/run_campaign.sh").read_text()
     assert "-m evodevo.campaign status" in (Path(REPO_ROOT) / "scripts/campaign/status_campaign.sh").read_text()
+    # plain `setsid` under `script` forks and exits, racing the pane's SIGHUP
+    assert "-c 'setsid --wait " in (Path(REPO_ROOT) / "scripts/campaign/run_campaign.sh").read_text()
 
 
 def smoke_config(path: Path, *, arm="nca", population=15, eval_budget=15, timesteps=500) -> Path:
@@ -158,15 +160,18 @@ def test_real_ppo_cli_smoke(tmp_path):
     assert records, "no real PPO task reached the journal"
     completed = [r for r in records if r["result"]["completed"] and r["result"]["fitness"] is not None]
     assert completed, "no real evaluation completed"
-    cpus_by_pid = {}
+    # Invariant is per worker SLOT: a retried task rebuilds the executor, and
+    # the fresh processes (new pids) legitimately reuse the same slots/CPUs.
+    cpus_by_slot, slots_by_pid = {}, {}
     for record in records:
         res = record["result"]
         assert res["torch_num_threads"] == 1, res
         for var, value in res["thread_env"].items():
             assert value == ("FALSE" if var.endswith("_DYNAMIC") else "1"), (var, value)
-        cpus_by_pid.setdefault(res["worker_pid"], set()).add(tuple(res["cpu_ids"]))
-    assert all(len(sets) == 1 for sets in cpus_by_pid.values()), cpus_by_pid
-    cpu_sets = [next(iter(sets)) for sets in cpus_by_pid.values()]
-    assert len(set(cpu_sets)) == len(cpu_sets), cpus_by_pid
-    flat = [cpu for cpus in cpu_sets for cpu in cpus]
-    assert len(flat) == len(set(flat)), cpus_by_pid
+        cpus_by_slot.setdefault(res["worker_slot"], set()).add(tuple(res["cpu_ids"]))
+        slots_by_pid.setdefault(res["worker_pid"], set()).add(res["worker_slot"])
+    assert all(len(slots) == 1 for slots in slots_by_pid.values()), slots_by_pid
+    assert all(len(sets) == 1 for sets in cpus_by_slot.values()), cpus_by_slot
+    flat = [cpu for sets in cpus_by_slot.values() for cpu in next(iter(sets))]
+    assert len(flat) == len(set(flat)), cpus_by_slot
+    assert len(cpus_by_slot) >= 2, cpus_by_slot
