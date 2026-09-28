@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import json
 import os
+import shlex
 import signal
 import subprocess
 import sys
@@ -290,6 +291,15 @@ class CampaignScheduler:
             return json.load(handle)
 
 
+def resume_command(args, campaign_id):
+    command = ["scripts/campaign/run_campaign.sh", "--resume", campaign_id,
+               "--config", args.config, "--output-root", args.output_root,
+               "--workers", str(args.workers), "--mode", args.mode,
+               "--grace-s", str(args.grace_s)]
+    command.extend(["--no-mirror"] if args.no_mirror else ["--mirror-dir", args.mirror_dir])
+    return shlex.join(command)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--campaign-id")
@@ -341,8 +351,7 @@ def main(argv=None):
         handle.write(str(os.getpgrp()) + "\n")
     scheduler.run()
     if scheduler.stop_requested:
-        print(f"Resume: scripts/campaign/run_campaign.sh --resume {campaign_id} "
-              f"{'--mirror-dir ' + args.mirror_dir if args.mirror_dir else '--no-mirror'}", flush=True)
+        print(f"Resume: {resume_command(args, campaign_id)}", flush=True)
 
 
 if __name__ == "__main__":

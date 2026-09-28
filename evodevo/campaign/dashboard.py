@@ -216,12 +216,21 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
     else:
         phase_eta = (remaining_fraction * prior_phase_low, remaining_fraction * prior_phase_high)
         eta_source = "prior"
-    future = 0.0
+    future_low = future_high = 0.0
     if current and phases.index(current) + 1 < len(phases):
         for phase in phases[phases.index(current) + 1:]:
             key = "walker_phase_h" if phase["task"] == "Walker-v0" else "upstepper_phase_h"
-            future += float(prior.get(key, {}).get("mean", 123 if key == "walker_phase_h" else 280.2)) * 3600
-    campaign_eta = (phase_eta[0] + future, phase_eta[1] + future)
+            band = prior.get(key, {})
+            future_low += float(band.get("p5", band.get("mean", 123 if key == "walker_phase_h" else 280.2))) * 3600
+            future_high += float(band.get("p95", band.get("mean", 123 if key == "walker_phase_h" else 280.2))) * 3600
+        # Preserve the P2 simulator's *joint* total distribution at campaign
+        # start. Summing marginal phase quantiles would discard its observed
+        # phase correlation and misstate the registered 400.6–406.0 h band.
+        if eta_source == "prior" and task == "Walker-v0" and "total_h" in prior:
+            total = prior["total_h"]
+            future_low = float(total["p5"]) * 3600 - prior_phase_low
+            future_high = float(total["p95"]) * 3600 - prior_phase_high
+    campaign_eta = (phase_eta[0] + future_low, phase_eta[1] + future_high)
     last_task = max((r.get("completed_at", r.get("timestamp", 0)) for r in journal), default=None)
     if last_task is None and manifest.get("status") == "running":
         last_task = status.get(task, {}).get("started_at", manifest.get("started_at"))
@@ -256,6 +265,7 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
         "throughput_now_per_h": recent, "throughput_average_per_h": completed_ppo * 3600 / elapsed if elapsed else 0.0,
         "hourly_rates_24h": hourly_rates,
         "phase_eta_s": phase_eta, "campaign_eta_s": campaign_eta, "eta_source": eta_source,
+        "future_eta_source": "prior" if future_high else None,
         "walker_milestone_epoch": now + phase_eta[1] if task == "Walker-v0" else None,
         "p2_mean_h": P2_MEAN_H, "p2_p95_h": P2_P95_H,
         "projection_total_h": ((elapsed + campaign_eta[0]) / 3600,
@@ -280,7 +290,7 @@ def render(snapshot: dict, tty: bool = False) -> str:
         lines.append(f"{arm:<22} {cells}")
     lines.extend([
         f"Running {snapshot['tasks_running']} queued {snapshot['tasks_queued']} | PPO/h now {snapshot['throughput_now_per_h']:.1f}, average {snapshot['throughput_average_per_h']:.1f}",
-        f"ETA ({snapshot['eta_source']}): phase {_duration(snapshot['phase_eta_s'][0])}–{_duration(snapshot['phase_eta_s'][1])}; campaign {_duration(snapshot['campaign_eta_s'][0])}–{_duration(snapshot['campaign_eta_s'][1])}",
+        f"ETA ({snapshot['eta_source']}): phase {_duration(snapshot['phase_eta_s'][0])}–{_duration(snapshot['phase_eta_s'][1])}; campaign {_duration(snapshot['campaign_eta_s'][0])}–{_duration(snapshot['campaign_eta_s'][1])}" + (" (future phase: prior)" if snapshot.get("future_eta_source") else ""),
         f"Walker milestone (latest): {_when(snapshot['walker_milestone_epoch'])}; P2 {snapshot['p2_mean_h']} h mean / {snapshot['p2_p95_h']} h p95; projected total {_hours_range(snapshot.get('projection_total_h'))}; >432 h: {snapshot['projection_exceeds_432h']}",
         f"CPU {snapshot.get('cpu_percent', 'n/a')}% per-core {snapshot.get('per_core_percent', [])}; temp {snapshot.get('temperature_c', 'n/a')} °C; RAM {snapshot.get('ram_used_gb', 'n/a')} GB; swap {snapshot.get('swap_used_gb', 'n/a')} GB",
         f"Disk main {snapshot.get('main_disk_free_gb', 'n/a')} GB mirror {snapshot.get('mirror_disk_free_gb', 'n/a')} GB; last mirror {_when(snapshot.get('last_mirror_success'))}",

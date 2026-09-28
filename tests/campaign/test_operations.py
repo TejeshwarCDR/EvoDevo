@@ -44,6 +44,39 @@ def test_alert_rate_limit_and_clear_are_durable(tmp_path):
     assert len(spy.messages) == 4  # new trigger after a cleared condition
 
 
+def test_two_alert_writers_share_one_rate_limit(tmp_path):
+    clock = [1000.0]
+    spy = SpyNotifier()
+    path = tmp_path / "alerts.jsonl"
+    scheduler = AlertManager(path, notifier=spy, now=lambda: clock[0])
+    monitor = AlertManager(path, notifier=spy, now=lambda: clock[0])
+    scheduler.evaluate("mirror_failed", True, {"source": "phase_end"})
+    monitor.evaluate("mirror_failed", True, {"source": "six_hour"})
+    assert len(spy.messages) == 1
+    clock[0] += REN_NOTIFY_S
+    monitor.evaluate("mirror_failed", True, {"source": "six_hour"})
+    scheduler.evaluate("mirror_failed", True, {"source": "phase_end"})
+    assert len(spy.messages) == 2
+    scheduler.evaluate("mirror_failed", False)
+    monitor.evaluate("mirror_failed", False)
+    assert len(spy.messages) == 3
+    assert "cleared" in spy.messages[-1]
+
+
+def test_alert_journal_discards_only_incomplete_crash_tail(tmp_path):
+    path = tmp_path / "alerts.jsonl"
+    spy = SpyNotifier()
+    AlertManager(path, notifier=spy).evaluate("disk_main", True, {"free_gb": 40})
+    with path.open("a") as handle:
+        handle.write('{"condition": "incomplete"')
+    restored = AlertManager(path, notifier=spy)
+    restored.evaluate("disk_main", True, {"free_gb": 39})
+    rows = [json.loads(line) for line in path.read_text().splitlines()]
+    assert len(rows) == 2
+    assert all(row["condition"] == "disk_main" for row in rows)
+    assert len(spy.messages) == 1
+
+
 def test_heartbeat_and_phase_notice_deduplication(tmp_path):
     clock = [1000.0]
     spy = SpyNotifier()
@@ -260,6 +293,23 @@ def test_dashboard_prior_then_per_arm_core_class_measured_eta(tmp_path):
     assert measured["projection_total_h"][0] == measured["projection_total_h"][1]
     assert measured["generation"][("direct", 0)] == 10
     assert measured["tasks_running"] == 1 and measured["tasks_queued"] == 3
+
+
+def test_initial_campaign_prior_uses_joint_p2_total_band(tmp_path):
+    walker = {"task": "Walker-v0", "runs": [{"arm": "direct", "seed": 0,
+               "config": {"eval_budget": 300, "ppo_seeds": 1}}]}
+    upstepper = {"task": "UpStepper-v0", "runs": [{"arm": "direct", "seed": 0,
+                 "config": {"eval_budget": 300, "ppo_seeds": 2}}]}
+    manifest = {"campaign_id": "prior", "started_at": 1000, "status": "running",
+                "phase_status": {"Walker-v0": {"status": "running", "started_at": 1000}},
+                "plan": {"phases": [walker, upstepper]}}
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    snapshot = collect(str(tmp_path), now=1000, telemetry={})
+    assert snapshot["eta_source"] == "prior"
+    assert snapshot["future_eta_source"] == "prior"
+    assert abs(snapshot["campaign_eta_s"][0] / 3600 - 400.5636689293408) < 1e-9
+    assert abs(snapshot["campaign_eta_s"][1] / 3600 - 405.9615436943582) < 1e-9
+    assert "future phase: prior" in render(snapshot)
 
 
 def test_stall_timer_starts_before_first_completed_task_and_ecore_threshold(tmp_path):

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import shlex
@@ -60,70 +61,93 @@ class AlertManager:
         self._last_heartbeat = None
         self._last_throttle_count = None
         self._temp_24h = deque()
+        self._journal_offset = 0
         self._restore()
 
     def _restore(self):
         """Keep six-hour deduplication and heartbeat timing across restarts."""
-        try:
-            with open(self.path, encoding="utf-8") as handle:
-                rows = [json.loads(line) for line in handle if line.strip()]
-        except (OSError, ValueError):
-            return
-        cutoff = self.now() - HEARTBEAT_S
-        for row in rows:
-            name = row.get("condition")
-            stamp = row.get("timestamp", 0)
-            if not name:
-                continue
-            self._active[name] = row.get("status") == "active"
-            if row.get("notified"):
-                self._last_notice[name] = stamp
-            if name == "daily_heartbeat" and row.get("notified"):
-                self._last_heartbeat = stamp
-            if name == "temperature" and stamp >= cutoff:
-                temp = row.get("details", {}).get("temperature_c")
-                if temp is not None:
-                    self._temp_24h.append((stamp, temp))
-                if temp is not None and temp >= 95:
-                    self._temp_since = self._temp_since or stamp
-                else:
-                    self._temp_since = None
-            if name == "partial_stall" and stamp >= cutoff:
-                details = row.get("details", {})
-                rate, median = details.get("current_per_h"), details.get("median_24h_per_h")
-                if isinstance(rate, (float, int)) and isinstance(median, (float, int)) and median > 0 and rate < 0.25 * median:
-                    self._low_rate_since = self._low_rate_since or stamp
-                else:
-                    self._low_rate_since = None
+        with open(self.path, "a+", encoding="utf-8") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            self._refresh_locked(handle, restore_timers=True)
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
-    def _write(self, event):
-        with open(self.path, "a", encoding="utf-8") as handle:
-            handle.write(json.dumps(event, sort_keys=True) + "\n")
-            handle.flush()
-            os.fsync(handle.fileno())
+    def _consume(self, row, *, restore_timers=False):
+        cutoff = self.now() - HEARTBEAT_S
+        name = row.get("condition")
+        stamp = row.get("timestamp", 0)
+        if not name:
+            return
+        self._active[name] = row.get("status") == "active"
+        if row.get("notified"):
+            self._last_notice[name] = stamp
+        if name == "daily_heartbeat" and row.get("notified"):
+            self._last_heartbeat = stamp
+        if not restore_timers:
+            return
+        if name == "temperature" and stamp >= cutoff:
+            temp = row.get("details", {}).get("temperature_c")
+            if temp is not None:
+                self._temp_24h.append((stamp, temp))
+            if temp is not None and temp >= 95:
+                self._temp_since = self._temp_since or stamp
+            else:
+                self._temp_since = None
+        if name == "partial_stall" and stamp >= cutoff:
+            details = row.get("details", {})
+            rate, median = details.get("current_per_h"), details.get("median_24h_per_h")
+            if isinstance(rate, (float, int)) and isinstance(median, (float, int)) and median > 0 and rate < 0.25 * median:
+                self._low_rate_since = self._low_rate_since or stamp
+            else:
+                self._low_rate_since = None
+
+    def _refresh_locked(self, handle, *, restore_timers=False):
+        handle.seek(self._journal_offset)
+        while True:
+            position = handle.tell()
+            line = handle.readline()
+            if not line:
+                break
+            if not line.endswith("\n"):
+                # A process killed during its final write can leave only an
+                # incomplete tail. It was never a completed alert record;
+                # trim just that suffix so future JSONL readers remain safe.
+                handle.seek(position)
+                handle.truncate()
+                handle.flush()
+                os.fsync(handle.fileno())
+                break
+            self._consume(json.loads(line), restore_timers=restore_timers)
+        self._journal_offset = handle.tell()
 
     def evaluate(self, name: str, triggered: bool, details=None, *, informational=False):
         """Journal every check; notify first, every 6 h, and once on clear."""
-        stamp = self.now()
-        previous = self._active.get(name, False)
-        status = "active" if triggered else "clear"
-        event = {"timestamp": stamp, "condition": name, "status": status,
-                 "details": details or {}, "notified": False}
-        should_notify = (
-            triggered and (not previous or stamp - self._last_notice.get(name, float("-inf")) >= REN_NOTIFY_S)
-        ) or (not triggered and previous)
-        if should_notify:
-            label = "cleared" if not triggered else ("information" if informational else "alert")
-            message = f"[{label}] {name}: {json.dumps(details or {}, sort_keys=True)}"
-            try:
-                self.notifier.send(message)
-                event["notified"] = True
-                self._last_notice[name] = stamp
-            except Exception as exc:  # notifier failure must be visible in journal
-                event["notification_error"] = f"{type(exc).__name__}: {exc}"
-        self._active[name] = triggered
-        self._write(event)
-        return event
+        with open(self.path, "a+", encoding="utf-8") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            self._refresh_locked(handle)
+            stamp = self.now()
+            previous = self._active.get(name, False)
+            status = "active" if triggered else "clear"
+            event = {"timestamp": stamp, "condition": name, "status": status,
+                     "details": details or {}, "notified": False}
+            should_notify = (
+                triggered and (not previous or stamp - self._last_notice.get(name, float("-inf")) >= REN_NOTIFY_S)
+            ) or (not triggered and previous)
+            if should_notify:
+                label = "cleared" if not triggered else ("information" if informational else "alert")
+                message = f"[{label}] {name}: {json.dumps(details or {}, sort_keys=True)}"
+                try:
+                    self.notifier.send(message)
+                    event["notified"] = True
+                except Exception as exc:  # notifier failure must be visible in journal
+                    event["notification_error"] = f"{type(exc).__name__}: {exc}"
+            handle.seek(0, os.SEEK_END)
+            handle.write(json.dumps(event, sort_keys=True) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+            self._journal_offset = handle.tell()
+            self._consume(event)
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            return event
 
     def inspect(self, snapshot: dict, *, p95_ecore_s: float, mirror_ok=True):
         stamp = self.now()

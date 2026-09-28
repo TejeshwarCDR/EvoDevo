@@ -1,10 +1,12 @@
 """Small, deterministic scheduler checks; real campaign sizes are separate slow tests."""
 import json
+import argparse
+import shlex
 from pathlib import Path
 
 import pytest
 from evodevo.campaign.plan import CampaignPlan, PhasePlan, RunPlan
-from evodevo.campaign.scheduler import CampaignScheduler
+from evodevo.campaign.scheduler import CampaignScheduler, resume_command
 from evodevo.core.config import ExperimentConfig
 from evodevo.core.factors import extract_factors
 from evodevo.encoders import get_encoder
@@ -29,6 +31,16 @@ def _records(path):
     for row in rows:
         row.pop("wall_clock_s", None)
     return rows
+
+
+def test_resume_command_preserves_every_nondefault_launch_option():
+    args = argparse.Namespace(config="/tmp/custom benchmark.yaml", output_root="/tmp/campaigns",
+        workers=8, mode="surrogate", grace_s=45.0, no_mirror=False, mirror_dir="/mnt/mirror disk")
+    assert shlex.split(resume_command(args, "study-01")) == [
+        "scripts/campaign/run_campaign.sh", "--resume", "study-01",
+        "--config", "/tmp/custom benchmark.yaml", "--output-root", "/tmp/campaigns",
+        "--workers", "8", "--mode", "surrogate", "--grace-s", "45.0",
+        "--mirror-dir", "/mnt/mirror disk"]
 
 
 def test_surrogate_shared_phase_matches_serial_and_resume(tmp_path, monkeypatch):
