@@ -443,7 +443,10 @@ def test_launcher_starts_and_cleans_tiny_surrogate_campaign():
                 detail = transcript.read_text() if transcript.exists() else "no transcript"
                 raise AssertionError(f"surrogate launcher did not finish: {started.stdout}\n{detail}")
             assert (run_root / "smoke" / "runs" / "direct" / "Walker-v0" / "seed_0" / "run_log.jsonl").exists()
-            assert json.loads(manifest.read_text())["no_mirror"] is True
+            completed_manifest = json.loads(manifest.read_text())
+            assert completed_manifest["no_mirror"] is True
+            assert completed_manifest["milestone_status"]["Walker-v0"]["ok"] is True
+            assert (run_root / "smoke" / "milestones" / "Walker-v0" / "MILESTONE_REPORT.md").is_file()
             assert collect(str(run_root / "smoke"), telemetry={})["mirror_disabled"] is True
         finally:
             subprocess.run(["bash", "scripts/campaign/stop_campaign.sh", "--campaign", "smoke",
