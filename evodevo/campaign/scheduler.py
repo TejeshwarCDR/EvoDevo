@@ -246,7 +246,8 @@ class CampaignScheduler:
         old_int, old_term = signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)
         signal.signal(signal.SIGINT, self._request_stop)
         signal.signal(signal.SIGTERM, self._request_stop)
-        pool = EvaluationPool(self.affinity_plan.n_workers, self.affinity_plan, "real", max_retries=2) if self.mode == "real" else None
+        pool = (EvaluationPool(self.affinity_plan.n_workers, self.affinity_plan, "real", max_retries=2,
+                               ignore_sigint=True) if self.mode == "real" else None)
         try:
             for phase in self.plan.phases:  # D7 barrier: no phase interleaving.
                 if phase_status.get(phase.task, {}).get("status") == "complete":

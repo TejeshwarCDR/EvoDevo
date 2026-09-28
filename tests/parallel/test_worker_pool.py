@@ -269,3 +269,45 @@ def test_real_ppo_pool_smoke():
 
     stats = pool.stats()
     assert stats["workers_restarted"] == 0
+
+
+# --- campaign stop semantics -----------------------------------------------
+
+
+def _running(pid):
+    """True for a live, non-zombie process."""
+    try:
+        with open(f"/proc/{pid}/stat") as handle:
+            return handle.read().rsplit(") ", 1)[1][0] not in "ZX"
+    except FileNotFoundError:
+        return False
+
+
+@pytest.mark.parametrize("ignore_sigint", [True, False])
+def test_campaign_workers_survive_a_group_sigint_only_when_asked(ignore_sigint):
+    """stop_campaign.sh signals the scheduler's whole process group. A
+    campaign pool (ignore_sigint=True) keeps its workers alive so the
+    scheduler can drain in-flight work and shut the pool down itself; a
+    worker killed by SIGINT inside call_queue.get() can die holding the
+    queue's lock and deadlock the remaining workers and the parent's exit.
+    The default (preflight) pool keeps plain Ctrl-C semantics: workers die."""
+    import os
+    import signal
+    import time
+    tasks = _random_tasks(4)
+    with EvaluationPool(n_workers=2, plan=_plan(2), mode="surrogate", timeout_s=60,
+                        ignore_sigint=ignore_sigint) as pool:
+        first = list(pool.map_tasks(tasks))
+        pids = {r.worker_pid for r in first}
+        for pid in pids:
+            os.kill(pid, signal.SIGINT)
+        time.sleep(1.0)
+        alive = {pid for pid in pids if _running(pid)}
+        if ignore_sigint:
+            assert alive == pids
+            second = list(pool.map_tasks(tasks))
+            assert {r.worker_pid for r in second} <= pids
+            assert pool.stats()["workers_restarted"] == 0
+            assert [r.fitness for r in second] == [r.fitness for r in first]
+        else:
+            assert not alive

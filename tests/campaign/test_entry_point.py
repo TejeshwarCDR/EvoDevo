@@ -175,3 +175,46 @@ def test_real_ppo_cli_smoke(tmp_path):
     flat = [cpu for sets in cpus_by_slot.values() for cpu in next(iter(sets))]
     assert len(flat) == len(set(flat)), cpus_by_slot
     assert len(cpus_by_slot) >= 2, cpus_by_slot
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not HAS_SIMULATOR, reason="evogym.simulator_cpp is not built")
+def test_real_cli_graceful_group_sigint_exits_promptly(tmp_path):
+    """stop_campaign.sh sends SIGINT to the scheduler's WHOLE process group,
+    workers included. Workers used to die inside call_queue.get() holding the
+    queue lock; the survivors then blocked forever and the scheduler hung at
+    interpreter exit until SIGTERM. Now workers ignore SIGINT and the
+    scheduler drains in-flight tasks and exits cleanly."""
+    import signal
+    import time
+    config = smoke_config(tmp_path / "stop.yaml", eval_budget=90)
+    notify = tmp_path / "notify.yaml"
+    notify.write_text("shell_command: 'true'\n")
+    env = dict(os.environ, EVODEVO_NOTIFY_CONFIG=str(notify))
+    root = tmp_path / "campaigns"
+    process = subprocess.Popen([sys.executable, "-m", "evodevo.campaign", "--config", str(config),
+                                "--output-root", str(root), "--campaign-id", "stop", "--workers", "20",
+                                "--mode", "real", "--no-mirror", "--grace-s", "120"],
+                               cwd=REPO_ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                               text=True, start_new_session=True)
+    journal = root / "stop" / "journal.jsonl"
+    try:
+        deadline = time.monotonic() + 300
+        while time.monotonic() < deadline and not (journal.exists() and len(journal.read_text().splitlines()) >= 20):
+            assert process.poll() is None, process.stdout.read()
+            time.sleep(0.2)
+        os.killpg(process.pid, signal.SIGINT)
+        stopped_at = time.monotonic()
+        output, _ = process.communicate(timeout=30)
+        elapsed = time.monotonic() - stopped_at
+    finally:
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait()
+    assert process.returncode == 0, output[-3000:]
+    assert elapsed < 30
+    assert "Resume: scripts/campaign/run_campaign.sh --resume stop" in output
+    assert json.loads((root / "stop" / "manifest.json").read_text())["status"] == "stopped"
+    group = subprocess.run(["ps", "-eo", "pgid=,stat="], capture_output=True, text=True).stdout.split("\n")
+    assert not [line for line in group if line.split() and line.split()[0] == str(process.pid)
+                and not line.split()[1].startswith("Z")]

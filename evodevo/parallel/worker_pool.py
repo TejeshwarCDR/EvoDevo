@@ -104,12 +104,24 @@ def _run_ppo_task(task, timeout_s):
                                thread_env={var: os.environ.get(var) for var in THREAD_ENV_VARS})
 
 
-def _worker_initializer(slot_queue, slots: tuple) -> None:
+def _worker_initializer(slot_queue, slots: tuple, ignore_sigint: bool = False) -> None:
     """Runs once, in a fresh spawned worker process, before that worker
     processes any task. Order is load-bearing -- see module docstring."""
     # (1) Pin thread counts BEFORE any heavy import. This is the entire
     # reason this function exists as the FIRST thing a worker does.
     threading_report = configure_threading(n_threads=1, strict=True)
+
+    # (1b) Campaign pools: a graceful stop signals the WHOLE process group
+    # (scripts/campaign/stop_campaign.sh), workers included. An idle worker
+    # interrupted inside call_queue.get() can die holding the queue's
+    # process-shared lock; the surviving workers then block on it forever and
+    # the parent's interpreter exit hangs joining them. Workers therefore
+    # leave SIGINT to the parent, which lets in-flight tasks finish within
+    # grace_s and then terminates the workers itself (map_ppo_tasks).
+    if ignore_sigint:
+        import signal
+
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
 
     # (2) Claim this worker's slot index (0..n_workers-1) from the shared
     # queue -- whichever worker asks first gets slot 0, etc. Order across
@@ -236,6 +248,7 @@ class EvaluationPool:
         timeout_s: Optional[float] = None,
         max_tasks_per_child: Optional[int] = None,
         max_retries: int = 1,
+        ignore_sigint: bool = False,
     ):
         if n_workers < 1:
             raise ValueError(f"n_workers must be >= 1, got {n_workers}")
@@ -248,6 +261,7 @@ class EvaluationPool:
         self.timeout_s = timeout_s
         self.max_tasks_per_child = max_tasks_per_child
         self.max_retries = max_retries
+        self.ignore_sigint = ignore_sigint
 
         # Lazy import: safe here, this is parent-process-only code and never
         # runs inside a fresh worker's bootstrap (see module docstring).
@@ -285,7 +299,7 @@ class EvaluationPool:
             max_workers=self.n_workers,
             mp_context=self._ctx,
             initializer=_worker_initializer,
-            initargs=(slot_queue, self.plan.slots),
+            initargs=(slot_queue, self.plan.slots, self.ignore_sigint),
         )
         self._worker_task_counts = {}
 
