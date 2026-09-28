@@ -346,6 +346,14 @@ def test_milestone_package_and_subprocess_failure_isolated(tmp_path, monkeypatch
     assert abs(float(direct_nca["p_raw"]) - 1 / 3) < 1e-10
     spy = SpyNotifier()
     alerts = AlertManager(tmp_path / "alerts.jsonl", notifier=spy)
+    class Stale:
+        returncode = 0
+        stderr = ""
+        stdout = ""
+    monkeypatch.setattr("evodevo.campaign.milestone.subprocess.run", lambda *a, **k: Stale())
+    stale = run_subprocess(tmp_path, task, alerts)
+    assert not stale["ok"]
+    assert "fresh package_manifest.json for this invocation" in stale["missing"]
     class Failed:
         returncode = 1
         stderr = "injected crash"

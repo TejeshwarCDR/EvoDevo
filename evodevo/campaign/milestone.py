@@ -308,7 +308,8 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
     _atomic_text(output / "MILESTONE_REPORT.md", report)
     files = sorted(str(path.relative_to(output)) for path in output.rglob("*") if path.is_file())
     _atomic_text(output / "package_manifest.json", json.dumps({"task": task, "snapshot": snapshot,
-                  "completion_fraction": fraction, "files": files}, indent=2, sort_keys=True) + "\n")
+                  "completion_fraction": fraction, "generated_at": time.time(),
+                  "files": files}, indent=2, sort_keys=True) + "\n")
     missing = [name for name in REQUIRED if not (output / name).is_file()]
     missing += [name for name in best_files if not (output / name).is_file()]
     if task == "UpStepper-v0":
@@ -323,6 +324,7 @@ def run_subprocess(campaign_root, task, alert_manager=None, *, snapshot=False):
     argv = [sys.executable, "-m", "evodevo.campaign.milestone", "--campaign-root", str(campaign_root), "--task", task]
     if snapshot:
         argv.append("--snapshot")
+    started_at = time.time()
     try:
         completed = subprocess.run(argv, capture_output=True, text=True)
     except Exception as exc:
@@ -337,12 +339,21 @@ def run_subprocess(campaign_root, task, alert_manager=None, *, snapshot=False):
         except (ValueError, KeyError, TypeError):
             pass
     missing = [name for name in REQUIRED if not (output / name).is_file()]
-    if not (output / "package_manifest.json").is_file():
+    package_path = output / "package_manifest.json"
+    package = None
+    if not package_path.is_file():
         missing.append("package_manifest.json")
-    if not list((output / "best_bodies").glob("*.npz")):
-        missing.append("best_bodies/*.npz")
-    if not list((output / "best_bodies").glob("*.png")):
-        missing.append("best_bodies/*.png")
+    else:
+        try:
+            package = json.loads(package_path.read_text())
+            if package.get("generated_at", 0) < started_at:
+                missing.append("fresh package_manifest.json for this invocation")
+            missing += [name for name in package.get("files", []) if not (output / name).is_file()]
+        except (OSError, ValueError, TypeError):
+            missing.append("valid package_manifest.json")
+    for arm in {directory.parents[1].name for directory in _run_dirs(Path(campaign_root), task)}:
+        missing += [name for name in (f"best_bodies/{arm}.npz", f"best_bodies/{arm}.png")
+                    if not (output / name).is_file()]
     if task == "UpStepper-v0":
         missing += [name for name in ("stats/mean_of_2_sensitivity.csv", "stats/mean_of_2_omnibus.csv",
                                       "stats/mean_of_2_pairwise.csv") if not (output / name).is_file()]
