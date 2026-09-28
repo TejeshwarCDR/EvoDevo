@@ -38,7 +38,17 @@ group_live() {
   ps -eo pgid=,stat= | awk -v group="$PGID" '$1 == group && $2 !~ /^Z/ { found=1 } END { exit !found }'
 }
 
+group_owned() {
+  [[ -n "$PGID" ]] || return 1
+  [[ "$(ps -o pgid= -p "$PGID" 2>/dev/null | tr -d ' ')" == "$PGID" ]] || return 1
+  ps -o args= -p "$PGID" 2>/dev/null | grep -E "evodevo\.campaign\.(scheduler|monitor).*${CAMPAIGN_ID}" >/dev/null
+}
+
 if group_live; then
+  if ! group_owned; then
+    echo "Refusing to signal process group $PGID: leader does not identify campaign $CAMPAIGN_ID" >&2
+    exit 1
+  fi
   kill -INT -- "-$PGID" 2>/dev/null || true
   deadline=$((SECONDS + GRACE_S))
   while (( SECONDS < deadline )); do
@@ -58,7 +68,12 @@ if [[ -n "${EVODEVO_TMUX_SOCKET:-}" ]]; then
   TMUX_ARGS=(-L "$EVODEVO_TMUX_SOCKET")
 fi
 if tmux "${TMUX_ARGS[@]}" has-session -t evodevo-campaign 2>/dev/null; then
-  tmux "${TMUX_ARGS[@]}" kill-session -t evodevo-campaign
+  SESSION_OWNER="$(tmux "${TMUX_ARGS[@]}" show-environment -t evodevo-campaign EVODEVO_CAMPAIGN_ID 2>/dev/null || true)"
+  if [[ "$SESSION_OWNER" == "EVODEVO_CAMPAIGN_ID=$CAMPAIGN_ID" ]]; then
+    tmux "${TMUX_ARGS[@]}" kill-session -t evodevo-campaign
+  else
+    echo "Leaving tmux session intact: it belongs to ${SESSION_OWNER:-an unlabelled campaign}, not $CAMPAIGN_ID" >&2
+  fi
 fi
 if group_live; then
   echo "ERROR: process group $PGID survived stop" >&2

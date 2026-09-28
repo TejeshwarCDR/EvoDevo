@@ -42,6 +42,9 @@ fi
 if [[ -z "$MIRROR_DIR" && "$NO_MIRROR" -ne 1 ]]; then
   echo "--mirror-dir is required unless --no-mirror is explicit" >&2; exit 2
 fi
+if [[ -n "$MIRROR_DIR" && "$NO_MIRROR" -eq 1 ]]; then
+  echo "--mirror-dir and --no-mirror are mutually exclusive" >&2; exit 2
+fi
 if [[ -n "$RESUME" && -n "$CAMPAIGN_ID" ]]; then
   echo "--resume and --campaign-id are mutually exclusive" >&2; exit 2
 fi
@@ -83,6 +86,7 @@ if [[ "$NO_MIRROR" -eq 1 ]]; then CMD+=(--no-mirror); else CMD+=(--mirror-dir "$
 printf -v CMD_QUOTED '%q ' "${CMD[@]}"
 printf -v TRANSCRIPT_QUOTED '%q' "$RUN_DIR/transcript.log"
 tmux "${TMUX_ARGS[@]}" new-session -d -s evodevo-campaign -n dashboard
+tmux "${TMUX_ARGS[@]}" set-environment -t evodevo-campaign EVODEVO_CAMPAIGN_ID "$CAMPAIGN_ID"
 tmux "${TMUX_ARGS[@]}" send-keys -t evodevo-campaign:dashboard \
   ".venv/bin/python -m evodevo.campaign.dashboard --campaign '$CAMPAIGN_ID' --output-root '$OUTPUT_ROOT' --watch" C-m
 tmux "${TMUX_ARGS[@]}" split-window -h -l 50 -t evodevo-campaign:dashboard \

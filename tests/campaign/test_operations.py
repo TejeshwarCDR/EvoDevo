@@ -174,6 +174,11 @@ def test_run_script_help_and_existing_session_attach(tmp_path):
                                  capture_output=True, text=True)
         assert refused.returncode != 0
         assert "--mirror-dir is required" in refused.stderr
+        conflict = subprocess.run(["bash", str(script), "--campaign-id", "conflict",
+                                   "--mirror-dir", str(tmp_path), "--no-mirror"], env=env,
+                                  capture_output=True, text=True)
+        assert conflict.returncode != 0
+        assert "mutually exclusive" in conflict.stderr
         assert subprocess.run(["tmux", "-L", socket, "has-session", "-t", "evodevo-campaign"],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
         subprocess.run(["tmux", "-L", socket, "new-session", "-d", "-s", "evodevo-campaign", "sleep 30"],
@@ -292,6 +297,28 @@ def test_snapshot_failure_retries_without_waiting_another_twelve_hours(tmp_path,
                           p95_ecore_s=100, last_snapshot=first["last_snapshot"])
     assert second["last_snapshot"] == 1000 + SNAPSHOT_S + 60
     assert len(called) == 2
+    # Between D7 phases the next task is visible in the plan but has not
+    # started; it must not trigger a premature snapshot of empty run logs.
+    manifest["phase_status"] = {task: {"started_at": 1000, "status": "complete"}}
+    manifest["plan"]["phases"].append({"task": "UpStepper-v0", "runs": []})
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    transition = monitor_once(tmp_path, alerts, now=1000 + 2 * SNAPSHOT_S,
+                              p95_ecore_s=100, last_snapshot=second["last_snapshot"])
+    assert transition["last_snapshot"] == 1000 + 2 * SNAPSHOT_S
+    assert len(called) == 2
+
+
+def test_missing_mirror_alerts_before_next_six_hour_sync(tmp_path):
+    task = "Walker-v0"
+    manifest = {"campaign_id": "missing-mirror", "started_at": 1000, "status": "running",
+                "mirror_dir": str(tmp_path / "unmounted"), "no_mirror": False,
+                "phase_status": {task: {"started_at": 1000, "status": "running"}},
+                "plan": {"phases": [{"task": task, "runs": []}]}}
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    alerts = AlertManager(tmp_path / "alerts.jsonl", notifier=SpyNotifier(), now=lambda: 1100)
+    monitor_once(tmp_path, alerts, now=1100, p95_ecore_s=100, last_mirror=1099)
+    rows = [json.loads(line) for line in (tmp_path / "alerts.jsonl").read_text().splitlines()]
+    assert any(row["condition"] == "mirror_failed" and row["status"] == "active" for row in rows)
 
 
 def test_mirror_checksum_and_failure_alert(tmp_path, monkeypatch):
@@ -386,6 +413,8 @@ def test_stop_script_kills_process_group_and_tmux_session(tmp_path):
     socket = f"evodevo-test-{os.getpid()}"
     subprocess.run(["tmux", "-L", socket, "new-session", "-d", "-s", "evodevo-campaign",
                     "sleep 300"], check=True)
+    subprocess.run(["tmux", "-L", socket, "set-environment", "-t", "evodevo-campaign",
+                    "EVODEVO_CAMPAIGN_ID", campaign], check=True)
     process = subprocess.Popen(["setsid", sys.executable, "-m", "evodevo.campaign.monitor",
                                 "--campaign", campaign, "--output-root", str(tmp_path),
                                 "--interval-s", "1"])
@@ -416,6 +445,25 @@ def test_stop_script_kills_process_group_and_tmux_session(tmp_path):
             process.wait()
         subprocess.run(["tmux", "-L", socket, "kill-server"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def test_stop_does_not_remove_another_campaigns_tmux_session(tmp_path):
+    socket = f"evodevo-owner-test-{os.getpid()}-{time.time_ns()}"
+    env = {**os.environ, "EVODEVO_TMUX_SOCKET": socket}
+    try:
+        subprocess.run(["tmux", "-L", socket, "new-session", "-d", "-s", "evodevo-campaign",
+                        "sleep 30"], check=True)
+        subprocess.run(["tmux", "-L", socket, "set-environment", "-t", "evodevo-campaign",
+                        "EVODEVO_CAMPAIGN_ID", "current"], check=True)
+        stopped = subprocess.run(["bash", "scripts/campaign/stop_campaign.sh", "--campaign",
+                                  "old", "--output-root", str(tmp_path), "--grace-s", "0"],
+                                 env=env, capture_output=True, text=True, timeout=10)
+        assert stopped.returncode == 0
+        assert "Leaving tmux session intact" in stopped.stderr
+        assert subprocess.run(["tmux", "-L", socket, "has-session", "-t", "evodevo-campaign"],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+    finally:
+        subprocess.run(["tmux", "-L", socket, "kill-server"], capture_output=True)
 
 
 def test_launcher_starts_and_cleans_tiny_surrogate_campaign():

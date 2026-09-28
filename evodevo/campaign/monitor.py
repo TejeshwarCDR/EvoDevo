@@ -35,13 +35,13 @@ def monitor_once(root, alerts, *, now=None, p95_ecore_s=None, last_mirror=0,
         return {"running": True, "last_mirror": last_mirror, "last_snapshot": last_snapshot}
     manifest = json.loads(manifest_path.read_text())
     snapshot = collect(str(root), now=now)
-    phase_started = manifest.get("phase_status", {}).get(snapshot["phase"], {}).get(
-        "started_at", manifest.get("started_at", now))
+    phase_state = manifest.get("phase_status", {}).get(snapshot["phase"], {})
+    phase_started = phase_state.get("started_at", now)
     last_snapshot = max(last_snapshot, phase_started)
     if p95_ecore_s is None:
         p95_ecore_s = slowest_ecore_p95_s(snapshot["phase"])
     mirror_dir = manifest.get("mirror_dir")
-    mirror_ok = manifest.get("no_mirror", False) or bool(mirror_dir)
+    mirror_ok = manifest.get("no_mirror", False) or bool(mirror_dir and Path(mirror_dir).is_dir())
     if mirror_dir and now - last_mirror >= INTERVAL_S:
         result = sync(root, mirror_dir, alert_manager=alerts)
         mirror_ok = result["ok"]
@@ -51,7 +51,7 @@ def monitor_once(root, alerts, *, now=None, p95_ecore_s=None, last_mirror=0,
             # concurrent manifest rewrites from losing phase transitions.
             (Path(root) / "mirror_status.json").write_text(json.dumps(
                 {"last_success": now, "destination": result["destination"]}))
-    if now - last_snapshot >= SNAPSHOT_S and manifest.get("status") == "running":
+    if now - last_snapshot >= SNAPSHOT_S and phase_state.get("status") == "running":
         outcome = run_subprocess(root, snapshot["phase"], alerts, snapshot=True)
         if outcome["ok"]:
             last_snapshot = now

@@ -304,6 +304,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if not args.mirror_dir and not args.no_mirror:
         parser.error("--mirror-dir is required unless --no-mirror is explicitly set")
+    if args.mirror_dir and args.no_mirror:
+        parser.error("--mirror-dir and --no-mirror are mutually exclusive")
     if args.resume and args.campaign_id:
         parser.error("--resume and --campaign-id are mutually exclusive")
     from evodevo.preflight.dirty_check import project_is_dirty
