@@ -121,8 +121,13 @@ tmux "${TMUX_ARGS[@]}" send-keys -t evodevo-campaign:dashboard \
 tmux "${TMUX_ARGS[@]}" split-window -h -l 50 -t evodevo-campaign:dashboard \
   "tail -F '$RUN_DIR/transcript.log'"
 tmux "${TMUX_ARGS[@]}" split-window -v -l 15 -t evodevo-campaign:dashboard.1 "top"
+# setsid --wait: inside `script` the command is a process-group leader, so a
+# plain setsid forks and exits at once; `script` and the pane then close and
+# the pane's SIGHUP could kill the child before it left the old session (an
+# intermittent "Started campaign" with nothing running, and an empty
+# transcript). Waiting keeps the pane, the transcript and the child together.
 tmux "${TMUX_ARGS[@]}" new-window -d -t evodevo-campaign -n scheduler \
-  "script -q -f $TRANSCRIPT_QUOTED -c 'setsid $CMD_QUOTED'"
+  "script -q -f $TRANSCRIPT_QUOTED -c 'setsid --wait $CMD_QUOTED'"
 tmux "${TMUX_ARGS[@]}" new-window -d -t evodevo-campaign -n monitor \
   "env EVODEVO_NOTIFY_CONFIG=$NOTIFY_QUOTED .venv/bin/python -m evodevo.campaign.monitor --campaign '$CAMPAIGN_ID' --output-root '$OUTPUT_ROOT'"
 echo "Started campaign $CAMPAIGN_ID in tmux session evodevo-campaign."
