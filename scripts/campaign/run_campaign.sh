@@ -46,7 +46,8 @@ if [[ -n "$RESUME" && -n "$CAMPAIGN_ID" ]]; then
   echo "--resume and --campaign-id are mutually exclusive" >&2; exit 2
 fi
 if [[ "$RESUME" == latest ]]; then
-  RESUME="$(find "$OUTPUT_ROOT" -mindepth 2 -maxdepth 2 -name manifest.json -printf '%h\n' 2>/dev/null | sort | tail -n 1)"
+  RESUME="$(find "$OUTPUT_ROOT" -mindepth 2 -maxdepth 2 -name manifest.json -printf '%T@ %h\n' 2>/dev/null | sort -nr | head -n 1 || true)"
+  RESUME="${RESUME#* }"
   RESUME="${RESUME##*/}"
   if [[ -z "$RESUME" ]]; then echo "no campaign to resume" >&2; exit 1; fi
 fi

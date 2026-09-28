@@ -19,7 +19,8 @@ done
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 if [[ "$CAMPAIGN_ID" == "latest" ]]; then
-  CAMPAIGN_ID="$(find "$OUTPUT_ROOT" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | sort | tail -n 1)"
+  CAMPAIGN_ID="$(find "$OUTPUT_ROOT" -mindepth 2 -maxdepth 2 -name manifest.json -printf '%T@ %h\n' 2>/dev/null | sort -nr | head -n 1 || true)"
+  CAMPAIGN_ID="${CAMPAIGN_ID##*/}"
 fi
 if [[ -z "$CAMPAIGN_ID" || ! -f "$OUTPUT_ROOT/$CAMPAIGN_ID/manifest.json" ]]; then
   echo "No campaign manifest found" >&2

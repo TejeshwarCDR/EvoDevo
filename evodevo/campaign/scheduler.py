@@ -307,10 +307,10 @@ def main(argv=None):
     campaign_id = args.resume or args.campaign_id or time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     if campaign_id == "latest":
         root = args.output_root
-        candidates = sorted(d for d in os.listdir(root) if os.path.isfile(os.path.join(root, d, "manifest.json")))
+        candidates = [d for d in os.listdir(root) if os.path.isfile(os.path.join(root, d, "manifest.json"))]
         if not candidates:
             parser.error("no campaign to resume")
-        campaign_id = candidates[-1]
+        campaign_id = max(candidates, key=lambda d: os.path.getmtime(os.path.join(root, d, "manifest.json")))
     manifest_path = os.path.join(args.output_root, campaign_id, "manifest.json")
     if args.resume:
         if not os.path.isfile(manifest_path):
