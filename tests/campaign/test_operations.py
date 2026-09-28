@@ -460,11 +460,34 @@ def test_milestone_package_and_subprocess_failure_isolated(tmp_path, monkeypatch
     direct_nca = next(r for r in pairwise if r["arm_a"] == "direct" and r["arm_b"] == "nca")
     assert float(direct_nca["a12"]) == 0.0
     assert abs(float(direct_nca["p_raw"]) - 1 / 3) < 1e-10
+    import csv
+    primary = list(csv.DictReader((folder / "stats/final_fitness_summary.csv").open()))
+    direct = next(row for row in primary if row["arm"] == "direct")
+    assert direct["n_seeds"] == "2"
+    assert all(abs(float(direct[key]) - expected) < 1e-12 for key, expected in
+               zip(("q25", "median", "q75", "iqr"), (0.025, 0.05, 0.075, 0.05)))
+    morphology = list(csv.DictReader((folder / "stats/final_best_morphology.csv").open()))
+    assert len(morphology) == 8
+    assert {row["occupied_voxels"] for row in morphology} == {"1"}
+    assert {row["distinct_materials"] for row in morphology} == {"1"}
+    thresholds = list(csv.DictReader((folder / "stats/evaluations_to_90pct_arm_median.csv").open()))
+    assert len(thresholds) == 8
+    assert next(row for row in thresholds if row["arm"] == "direct" and row["seed"] == "0")["reached"] == "False"
+    assert next(row for row in thresholds if row["arm"] == "direct" and row["seed"] == "1")["evaluations_to_threshold"] == "1"
+    rates = list(csv.DictReader((folder / "stats/validity_diversity_by_generation.csv").open()))
+    assert len(rates) == 8 and all(float(row["validity_rate"]) == 1 for row in rates)
+    report = (folder / "MILESTONE_REPORT.md").read_text()
+    assert "Pre-registered limitations" in report and "median and IQR" in report
     snapshot_outcome = build(tmp_path, task, snapshot=True, timestamp="20260928T000000Z")
     assert snapshot_outcome["completion_fraction"] == 1.0
     assert "milestones/snapshots/20260928T000000Z" in snapshot_outcome["output"]
     assert json.loads((Path(snapshot_outcome["output"]) / "package_manifest.json").read_text())[
         "completion_fraction"] == 1.0
+    snapshot_root = Path(snapshot_outcome["output"])
+    partial = list(csv.DictReader((snapshot_root / "stats/pairwise.csv").open()))
+    assert all(row["status"] == "PARTIAL" and row["n_a"] == row["n_b"] == "2" for row in partial)
+    assert "PARTIAL" in (snapshot_root / "MILESTONE_REPORT.md").read_text()
+    assert str(__import__("numpy").load(snapshot_root / "best_bodies/direct.npz")["status"]) == "PARTIAL"
     spy = SpyNotifier()
     alerts = AlertManager(tmp_path / "alerts.jsonl", notifier=spy)
     class Stale:
@@ -506,7 +529,7 @@ def test_upstepper_mean_of_two_sensitivity_tables(tmp_path):
     folder = Path(outcome["output"])
     assert all((folder / name).is_file() for name in (
         "stats/mean_of_2_sensitivity.csv", "stats/mean_of_2_omnibus.csv",
-        "stats/mean_of_2_pairwise.csv"))
+        "stats/mean_of_2_pairwise.csv", "stats/mean_of_2_final_fitness_summary.csv"))
     import csv
     summary = list(csv.DictReader((folder / "stats/mean_of_2_sensitivity.csv").open()))
     direct = next(row for row in summary if row["encoder"] == "direct")

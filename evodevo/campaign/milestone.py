@@ -14,13 +14,20 @@ from pathlib import Path
 
 import numpy as np
 
-from evodevo.analysis.aggregate import load_runs, per_seed_finals, three_way_table
+from evodevo.analysis.aggregate import per_seed_finals, three_way_table
+from evodevo.analysis.budget_curves import plot_two_panel_comparison
+from evodevo.morphology.metrics import body_metrics
 from evodevo.visualization.morphology import plot_body
 from evodevo.morphology.validate import validate_body
 
 REQUIRED = ("figures/fitness_curves.png", "figures/fitness_curves.pdf",
+            "figures/budget_curves.png", "figures/budget_curves.pdf",
+            "figures/validity_diversity.png", "figures/validity_diversity.pdf",
             "stats/omnibus.csv", "stats/pairwise.csv", "stats/tables.md",
-            "stats/tables.tex", "stats/rule_based_vs_monotone.csv", "MILESTONE_REPORT.md")
+            "stats/tables.tex", "stats/final_fitness_summary.csv",
+            "stats/validity_diversity_by_generation.csv", "stats/current_rates.csv",
+            "stats/final_best_morphology.csv", "stats/evaluations_to_90pct_arm_median.csv",
+            "stats/rule_based_vs_monotone.csv", "MILESTONE_REPORT.md")
 
 
 def _atomic_text(path, text):
@@ -168,6 +175,72 @@ def _run_dirs(root, task):
     return sorted(path.parent for path in (root / "runs").glob(f"*/{task}/seed_*/run_log.jsonl"))
 
 
+def _primary_summary(finals, status, fraction):
+    rows = []
+    for arm, values in sorted(finals.items()):
+        q25, median, q75 = np.quantile(values, [0.25, 0.5, 0.75])
+        rows.append({"arm": arm, "n_seeds": len(values), "median": float(median),
+                     "q25": float(q25), "q75": float(q75), "iqr": float(q75 - q25),
+                     "status": status, "completion_fraction": fraction})
+    return rows
+
+
+def _secondary_tables(data, output, finals, status, fraction):
+    generation_rows = []
+    current_run_rows = []
+    morphology_rows = []
+    threshold_rows = []
+    for (arm, seed), group in data.groupby(["encoder", "seed"]):
+        group = group.sort_values("eval_index")
+        for generation, records in group.groupby("generation"):
+            valid = records[records["valid"] == True]
+            distinct = valid["body_hash"].dropna().nunique() if "body_hash" in valid else 0
+            generation_rows.append({"arm": arm, "seed": seed, "generation": generation,
+                "evaluations": len(records), "valid": len(valid), "validity_rate": len(valid) / len(records),
+                "unique_valid_bodies": distinct, "diversity_per_valid": distinct / len(valid) if len(valid) else 0,
+                "status": status, "completion_fraction": fraction})
+        valid = group[group["valid"] == True]
+        distinct = valid["body_hash"].dropna().nunique() if "body_hash" in valid else 0
+        current_run_rows.append({"arm": arm, "seed": seed, "evaluations": len(group),
+            "validity_rate": len(valid) / len(group), "unique_valid_bodies": distinct,
+            "diversity_per_valid": distinct / len(valid) if len(valid) else 0,
+            "status": status, "completion_fraction": fraction})
+        best = group.loc[group["fitness"].idxmax()]
+        body = np.asarray(best["body"], dtype=int)
+        metrics = body_metrics(body)
+        morphology_rows.append({"arm": arm, "seed": seed, "best_fitness": float(best["fitness"]),
+            "occupied_voxels": metrics["occupied_count"], "actuator_fraction": metrics["actuator_fraction"],
+            "horizontal_symmetry": metrics["horizontal_symmetry_score"],
+            "vertical_symmetry": metrics["vertical_symmetry_score"],
+            "distinct_materials": len(set(body.flat) - {0}), "status": status,
+            "completion_fraction": fraction})
+        threshold = 0.9 * float(np.median(finals[arm]))
+        reached = group[group["fitness"].cummax() >= threshold]
+        threshold_rows.append({"arm": arm, "seed": seed, "arm_final_median": float(np.median(finals[arm])),
+            "threshold": threshold, "reached": not reached.empty,
+            "evaluations_to_threshold": int(reached.iloc[0]["eval_index"]) + 1 if not reached.empty else "",
+            "status": status, "completion_fraction": fraction})
+    current_rows = []
+    for arm, group in data.groupby("encoder"):
+        valid = group[group["valid"] == True]
+        distinct = valid["body_hash"].dropna().nunique() if "body_hash" in valid else 0
+        current_rows.append({"arm": arm, "n_seeds": group["seed"].nunique(),
+            "evaluations": len(group), "valid": len(valid),
+            "validity_rate": len(valid) / len(group), "unique_valid_bodies": distinct,
+            "diversity_per_valid": distinct / len(valid) if len(valid) else 0,
+            "status": status, "completion_fraction": fraction})
+    tables = (
+        ("validity_diversity_by_generation.csv", generation_rows),
+        ("current_rates.csv", current_rows),
+        ("current_run_rates.csv", current_run_rows),
+        ("final_best_morphology.csv", morphology_rows),
+        ("evaluations_to_90pct_arm_median.csv", threshold_rows),
+    )
+    for name, rows in tables:
+        _csv(output / "stats" / name, rows, list(rows[0]))
+    return generation_rows
+
+
 def build(campaign_root, task, *, snapshot=False, timestamp=None):
     # EvoGym's rendering path can change cwd as a side effect; every package
     # path must be absolute before the visualisation gate is exercised.
@@ -197,37 +270,83 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
     if not frames:
         raise RuntimeError("run logs contain no evaluations")
     data = pd.concat(frames, ignore_index=True)
+    manifest = json.loads((root / "manifest.json").read_text()) if (root / "manifest.json").exists() else {}
+    planned = sum(int(r["config"]["eval_budget"]) for p in manifest.get("plan", {}).get("phases", [])
+                  if p["task"] == task for r in p["runs"])
+    fraction = len(data) / planned if planned else None
+    status = "PARTIAL" if snapshot or fraction is None or fraction < 1 else "COMPLETE"
+    for (_, _), indices in data.groupby(["encoder", "seed"]).groups.items():
+        ordered = data.loc[indices].sort_values("eval_index")
+        data.loc[ordered.index, "evals_spent"] = ordered["eval_index"].to_numpy() + 1
+        data.loc[ordered.index, "evals_valid_cumulative"] = ordered["valid"].astype(int).cumsum().to_numpy()
+        data.loc[ordered.index, "best_fitness_so_far"] = ordered["fitness"].cummax().to_numpy()
     finals = per_seed_finals(data)
     omnibus, pairwise = _stats(finals)
+    if status == "PARTIAL":
+        omnibus.update(status=status, completion_fraction=fraction,
+                       n_per_arm=json.dumps({arm: len(values) for arm, values in finals.items()}, sort_keys=True))
+        for row in pairwise:
+            row.update(status=status, completion_fraction=fraction,
+                       n_a=len(finals[row["arm_a"]]), n_b=len(finals[row["arm_b"]]))
     _csv(output / "stats/omnibus.csv", [omnibus], list(omnibus))
     fields = ["arm_a", "arm_b", "u", "p_raw", "p_holm", "a12", "a12_ci_low", "a12_ci_high"]
+    if status == "PARTIAL":
+        fields += ["status", "completion_fraction", "n_a", "n_b"]
     _csv(output / "stats/pairwise.csv", pairwise, fields)
     contrast = [r for r in pairwise if {r["arm_a"], r["arm_b"]} == {"rule_based", "rule_based_monotone"}]
     _csv(output / "stats/rule_based_vs_monotone.csv", contrast, fields)
     summary = three_way_table(data)
     summary.to_csv(output / "stats/summary.csv", index=False)
+    primary = pd.DataFrame(_primary_summary(finals, status, fraction))
+    primary.to_csv(output / "stats/final_fitness_summary.csv", index=False)
     try:
-        markdown = summary.to_markdown(index=False)
+        markdown = primary.to_markdown(index=False)
     except ImportError:
-        markdown = summary.to_csv(index=False)
+        markdown = primary.to_csv(index=False)
     _atomic_text(output / "stats/tables.md", markdown + "\n")
-    _atomic_text(output / "stats/tables.tex", summary.to_latex(index=False))
+    _atomic_text(output / "stats/tables.tex", primary.to_latex(index=False))
+    generation_rows = _secondary_tables(data, output, finals, status, fraction)
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(figsize=(8, 5))
     for arm, group in data.groupby("encoder"):
-        curves = []
-        for _, run in group.groupby("seed"):
-            run = run.sort_values("eval_index")
-            curves.append(run["fitness"].cummax().to_numpy())
+        curves = [run.sort_values("eval_index")["fitness"].cummax().to_numpy()
+                  for _, run in group.groupby("seed")]
         n = min(map(len, curves))
-        ax.plot(np.arange(1, n + 1), np.mean([v[:n] for v in curves], axis=0), label=arm)
-    ax.set(xlabel="Genomes evaluated", ylabel="Mean best fitness", title=f"{task}: evolutionary progress")
+        matrix = np.stack([curve[:n] for curve in curves])
+        x = np.arange(1, n + 1)
+        ax.plot(x, np.median(matrix, axis=0), label=arm)
+        ax.fill_between(x, np.quantile(matrix, .25, axis=0), np.quantile(matrix, .75, axis=0), alpha=.2)
+    ax.set(xlabel="Genomes evaluated", ylabel="Median best fitness (IQR band)",
+           title=f"{task}: evolutionary progress" + (f" — PARTIAL {fraction:.1%}" if status == "PARTIAL" and fraction is not None else ""))
     ax.legend()
     (output / "figures").mkdir(exist_ok=True)
     fig.savefig(output / "figures/fitness_curves.png", dpi=160, bbox_inches="tight")
     fig.savefig(output / "figures/fitness_curves.pdf", bbox_inches="tight")
+    plt.close(fig)
+    fig, _ = plot_two_panel_comparison(data)
+    fig.suptitle(f"{task}: spent versus valid evaluations" +
+                 (f" — PARTIAL {fraction:.1%}" if status == "PARTIAL" and fraction is not None else ""))
+    fig.savefig(output / "figures/budget_curves.png", dpi=160, bbox_inches="tight")
+    fig.savefig(output / "figures/budget_curves.pdf", bbox_inches="tight")
+    plt.close(fig)
+    rates = pd.DataFrame(generation_rows)
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+    for arm, group in rates.groupby("arm"):
+        by_gen = group.groupby("generation")
+        for ax, field in zip(axes, ("validity_rate", "diversity_per_valid")):
+            values = by_gen[field]
+            x = np.asarray(sorted(group["generation"].unique()))
+            ax.plot(x, values.median().reindex(x), label=arm)
+            ax.fill_between(x, values.quantile(.25).reindex(x), values.quantile(.75).reindex(x), alpha=.2)
+    axes[0].set(xlabel="Generation", ylabel="Valid evaluations / evaluations")
+    axes[1].set(xlabel="Generation", ylabel="Unique valid bodies / valid evaluations")
+    axes[0].legend()
+    fig.suptitle(f"{task}: validity and diversity" +
+                 (f" — PARTIAL {fraction:.1%}" if status == "PARTIAL" and fraction is not None else ""))
+    fig.savefig(output / "figures/validity_diversity.png", dpi=160, bbox_inches="tight")
+    fig.savefig(output / "figures/validity_diversity.pdf", bbox_inches="tight")
     plt.close(fig)
     best_files = []
     video_notes = []
@@ -238,8 +357,10 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
         best_dir = output / "best_bodies"
         best_dir.mkdir(exist_ok=True)
         npz = best_dir / f"{arm}.npz"
-        np.savez(npz, body=body, fitness=float(best["fitness"]), seed=int(best["seed"]))
-        axes = plot_body(body, title=f"{arm}, {task}, fitness {best['fitness']:.3f}")
+        np.savez(npz, body=body, fitness=float(best["fitness"]), seed=int(best["seed"]),
+                 status=status, completion_fraction=fraction if fraction is not None else np.nan)
+        axes = plot_body(body, title=f"{arm}, {task}, fitness {best['fitness']:.3f}" +
+                         (f", PARTIAL {fraction:.1%}" if status == "PARTIAL" and fraction is not None else ""))
         image = best_dir / f"{arm}.png"
         axes.figure.savefig(image, dpi=160, bbox_inches="tight")
         plt.close(axes.figure)
@@ -279,29 +400,55 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
             if isinstance(r["per_seed_fitness"], list) and any(v is not None for v in r["per_seed_fitness"])
             else r["fitness"], axis=1)
         sensitivity = three_way_table(changed)
+        if status == "PARTIAL":
+            sensitivity["status"] = status
+            sensitivity["completion_fraction"] = fraction
+            sensitivity["n_seeds"] = sensitivity["encoder"].map(
+                {arm: len(values) for arm, values in per_seed_finals(changed).items()})
         sensitivity.to_csv(output / "stats/mean_of_2_sensitivity.csv", index=False)
         mean_omnibus, mean_pairwise = _stats(per_seed_finals(changed))
+        if status == "PARTIAL":
+            mean_finals = per_seed_finals(changed)
+            mean_omnibus.update(status=status, completion_fraction=fraction,
+                                n_per_arm=json.dumps({arm: len(values) for arm, values in mean_finals.items()},
+                                                     sort_keys=True))
+            for row in mean_pairwise:
+                row.update(status=status, completion_fraction=fraction,
+                           n_a=len(mean_finals[row["arm_a"]]), n_b=len(mean_finals[row["arm_b"]]))
         _csv(output / "stats/mean_of_2_omnibus.csv", [mean_omnibus], list(mean_omnibus))
         _csv(output / "stats/mean_of_2_pairwise.csv", mean_pairwise, fields)
-    manifest = json.loads((root / "manifest.json").read_text()) if (root / "manifest.json").exists() else {}
-    planned = sum(int(r["config"]["eval_budget"]) for p in manifest.get("plan", {}).get("phases", [])
-                  if p["task"] == task for r in p["runs"])
-    fraction = len(data) / planned if planned else None
+        pd.DataFrame(_primary_summary(per_seed_finals(changed), status, fraction)).to_csv(
+            output / "stats/mean_of_2_final_fitness_summary.csv", index=False)
     report = (f"# {task} milestone report\n\n"
-              f"Completion: {len(data)}/{planned or '?'} evaluations"
+              f"Status: {status}. Completion: {len(data)}/{planned or '?'} evaluations"
               f" ({fraction:.1%} of plan).\n\n" if fraction is not None else
-              f"# {task} milestone report\n\nCompletion: {len(data)} evaluations; plan unavailable.\n\n")
-    report += ("The table contains final best fitness per independent run. "
+              f"# {task} milestone report\n\nStatus: {status}. Completion: {len(data)} evaluations; plan unavailable.\n\n")
+    if status == "PARTIAL":
+        report += ("PARTIAL — monitoring and drafting only; do not cite without a completeness check. "
+                   "Every table has n per arm or run and a completion-fraction column.\n\n")
+    report += ("The primary table contains median and IQR of final best-so-far fitness "
+               "per independent run; its n_seeds column reports the available replicates. "
                "Kruskal-Wallis tests the arm distributions; pairwise Mann-Whitney U p-values "
                "use Holm correction. A12 is the probability that an observation from the first "
                "arm exceeds one from the second, with ties counted as half; bootstrap 95% "
-               "intervals are descriptive at five seeds.\n\n" + markdown + "\n\n"
+               "intervals are descriptive at five seeds. The progress plot is the across-seed "
+               "median with an IQR band. The two-panel budget plot separates evaluations spent "
+               "from valid search attempts.\n\n" + markdown + "\n\n"
                f"Omnibus H={omnibus['statistic']:.4g}, p={omnibus['p']:.4g}.\n\n"
                "The rule_based versus rule_based_monotone contrast is in "
                "stats/rule_based_vs_monotone.csv.\n\n")
+    report += ("Secondary endpoints: stats/validity_diversity_by_generation.csv gives realised "
+               "validity and unique-valid-body diversity by generation; stats/current_rates.csv "
+               "gives per-run rates. stats/final_best_morphology.csv gives occupied voxels, "
+               "actuator fraction, two axis-specific symmetry scores, and distinct nonempty "
+               "materials for each run's best body. stats/evaluations_to_90pct_arm_median.csv "
+               "uses 90% of each arm's current final median; unreached runs are explicit.\n\n")
     if sensitivity is not None:
         report += ("UpStepper mean-of-2 sensitivity: stats/mean_of_2_sensitivity.csv, "
-                   "stats/mean_of_2_omnibus.csv and stats/mean_of_2_pairwise.csv.\n\n")
+                   "stats/mean_of_2_final_fitness_summary.csv, stats/mean_of_2_omnibus.csv "
+                   "and stats/mean_of_2_pairwise.csv.\n\n")
+    report += ("Pre-registered limitations: NCA development does not settle; the validity "
+               "proxy assumes random fitness; planned n=5 seeds per arm per task.\n\n")
     report += "Figures and best-body files are listed in package_manifest.json. Videos require a green visualisation check.\n"
     if video_notes:
         report += "\n" + "\n".join(video_notes) + "\n"
@@ -314,7 +461,8 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
     missing += [name for name in best_files if not (output / name).is_file()]
     if task == "UpStepper-v0":
         missing += [name for name in ("stats/mean_of_2_sensitivity.csv", "stats/mean_of_2_omnibus.csv",
-                                      "stats/mean_of_2_pairwise.csv") if not (output / name).is_file()]
+                                      "stats/mean_of_2_pairwise.csv", "stats/mean_of_2_final_fitness_summary.csv")
+                    if not (output / name).is_file()]
     if missing:
         raise RuntimeError(f"incomplete milestone package: {missing}")
     return {"output": str(output), "files": files, "completion_fraction": fraction}
@@ -356,7 +504,8 @@ def run_subprocess(campaign_root, task, alert_manager=None, *, snapshot=False):
                     if not (output / name).is_file()]
     if task == "UpStepper-v0":
         missing += [name for name in ("stats/mean_of_2_sensitivity.csv", "stats/mean_of_2_omnibus.csv",
-                                      "stats/mean_of_2_pairwise.csv") if not (output / name).is_file()]
+                                      "stats/mean_of_2_pairwise.csv", "stats/mean_of_2_final_fitness_summary.csv")
+                    if not (output / name).is_file()]
     if completed.returncode or missing:
         if alert_manager:
             alert_manager.milestone_failure(task, missing, completed.stderr[-2000:])
