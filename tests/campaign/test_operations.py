@@ -243,7 +243,9 @@ def test_launcher_starts_and_cleans_tiny_surrogate_campaign():
                     break
                 time.sleep(0.1)
             else:
-                raise AssertionError(f"surrogate launcher did not finish: {started.stdout}")
+                transcript = run_root / "smoke" / "transcript.log"
+                detail = transcript.read_text() if transcript.exists() else "no transcript"
+                raise AssertionError(f"surrogate launcher did not finish: {started.stdout}\n{detail}")
             assert (run_root / "smoke" / "runs" / "direct" / "Walker-v0" / "seed_0" / "run_log.jsonl").exists()
         finally:
             subprocess.run(["bash", "scripts/campaign/stop_campaign.sh", "--campaign", "smoke",
