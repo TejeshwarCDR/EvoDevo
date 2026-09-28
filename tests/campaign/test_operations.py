@@ -744,3 +744,40 @@ def test_artifact_stamp_reaches_every_milestone_artifact(tmp_path, monkeypatch):
     assert (folder / "stats/tables.md").read_text().startswith(f"**{stamp}**")
     assert stamp in (folder / "stats/final_fitness_summary.csv").read_text()
     assert json.loads((folder / "package_manifest.json").read_text())["artifact_stamp"] == stamp
+
+
+def test_stale_session_with_dead_scheduler_is_never_silently_attached(tmp_path):
+    """After a scheduler crash/SIGKILL the tmux session (dashboard, monitor)
+    survives. `--resume <that campaign>` must remove it and proceed; any other
+    launch must refuse loudly instead of "attaching" to nothing."""
+    import shutil
+    if shutil.which("tmux") is None:
+        return
+    campaign = "stale-one"
+    (tmp_path / campaign).mkdir()
+    (tmp_path / campaign / "manifest.json").write_text(json.dumps({"config_hash": "x", "plan": {"phases": []}}))
+    dead = subprocess.Popen(["true"])
+    dead.wait()
+    (tmp_path / campaign / "scheduler.pgid").write_text(f"{dead.pid}\n")
+    socket = f"evodevo-stale-{os.getpid()}-{time.time_ns()}"
+    env = {**os.environ, "EVODEVO_TMUX_SOCKET": socket}
+
+    def session(*args):
+        return subprocess.run(["tmux", "-L", socket, *args], capture_output=True, text=True)
+    try:
+        session("new-session", "-d", "-s", "evodevo-campaign", "sleep 60")
+        session("set-environment", "-t", "evodevo-campaign", "EVODEVO_CAMPAIGN_ID", campaign)
+        refused = subprocess.run(["bash", "scripts/campaign/run_campaign.sh", "--campaign-id", "other",
+                                  "--output-root", str(tmp_path), "--no-mirror"], env=env,
+                                 capture_output=True, text=True, timeout=60)
+        assert refused.returncode != 0 and "NOT running" in refused.stderr
+        assert "attaching" not in refused.stdout
+        assert session("has-session", "-t", "evodevo-campaign").returncode == 0
+        resumed = subprocess.run(["bash", "scripts/campaign/run_campaign.sh", "--resume", "latest",
+                                  "--output-root", str(tmp_path), "--no-mirror", "--mode", "surrogate"], env=env,
+                                 capture_output=True, text=True, timeout=120)
+        assert f"Removing stale tmux session of {campaign}" in resumed.stdout
+        assert session("has-session", "-t", "evodevo-campaign").returncode != 0
+        assert resumed.returncode != 0  # this fake manifest then fails the real resume checks
+    finally:
+        session("kill-server")

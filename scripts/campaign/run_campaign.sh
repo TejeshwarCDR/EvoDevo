@@ -54,12 +54,41 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   if [[ -n "$LAUNCH_AT" ]]; then DRY+=(--launch-at "$LAUNCH_AT"); fi
   exec "${DRY[@]}"
 fi
+if [[ "$RESUME" == latest ]]; then
+  RESUME="$(find "$OUTPUT_ROOT" -mindepth 2 -maxdepth 2 -name manifest.json -printf '%T@ %h\n' 2>/dev/null | sort -nr | head -n 1 || true)"
+  RESUME="${RESUME#* }"
+  RESUME="${RESUME##*/}"
+  if [[ -z "$RESUME" ]]; then echo "no campaign to resume" >&2; exit 1; fi
+fi
 TMUX_ARGS=()
 if [[ -n "${EVODEVO_TMUX_SOCKET:-}" ]]; then TMUX_ARGS=(-L "$EVODEVO_TMUX_SOCKET"); fi
+scheduler_alive() {  # $1 = campaign id: is its recorded scheduler process group alive?
+  local pgid_file="$OUTPUT_ROOT/$1/scheduler.pgid" pgid
+  [[ -f "$pgid_file" ]] || return 1
+  pgid="$(<"$pgid_file")"
+  [[ "$pgid" =~ ^[0-9]+$ ]] || return 1
+  ps -eo pgid=,stat= | awk -v group="$pgid" '$1 == group && $2 !~ /^Z/ { found=1 } END { exit !found }'
+}
 if tmux "${TMUX_ARGS[@]}" has-session -t evodevo-campaign 2>/dev/null; then
-  echo "Campaign session already running; attaching."
-  if [[ -t 0 && -t 1 ]]; then tmux "${TMUX_ARGS[@]}" attach-session -t evodevo-campaign; fi
-  exit 0
+  OWNER="$(tmux "${TMUX_ARGS[@]}" show-environment -t evodevo-campaign EVODEVO_CAMPAIGN_ID 2>/dev/null || true)"
+  OWNER="${OWNER#EVODEVO_CAMPAIGN_ID=}"
+  if [[ -n "$OWNER" && "$OWNER" != -EVODEVO_CAMPAIGN_ID ]] && ! scheduler_alive "$OWNER"; then
+    # The scheduler died (crash, OOM, SIGKILL) but its tmux session (dashboard,
+    # monitor) survived. Attaching would silently resume nothing.
+    if [[ -n "$RESUME" && "$OWNER" == "$RESUME" ]]; then
+      echo "Removing stale tmux session of $OWNER: its scheduler is not running."
+      tmux "${TMUX_ARGS[@]}" kill-session -t evodevo-campaign
+      sleep 1
+    else
+      echo "tmux session evodevo-campaign belongs to $OWNER, whose scheduler is NOT running." >&2
+      echo "Run scripts/campaign/stop_campaign.sh --campaign $OWNER, or resume it with --resume $OWNER." >&2
+      exit 1
+    fi
+  else
+    echo "Campaign session already running; attaching."
+    if [[ -t 0 && -t 1 ]]; then tmux "${TMUX_ARGS[@]}" attach-session -t evodevo-campaign; fi
+    exit 0
+  fi
 fi
 if [[ -z "$MIRROR_DIR" && "$NO_MIRROR" -ne 1 ]]; then
   echo "--mirror-dir is required unless --no-mirror is explicit" >&2; exit 2
@@ -69,12 +98,6 @@ if [[ -n "$MIRROR_DIR" && "$NO_MIRROR" -eq 1 ]]; then
 fi
 if [[ -n "$RESUME" && -n "$CAMPAIGN_ID" ]]; then
   echo "--resume and --campaign-id are mutually exclusive" >&2; exit 2
-fi
-if [[ "$RESUME" == latest ]]; then
-  RESUME="$(find "$OUTPUT_ROOT" -mindepth 2 -maxdepth 2 -name manifest.json -printf '%T@ %h\n' 2>/dev/null | sort -nr | head -n 1 || true)"
-  RESUME="${RESUME#* }"
-  RESUME="${RESUME##*/}"
-  if [[ -z "$RESUME" ]]; then echo "no campaign to resume" >&2; exit 1; fi
 fi
 if [[ -z "$CAMPAIGN_ID" ]]; then CAMPAIGN_ID="${RESUME:-$(date -u +%Y%m%dT%H%M%SZ)}"; fi
 if [[ -z "$RESUME" && -e "$OUTPUT_ROOT/$CAMPAIGN_ID/manifest.json" ]]; then
