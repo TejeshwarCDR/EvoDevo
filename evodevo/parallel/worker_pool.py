@@ -65,6 +65,37 @@ from evodevo.parallel.topology import AffinityPlan
 _WORKER_STATE: dict = {}
 
 
+def _run_ppo_task(task, timeout_s):
+    """Worker entry point for campaign PPO units; heavy imports stay lazy."""
+    import dataclasses
+    import signal
+    import time
+
+    from evodevo.evaluation.ppo_runner import PPOTaskResult, evaluate_ppo_task
+
+    previous = None
+    if timeout_s is not None and hasattr(signal, "setitimer"):
+        previous = signal.getsignal(signal.SIGALRM)
+
+        def timeout_handler(_signum, _frame):
+            raise TimeoutError(f"PPO task timed out after {timeout_s}s")
+
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.setitimer(signal.ITIMER_REAL, timeout_s)
+    started = time.time()
+    try:
+        result = evaluate_ppo_task(task)
+    except BaseException as exc:  # a task failure must return to the pool
+        result = PPOTaskResult(None, False, f"infra_failure: {type(exc).__name__}: {exc}",
+                               time.time() - started, None, None, [], None, None, str(exc), None)
+    finally:
+        if previous is not None:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, previous)
+    return dataclasses.replace(result, worker_slot=_WORKER_STATE.get("slot"),
+                               cpu_ids=list(_WORKER_STATE.get("cpu_ids", [])))
+
+
 def _worker_initializer(slot_queue, slots: tuple) -> None:
     """Runs once, in a fresh spawned worker process, before that worker
     processes any task. Order is load-bearing -- see module docstring."""
@@ -251,6 +282,72 @@ class EvaluationPool:
 
     def _submit(self, task: EvaluationTask):
         return self._executor.submit(self._run_task, task, self.mode, self.timeout_s)
+
+    def map_ppo_tasks(self, tasks: Iterable, timeout_s: float | None = None,
+                      should_stop=None, grace_s: float = 120):
+        """Yield (PPOTask, PPOTaskResult) as they finish on this one pool.
+
+        A crashed worker invalidates all in-flight futures in stdlib's pool;
+        those tasks are resubmitted after the pool is rebuilt. Ordinary
+        failures/timeouts get two further tries on fresh worker processes.
+        """
+        from evodevo.evaluation.ppo_runner import PPOTaskResult
+
+        pending = list(tasks)
+        attempts = {}
+        timeout_s = self.timeout_s if timeout_s is None else timeout_s
+        stop_at = None
+
+        def key(task):
+            return (task.run_key, task.eval_index, task.ppo_k)
+
+        while pending:
+            if should_stop and should_stop():
+                return
+            # Drain one wave before recycling. This ensures every failed task
+            # gets a genuinely fresh worker, and every completed result can
+            # be journaled exactly once even if a sibling worker crashes.
+            wave, pending = pending[:self.n_workers], pending[self.n_workers:]
+            futures = {}
+            for task in wave:
+                identity = key(task)
+                attempts[identity] = attempts.get(identity, 0) + 1
+                futures[self._executor.submit(_run_ppo_task, task, timeout_s)] = task
+            retry = []
+            while futures:
+                if should_stop and should_stop() and stop_at is None:
+                    import time
+                    stop_at = time.monotonic()
+                if stop_at is not None:
+                    import time
+                    remaining = grace_s - (time.monotonic() - stop_at)
+                    if remaining <= 0:
+                        for process in self._executor._processes.values():
+                            if process.is_alive():
+                                process.terminate()
+                        self._executor.shutdown(wait=False, cancel_futures=True)
+                        self._executor = None
+                        return
+                    done, _ = wait(tuple(futures), timeout=min(1.0, remaining),
+                                   return_when=FIRST_COMPLETED)
+                else:
+                    done, _ = wait(tuple(futures), timeout=1.0, return_when=FIRST_COMPLETED)
+                for future in done:
+                    task = futures.pop(future)
+                    try:
+                        result = future.result()
+                    except Exception as exc:
+                        result = PPOTaskResult(None, False, f"infra_failure: {exc}", 0.0,
+                                               None, None, [], None, None, str(exc), None)
+                    if result.completed or attempts[key(task)] > self.max_retries:
+                        yield task, result
+                    else:
+                        retry.append(task)
+            if retry:
+                if stop_at is not None:
+                    return
+                self._rebuild_executor()
+                pending = retry + pending
 
     def _record_result_stats(self, result: WorkerResult) -> None:
         if result.timed_out:

@@ -16,13 +16,13 @@ def _utc_now_iso() -> str:
 class RunLogger:
     def __init__(self, output_dir: str, heartbeat_path: Optional[str] = None,
                  encoder: Optional[str] = None, seed: Optional[int] = None,
-                 on_eval: Optional[Callable[[dict], None]] = None):
+                 on_eval: Optional[Callable[[dict], None]] = None, append: bool = False):
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
         self.log_path = os.path.join(output_dir, "run_log.jsonl")
-        self._fh = open(self.log_path, "w")
+        self._fh = open(self.log_path, "a" if append else "w")
         self.generation_log_path = os.path.join(output_dir, "generation_log.jsonl")
-        self._generation_fh = open(self.generation_log_path, "w")
+        self._generation_fh = open(self.generation_log_path, "a" if append else "w")
         # heartbeat_path, if given, is a single shared file (typically
         # <benchmark output_dir>/.heartbeat.json) rewritten after every
         # completed evaluation, for an unattended multi-hour run to be
