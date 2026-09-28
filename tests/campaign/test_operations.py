@@ -7,7 +7,8 @@ import time
 from pathlib import Path
 
 from evodevo.campaign.alerts import AlertManager, REN_NOTIFY_S
-from evodevo.campaign.dashboard import render
+from evodevo.campaign.dashboard import collect, render
+from evodevo.campaign.monitor import slowest_ecore_p95_s
 from evodevo.campaign.mirror import sync, verify_mirror
 from evodevo.campaign.milestone import build, REQUIRED, run_subprocess
 
@@ -41,6 +42,49 @@ def test_alert_rate_limit_and_clear_are_durable(tmp_path):
     restarted.evaluate("disk_main", True, {"free_gb": 40})
     restarted.evaluate("disk_main", True, {"free_gb": 39})
     assert len(spy.messages) == 4  # new trigger after a cleared condition
+
+
+def test_heartbeat_and_phase_notice_deduplication(tmp_path):
+    clock = [1000.0]
+    spy = SpyNotifier()
+    alerts = AlertManager(tmp_path / "alerts.jsonl", notifier=spy, now=lambda: clock[0])
+    snapshot = {"phase": "Walker-v0", "generation": {("direct", 0): 2, ("direct", 1): 4},
+                "completed_evaluations": 50, "campaign_eta_s": (100, 200),
+                "infra_failure_count": 0, "main_disk_free_gb": 200,
+                "mirror_disk_free_gb": 300, "last_mirror_success": 900,
+                "temperature_c": 90, "critical_temp_c": 100}
+    alerts.heartbeat(snapshot)
+    assert len(spy.messages) == 1
+    row = json.loads((tmp_path / "alerts.jsonl").read_text().splitlines()[-1])
+    assert row["details"]["per_arm_mean_generation"] == {"direct": 3}
+    assert row["details"]["max_temperature_24h_c"] is None  # no inspect sample yet
+    alerts.phase_complete("Walker-v0")
+    alerts.phase_complete("Walker-v0")
+    alerts.phase_complete("UpStepper-v0")
+    assert len(spy.messages) == 3
+    clock[0] += 23 * 3600
+    alerts.inspect(snapshot, p95_ecore_s=100)
+    assert len(spy.messages) == 3
+    clock[0] += 3600
+    alerts.inspect(snapshot, p95_ecore_s=100)
+    assert len(spy.messages) == 4
+    restarted = AlertManager(tmp_path / "alerts.jsonl", notifier=spy, now=lambda: clock[0])
+    restarted.inspect(snapshot, p95_ecore_s=100)
+    assert len(spy.messages) == 4
+
+
+def test_failed_heartbeat_is_journaled_and_retried(tmp_path):
+    class BrokenNotifier:
+        def send(self, _message):
+            raise RuntimeError("offline")
+    clock = [1000.0]
+    alerts = AlertManager(tmp_path / "alerts.jsonl", notifier=BrokenNotifier(), now=lambda: clock[0])
+    alerts.heartbeat({"phase": "Walker-v0", "generation": {}})
+    clock[0] += 60
+    alerts.heartbeat({"phase": "Walker-v0", "generation": {}})
+    rows = [json.loads(line) for line in (tmp_path / "alerts.jsonl").read_text().splitlines()]
+    assert len(rows) == 2
+    assert all(not row["notified"] and "offline" in row["notification_error"] for row in rows)
 
 
 def test_all_alert_conditions_and_daily_heartbeat(tmp_path):
@@ -92,6 +136,13 @@ def test_run_script_help_and_existing_session_attach(tmp_path):
         assert "Usage:" in help_result.stdout
         assert subprocess.run(["tmux", "-L", socket, "has-session", "-t", "evodevo-campaign"],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
+        refused = subprocess.run(["bash", str(script), "--campaign-id", "no-mirror",
+                                  "--output-root", str(tmp_path)], env=env,
+                                 capture_output=True, text=True)
+        assert refused.returncode != 0
+        assert "--mirror-dir is required" in refused.stderr
+        assert subprocess.run(["tmux", "-L", socket, "has-session", "-t", "evodevo-campaign"],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
         subprocess.run(["tmux", "-L", socket, "new-session", "-d", "-s", "evodevo-campaign", "sleep 30"],
                        check=True)
         attached = subprocess.run(["bash", str(script), "--no-mirror"], env=env,
@@ -110,9 +161,70 @@ def test_dashboard_plain_and_tty_render_eta_range():
                 "phase_eta_s": (100, 200), "campaign_eta_s": (300, 400),
                 "eta_source": "prior", "walker_milestone_epoch": None,
                 "p2_mean_h": 403.2, "p2_p95_h": 406, "projection_exceeds_432h": False,
-                "infra_failure_count": 0, "last_error": None, "seconds_since_last_task": 5}
+                "infra_failure_count": 0, "last_error": None, "seconds_since_last_task": 5,
+                "projection_total_h": (402, 407), "mirror_disabled": True}
     assert "average 10.0" in render(snapshot, tty=False)
     assert "phase 0.0 h–0.1 h" in render(snapshot, tty=True)
+    assert "projected total 402.0–407.0 h" in render(snapshot)
+    assert "mirror explicitly disabled" in render(snapshot)
+
+
+def test_dashboard_prior_then_per_arm_core_class_measured_eta(tmp_path):
+    task = "Walker-v0"
+    runs = [{"arm": arm, "seed": 0, "config": {"eval_budget": 100, "ppo_seeds": 1}}
+            for arm in ("direct", "nca")]
+    manifest = {"campaign_id": "synthetic", "started_at": 1000,
+                "status": "running", "phase_status": {task: {"status": "running", "started_at": 1000}},
+                "plan": {"phases": [{"task": task, "runs": runs}]},
+                "worker_slots": {"slots": [[0], [1]]},
+                "topology": {"cores": [{"logical_id": 0, "kind": "P"},
+                                        {"logical_id": 1, "kind": "E"}]}}
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    for arm in ("direct", "nca"):
+        directory = tmp_path / "runs" / arm / task / "seed_0"
+        directory.mkdir(parents=True)
+        (directory / "run_log.jsonl").write_text("".join(json.dumps(
+            {"eval_index": index, "generation": index // 5, "valid": True}) + "\n"
+            for index in range(49)))
+    journal = tmp_path / "journal.jsonl"
+    rows = []
+    for arm, base in (("direct", 100), ("nca", 200)):
+        for index in range(49):
+            rows.append({"run_key": f"{arm}/{task}/seed_0", "eval_index": index,
+                         "ppo_k": 0, "completed_at": 1900,
+                         "result": {"wall_clock_s": base * (2 if index % 2 else 1),
+                                    "cpu_ids": [index % 2], "completed": True}})
+    journal.write_text("".join(json.dumps(row) + "\n" for row in rows))
+    prior = collect(str(tmp_path), now=2000, telemetry={})
+    assert prior["eta_source"] == "prior"
+    assert prior["seconds_since_last_task"] == 100
+    for arm in ("direct", "nca"):
+        path = tmp_path / "runs" / arm / task / "seed_0" / "run_log.jsonl"
+        with path.open("a") as handle:
+            handle.write(json.dumps({"eval_index": 49, "generation": 9, "valid": True}) + "\n")
+        rows.append({"run_key": f"{arm}/{task}/seed_0", "eval_index": 49,
+                     "ppo_k": 0, "completed_at": 1900,
+                     "result": {"wall_clock_s": (100 if arm == "direct" else 200) * 2,
+                                "cpu_ids": [1], "completed": True}})
+    journal.write_text("".join(json.dumps(row) + "\n" for row in rows))
+    measured = collect(str(tmp_path), now=2000, telemetry={})
+    assert measured["eta_source"] == "measured"
+    assert measured["phase_eta_s"] == (10000.0, 10000.0)
+    assert measured["projection_total_h"][0] == measured["projection_total_h"][1]
+
+
+def test_stall_timer_starts_before_first_completed_task_and_ecore_threshold(tmp_path):
+    manifest = {"campaign_id": "empty", "started_at": 1000, "status": "running",
+                "phase_status": {"UpStepper-v0": {"started_at": 1000, "status": "running"}},
+                "plan": {"phases": [{"task": "UpStepper-v0", "runs": []}]}}
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    snapshot = collect(str(tmp_path), now=2000, telemetry={})
+    assert snapshot["seconds_since_last_task"] == 1000
+    expected = max((mean + 1.645 * sd) for key, (mean, sd) in
+                   json.loads((Path("results/campaign_prep/final_estimate/final_estimate.json")).read_text())
+                   ["inputs"]["t_ppo_mean_sd_at_b3_footing"].items()
+                   if key.endswith("|UpStepper-v0")) * 2.3172
+    assert abs(slowest_ecore_p95_s("UpStepper-v0") - expected) < 1e-9
 
 
 def test_mirror_checksum_and_failure_alert(tmp_path):
@@ -247,6 +359,8 @@ def test_launcher_starts_and_cleans_tiny_surrogate_campaign():
                 detail = transcript.read_text() if transcript.exists() else "no transcript"
                 raise AssertionError(f"surrogate launcher did not finish: {started.stdout}\n{detail}")
             assert (run_root / "smoke" / "runs" / "direct" / "Walker-v0" / "seed_0" / "run_log.jsonl").exists()
+            assert json.loads(manifest.read_text())["no_mirror"] is True
+            assert collect(str(run_root / "smoke"), telemetry={})["mirror_disabled"] is True
         finally:
             subprocess.run(["bash", "scripts/campaign/stop_campaign.sh", "--campaign", "smoke",
                 "--output-root", str(run_root), "--grace-s", "0"], cwd=repo, env=env,

@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import math
 import os
 import statistics
 import sys
@@ -17,6 +18,7 @@ PRIOR_PATH = Path(__file__).resolve().parents[2] / "results/campaign_prep/final_
 P2_MEAN_H = 403.2
 P2_P95_H = 406.0
 GUARD_H = 432.0
+E_CORE_FACTOR = 2.3172
 
 
 def _json(path, default=None):
@@ -64,6 +66,10 @@ def _duration(seconds):
     return f"{seconds / 3600:.1f} h"
 
 
+def _hours_range(hours):
+    return "n/a" if hours is None else f"{hours[0]:.1f}–{hours[1]:.1f} h"
+
+
 def _when(epoch):
     if epoch is None:
         return "n/a"
@@ -93,6 +99,56 @@ def _telemetry(main_path, mirror_path):
         return {}
 
 
+def _measured_phase_eta(runs, task, logged, journaled, durations, worker_slots, cpu_kind):
+    """Estimate remaining wall time from each arm's measured P/E service rate.
+
+    Each arm's remaining valid PPO count is estimated from its own observed
+    validity fraction. For a given arm the pool's P- and E-core capacities
+    add; arm workloads then add as server-time. The 5th/95th per-task
+    duration quantiles form the ETA range. A class without a sample yet uses
+    the measured other class scaled by the B3/P1 E-core factor.
+    """
+    slots = Counter(cpu_kind.get(slot[0], "unknown") for slot in worker_slots if slot)
+    if not slots:
+        return None
+    low_total = high_total = 0.0
+    for run in runs:
+        arm = run["arm"]
+        spent, valid = logged[(arm, run["seed"])]
+        budget = int(run["config"]["eval_budget"])
+        k = int(run["config"].get("ppo_seeds", 1))
+        if spent == 0:
+            return None
+        valid_fraction = valid / spent
+        pending = (budget - spent) * valid_fraction * k
+        # Completed seed tasks for a generation not yet told are already
+        # durable in the journal and should not be projected a second time.
+        pending = max(0, pending - max(0, journaled[(arm, run["seed"])] - valid * k))
+        samples = {core: durations[(arm, task, core)] for core in ("P", "E", "unknown")}
+        if not any(samples.values()):
+            return None
+        rate_slow = rate_fast = 0.0
+        for core, count in slots.items():
+            values = samples.get(core) or []
+            scale = 1.0
+            if not values:
+                if core == "E" and samples["P"]:
+                    values, scale = samples["P"], E_CORE_FACTOR
+                elif core == "P" and samples["E"]:
+                    values, scale = samples["E"], 1 / E_CORE_FACTOR
+                else:
+                    values = next((v for v in samples.values() if v), [])
+            if not values:
+                return None
+            fast = max(1e-6, float(np.quantile(values, 0.05)) * scale)
+            slow = max(1e-6, float(np.quantile(values, 0.95)) * scale)
+            rate_fast += count / fast
+            rate_slow += count / slow
+        low_total += pending / rate_fast
+        high_total += pending / rate_slow
+    return low_total, high_total
+
+
 def collect(root: str, now: float | None = None, telemetry: dict | None = None) -> dict:
     now = time.time() if now is None else now
     manifest = _json(os.path.join(root, "manifest.json"), {})
@@ -104,6 +160,7 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
     task = current["task"] if current else manifest.get("phase", "unknown")
     runs = current.get("runs", []) if current else []
     generation = {}
+    logged = {}
     completed_evals = 0
     total_evals = 0
     for phase in phases:
@@ -115,23 +172,29 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
             completed_evals += len(rows)
             if phase["task"] == task:
                 generation[(run["arm"], run["seed"])] = max((r["generation"] for r in rows), default=0)
+                logged[(run["arm"], run["seed"])] = (len(rows), sum(bool(r.get("valid")) for r in rows))
     journal = _rows(os.path.join(root, "journal.jsonl"))
     completed_ppo = len(journal)
     completed_by_pair = Counter((r.get("run_key", "").split("/")[0], r.get("run_key", "").split("/")[1])
                                 for r in journal if len(r.get("run_key", "").split("/")) >= 2)
     durations = defaultdict(list)
+    journaled_by_run = Counter()
     cpu_kind = {core["logical_id"]: core["kind"] for core in manifest.get("topology", {}).get("cores", [])}
     for row in journal:
         parts = row.get("run_key", "").split("/")
         if len(parts) >= 2:
+            if len(parts) >= 3:
+                try:
+                    journaled_by_run[(parts[0], int(parts[2].removeprefix("seed_")))] += 1
+                except ValueError:
+                    pass
             duration = row.get("result", {}).get("wall_clock_s")
             if isinstance(duration, (float, int)) and duration > 0:
                 ids = row.get("result", {}).get("cpu_ids") or []
                 core_class = cpu_kind.get(ids[0], "unknown") if ids else "unknown"
                 durations[(parts[0], parts[1], core_class)].append(duration)
     arms = {r["arm"] for r in runs}
-    measured = bool(runs) and all(completed_by_pair[(arm, task)] >= 50 and
-                                  any(durations[(arm, task, core)] for core in ("P", "E")) for arm in arms)
+    measured = bool(runs) and all(completed_by_pair[(arm, task)] >= 50 for arm in arms)
     prior = _prior()
     elapsed = max(0.0, now - float(manifest.get("started_at", now)))
     completed_phase = sum(len(_rows(os.path.join(root, "runs", r["arm"], task,
@@ -142,22 +205,14 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
     prior_band = prior.get(prior_key, {})
     prior_phase_low = float(prior_band.get("p5", 121.9 if task == "Walker-v0" else 277.8)) * 3600
     prior_phase_high = float(prior_band.get("p95", 124.1 if task == "Walker-v0" else 282.9)) * 3600
-    if measured and completed_phase and elapsed:
-        # Real elapsed phase throughput captures the actual mixture of P/E
-        # cores and validity; widen the range with observed duration spread.
-        phase_started = status.get(task, {}).get("started_at", manifest.get("started_at", now))
-        rate = completed_phase / max(1.0, now - phase_started)
-        remaining = max(0, phase_total - completed_phase)
-        # Per arm/task/core-class empirical tails bound the observed pooled
-        # rate. Core classes remain distinct so an E-core tail cannot be
-        # hidden by the much larger P-core sample.
-        class_samples = [values for (arm, t, core), values in durations.items()
-                         if t == task and core in ("P", "E") and values]
-        low_task = min(float(np.quantile(values, 0.05)) for values in class_samples)
-        high_task = max(float(np.quantile(values, 0.95)) for values in class_samples)
-        spread = max(1.0, (high_task / max(low_task, 1e-6)) ** 0.5)
-        phase_eta = (remaining / rate / spread, remaining / rate * spread)
-        eta_source = "measured"
+    if measured:
+        phase_eta = _measured_phase_eta(runs, task, logged, journaled_by_run, durations,
+            manifest.get("worker_slots", {}).get("slots", []), cpu_kind)
+        if phase_eta is None:
+            phase_eta = (remaining_fraction * prior_phase_low, remaining_fraction * prior_phase_high)
+            eta_source = "prior"
+        else:
+            eta_source = "measured"
     else:
         phase_eta = (remaining_fraction * prior_phase_low, remaining_fraction * prior_phase_high)
         eta_source = "prior"
@@ -168,10 +223,12 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
             future += float(prior.get(key, {}).get("mean", 123 if key == "walker_phase_h" else 280.2)) * 3600
     campaign_eta = (phase_eta[0] + future, phase_eta[1] + future)
     last_task = max((r.get("completed_at", r.get("timestamp", 0)) for r in journal), default=None)
+    if last_task is None and manifest.get("status") == "running":
+        last_task = status.get(task, {}).get("started_at", manifest.get("started_at"))
     recent = sum(1 for r in journal if r.get("completed_at", r.get("timestamp", 0)) >= now - 3600)
     hourly_rates = [sum(1 for r in journal if now - (hour + 1) * 3600 <=
                          r.get("completed_at", r.get("timestamp", 0)) < now - hour * 3600)
-                    for hour in range(24)]
+                    for hour in range(min(24, max(1, math.ceil(elapsed / 3600))))]
     alerts = _rows(os.path.join(root, "alerts.jsonl"))
     dispatch = _json(os.path.join(root, "dispatch_status.json"), {})
     failures = sum(1 for r in journal if not r.get("result", {}).get("completed", True))
@@ -189,6 +246,8 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
         "phase_eta_s": phase_eta, "campaign_eta_s": campaign_eta, "eta_source": eta_source,
         "walker_milestone_epoch": now + phase_eta[1] if task == "Walker-v0" else None,
         "p2_mean_h": P2_MEAN_H, "p2_p95_h": P2_P95_H,
+        "projection_total_h": ((elapsed + campaign_eta[0]) / 3600,
+                               (elapsed + campaign_eta[1]) / 3600),
         "projection_exceeds_432h": (elapsed + campaign_eta[1]) / 3600 > GUARD_H,
         "infra_failure_count": failures, "last_error": next((r.get("result", {}).get("error") for r in reversed(journal)
                                                            if r.get("result", {}).get("error")), None),
@@ -210,7 +269,7 @@ def render(snapshot: dict, tty: bool = False) -> str:
     lines.extend([
         f"Running {snapshot['tasks_running']} queued {snapshot['tasks_queued']} | PPO/h now {snapshot['throughput_now_per_h']:.1f}, average {snapshot['throughput_average_per_h']:.1f}",
         f"ETA ({snapshot['eta_source']}): phase {_duration(snapshot['phase_eta_s'][0])}–{_duration(snapshot['phase_eta_s'][1])}; campaign {_duration(snapshot['campaign_eta_s'][0])}–{_duration(snapshot['campaign_eta_s'][1])}",
-        f"Walker milestone (latest): {_when(snapshot['walker_milestone_epoch'])}; P2 {snapshot['p2_mean_h']} h mean / {snapshot['p2_p95_h']} h p95; >432 h: {snapshot['projection_exceeds_432h']}",
+        f"Walker milestone (latest): {_when(snapshot['walker_milestone_epoch'])}; P2 {snapshot['p2_mean_h']} h mean / {snapshot['p2_p95_h']} h p95; projected total {_hours_range(snapshot.get('projection_total_h'))}; >432 h: {snapshot['projection_exceeds_432h']}",
         f"CPU {snapshot.get('cpu_percent', 'n/a')}% per-core {snapshot.get('per_core_percent', [])}; temp {snapshot.get('temperature_c', 'n/a')} °C; RAM {snapshot.get('ram_used_gb', 'n/a')} GB; swap {snapshot.get('swap_used_gb', 'n/a')} GB",
         f"Disk main {snapshot.get('main_disk_free_gb', 'n/a')} GB mirror {snapshot.get('mirror_disk_free_gb', 'n/a')} GB; last mirror {_when(snapshot.get('last_mirror_success'))}",
         f"Infra failures {snapshot['infra_failure_count']}; last error {snapshot['last_error'] or 'none'}; since task {_duration(snapshot['seconds_since_last_task'])}",

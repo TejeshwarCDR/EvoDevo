@@ -88,6 +88,13 @@ class AlertManager:
                     self._temp_since = self._temp_since or stamp
                 else:
                     self._temp_since = None
+            if name == "partial_stall" and stamp >= cutoff:
+                details = row.get("details", {})
+                rate, median = details.get("current_per_h"), details.get("median_24h_per_h")
+                if isinstance(rate, (float, int)) and isinstance(median, (float, int)) and median > 0 and rate < 0.25 * median:
+                    self._low_rate_since = self._low_rate_since or stamp
+                else:
+                    self._low_rate_since = None
 
     def _write(self, event):
         with open(self.path, "a", encoding="utf-8") as handle:
@@ -102,7 +109,7 @@ class AlertManager:
         status = "active" if triggered else "clear"
         event = {"timestamp": stamp, "condition": name, "status": status,
                  "details": details or {}, "notified": False}
-        should_notify = informational and triggered or (
+        should_notify = (
             triggered and (not previous or stamp - self._last_notice.get(name, float("-inf")) >= REN_NOTIFY_S)
         ) or (not triggered and previous)
         if should_notify:
@@ -180,7 +187,9 @@ class AlertManager:
             self._last_heartbeat = stamp
 
     def phase_complete(self, task):
-        return self.evaluate("phase_complete", True, {"task": task}, informational=True)
+        # One durable condition per phase: restarting after a phase boundary
+        # cannot emit another notice, while the next phase still gets its own.
+        return self.evaluate(f"phase_complete:{task}", True, {"task": task}, informational=True)
 
     def milestone_failure(self, task, missing, error=None):
         return self.evaluate(f"milestone_failure:{task}", True,
