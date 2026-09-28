@@ -8,8 +8,8 @@ from pathlib import Path
 
 from evodevo.campaign.alerts import AlertManager, REN_NOTIFY_S
 from evodevo.campaign.dashboard import collect, render
-from evodevo.campaign.monitor import slowest_ecore_p95_s
-from evodevo.campaign.mirror import sync, verify_mirror
+from evodevo.campaign.monitor import SNAPSHOT_S, monitor_once, slowest_ecore_p95_s
+from evodevo.campaign.mirror import sync, verify_mirror, verify_checksum_manifest
 from evodevo.campaign.milestone import build, REQUIRED, run_subprocess
 
 
@@ -227,17 +227,64 @@ def test_stall_timer_starts_before_first_completed_task_and_ecore_threshold(tmp_
     assert abs(slowest_ecore_p95_s("UpStepper-v0") - expected) < 1e-9
 
 
-def test_mirror_checksum_and_failure_alert(tmp_path):
+def test_snapshot_failure_retries_without_waiting_another_twelve_hours(tmp_path, monkeypatch):
+    task = "Walker-v0"
+    manifest = {"campaign_id": "snapshot", "started_at": 1000, "status": "running",
+                "no_mirror": True, "phase_status": {task: {"started_at": 1000, "status": "running"}},
+                "plan": {"phases": [{"task": task, "runs": []}]}}
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+    outcomes = iter(({"ok": False}, {"ok": True}))
+    called = []
+
+    def snapshot_runner(*args, **kwargs):
+        called.append((args, kwargs))
+        return next(outcomes)
+
+    monkeypatch.setattr("evodevo.campaign.monitor.run_subprocess", snapshot_runner)
+    alerts = AlertManager(tmp_path / "alerts.jsonl", notifier=SpyNotifier(), now=lambda: 1000 + SNAPSHOT_S)
+    first = monitor_once(tmp_path, alerts, now=1000 + SNAPSHOT_S, p95_ecore_s=100)
+    assert first["last_snapshot"] == 1000
+    second = monitor_once(tmp_path, alerts, now=1000 + SNAPSHOT_S + 60,
+                          p95_ecore_s=100, last_snapshot=first["last_snapshot"])
+    assert second["last_snapshot"] == 1000 + SNAPSHOT_S + 60
+    assert len(called) == 2
+
+
+def test_mirror_checksum_and_failure_alert(tmp_path, monkeypatch):
     source = tmp_path / "campaign"
     source.mkdir()
     (source / "journal.jsonl").write_text('{"completed": true}\n')
     mirror = tmp_path / "mirror"
+    mirror.mkdir()
     alerts = AlertManager(tmp_path / "alerts.jsonl", notifier=SpyNotifier())
+    absent = sync(source, tmp_path / "not-mounted", alert_manager=alerts)
+    assert not absent["ok"] and "mirror directory absent" in absent["error"]
+    assert not (tmp_path / "not-mounted").exists()
     result = sync(source, mirror, alert_manager=alerts)
     assert result["ok"]
+    assert result["manifest_verified"]
     assert verify_mirror(source, mirror / "campaign")["ok"]
+    assert verify_checksum_manifest(mirror / "campaign")["ok"]
     (mirror / "campaign" / "journal.jsonl").write_text("corrupted")
     assert not verify_mirror(source, mirror / "campaign")["ok"]
+    assert not verify_checksum_manifest(mirror / "campaign")["ok"]
+    import evodevo.campaign.mirror as mirror_module
+    actual_run = mirror_module.subprocess.run
+    copies = [0]
+
+    def advancing_source(command, *args, **kwargs):
+        result = actual_run(command, *args, **kwargs)
+        if command[0] == "rsync" and "--delete" in command:
+            copies[0] += 1
+            if copies[0] == 1:
+                with (source / "journal.jsonl").open("a") as handle:
+                    handle.write('{"completed": false}\n')
+        return result
+
+    monkeypatch.setattr(mirror_module.subprocess, "run", advancing_source)
+    recovered = sync(source, mirror, alert_manager=alerts)
+    assert recovered["ok"] and copies[0] == 2
+    assert verify_checksum_manifest(mirror / "campaign")["ok"]
     failed = sync(source, source / "nested", alert_manager=alerts)
     assert not failed["ok"]
 

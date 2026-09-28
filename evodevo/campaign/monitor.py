@@ -11,7 +11,7 @@ from pathlib import Path
 from .alerts import AlertManager
 from .dashboard import collect, render
 from .dashboard import PRIOR_PATH
-from .milestone import run_subprocess
+from .milestone import REQUIRED, run_subprocess
 from .mirror import INTERVAL_S, sync
 
 SNAPSHOT_S = 12 * 3600
@@ -35,6 +35,9 @@ def monitor_once(root, alerts, *, now=None, p95_ecore_s=None, last_mirror=0,
         return {"running": True, "last_mirror": last_mirror, "last_snapshot": last_snapshot}
     manifest = json.loads(manifest_path.read_text())
     snapshot = collect(str(root), now=now)
+    phase_started = manifest.get("phase_status", {}).get(snapshot["phase"], {}).get(
+        "started_at", manifest.get("started_at", now))
+    last_snapshot = max(last_snapshot, phase_started)
     if p95_ecore_s is None:
         p95_ecore_s = slowest_ecore_p95_s(snapshot["phase"])
     mirror_dir = manifest.get("mirror_dir")
@@ -49,8 +52,9 @@ def monitor_once(root, alerts, *, now=None, p95_ecore_s=None, last_mirror=0,
             (Path(root) / "mirror_status.json").write_text(json.dumps(
                 {"last_success": now, "destination": result["destination"]}))
     if now - last_snapshot >= SNAPSHOT_S and manifest.get("status") == "running":
-        run_subprocess(root, snapshot["phase"], alerts, snapshot=True)
-        last_snapshot = now
+        outcome = run_subprocess(root, snapshot["phase"], alerts, snapshot=True)
+        if outcome["ok"]:
+            last_snapshot = now
     alerts.inspect(snapshot, p95_ecore_s=p95_ecore_s, mirror_ok=mirror_ok)
     return {"running": manifest.get("status") not in {"complete", "stopped"}, "last_mirror": last_mirror,
             "last_snapshot": last_snapshot, "snapshot": snapshot}
@@ -73,6 +77,8 @@ def main(argv=None):
     last_snapshot = 0
     for path in (root / "milestones" / "snapshots").glob("*"):
         try:
+            if not (path / "package_manifest.json").is_file() or not all((path / name).is_file() for name in REQUIRED):
+                continue
             stamp = dt.datetime.strptime(path.name, "%Y%m%dT%H%M%SZ").replace(tzinfo=dt.timezone.utc)
             last_snapshot = max(last_snapshot, stamp.timestamp())
         except ValueError:
