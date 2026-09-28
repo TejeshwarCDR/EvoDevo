@@ -80,7 +80,7 @@ fi
 ulimit -n 65535
 RUN_DIR="$OUTPUT_ROOT/$CAMPAIGN_ID"
 mkdir -p "$RUN_DIR"
-CMD=(.venv/bin/python -m evodevo.campaign.scheduler --config "$CONFIG" --output-root "$OUTPUT_ROOT" --workers "$WORKERS" --mode "$MODE" --grace-s "$GRACE_S")
+CMD=(.venv/bin/python -m evodevo.campaign --config "$CONFIG" --output-root "$OUTPUT_ROOT" --workers "$WORKERS" --mode "$MODE" --grace-s "$GRACE_S")
 if [[ -n "$RESUME" ]]; then CMD+=(--resume "$RESUME"); else CMD+=(--campaign-id "$CAMPAIGN_ID"); fi
 if [[ "$NO_MIRROR" -eq 1 ]]; then CMD+=(--no-mirror); else CMD+=(--mirror-dir "$MIRROR_DIR"); fi
 printf -v CMD_QUOTED '%q ' "${CMD[@]}"
@@ -88,7 +88,7 @@ printf -v TRANSCRIPT_QUOTED '%q' "$RUN_DIR/transcript.log"
 tmux "${TMUX_ARGS[@]}" new-session -d -s evodevo-campaign -n dashboard
 tmux "${TMUX_ARGS[@]}" set-environment -t evodevo-campaign EVODEVO_CAMPAIGN_ID "$CAMPAIGN_ID"
 tmux "${TMUX_ARGS[@]}" send-keys -t evodevo-campaign:dashboard \
-  ".venv/bin/python -m evodevo.campaign.dashboard --campaign '$CAMPAIGN_ID' --output-root '$OUTPUT_ROOT' --watch" C-m
+  ".venv/bin/python -m evodevo.campaign status --campaign '$CAMPAIGN_ID' --output-root '$OUTPUT_ROOT' --watch" C-m
 tmux "${TMUX_ARGS[@]}" split-window -h -l 50 -t evodevo-campaign:dashboard \
   "tail -F '$RUN_DIR/transcript.log'"
 tmux "${TMUX_ARGS[@]}" split-window -v -l 15 -t evodevo-campaign:dashboard.1 "top"

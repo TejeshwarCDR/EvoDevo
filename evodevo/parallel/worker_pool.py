@@ -92,8 +92,16 @@ def _run_ppo_task(task, timeout_s):
         if previous is not None:
             signal.setitimer(signal.ITIMER_REAL, 0)
             signal.signal(signal.SIGALRM, previous)
+    import os
+    import sys
+
+    from evodevo.parallel.threading_control import THREAD_ENV_VARS
+
+    torch_threads = sys.modules["torch"].get_num_threads() if "torch" in sys.modules else None
     return dataclasses.replace(result, worker_slot=_WORKER_STATE.get("slot"),
-                               cpu_ids=list(_WORKER_STATE.get("cpu_ids", [])))
+                               cpu_ids=list(_WORKER_STATE.get("cpu_ids", [])),
+                               worker_pid=os.getpid(), torch_num_threads=torch_threads,
+                               thread_env={var: os.environ.get(var) for var in THREAD_ENV_VARS})
 
 
 def _worker_initializer(slot_queue, slots: tuple) -> None:

@@ -41,7 +41,7 @@ group_live() {
 group_owned() {
   [[ -n "$PGID" ]] || return 1
   [[ "$(ps -o pgid= -p "$PGID" 2>/dev/null | tr -d ' ')" == "$PGID" ]] || return 1
-  ps -o args= -p "$PGID" 2>/dev/null | grep -E "evodevo\.campaign\.(scheduler|monitor).*${CAMPAIGN_ID}" >/dev/null
+  ps -o args= -p "$PGID" 2>/dev/null | grep -E "evodevo\.campaign(\.monitor)? .*${CAMPAIGN_ID}" >/dev/null
 }
 
 if group_live; then
@@ -79,9 +79,9 @@ if group_live; then
   echo "ERROR: process group $PGID survived stop" >&2
   exit 1
 fi
-if pgrep -af "evodevo\.campaign\.(scheduler|monitor|dashboard).*${CAMPAIGN_ID}" >/dev/null; then
+if pgrep -af "evodevo\.campaign(\.monitor|\.dashboard)? .*${CAMPAIGN_ID}" >/dev/null; then
   echo "ERROR: evodevo campaign processes for $CAMPAIGN_ID remain:" >&2
-  pgrep -af "evodevo\.campaign\.(scheduler|monitor|dashboard).*${CAMPAIGN_ID}" >&2 || true
+  pgrep -af "evodevo\.campaign(\.monitor|\.dashboard)? .*${CAMPAIGN_ID}" >&2 || true
   exit 1
 fi
 echo "Stopped campaign $CAMPAIGN_ID; no evodevo campaign processes remain."

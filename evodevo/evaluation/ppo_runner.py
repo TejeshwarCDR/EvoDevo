@@ -71,6 +71,12 @@ class PPOTaskResult:
     training_log_path: Optional[str]
     error: Optional[str]
     traceback: Optional[str]
+    # Operational telemetry only, attached by the worker (worker_pool.
+    # _run_ppo_task); never read by selection/aggregation. Defaults keep old
+    # journal records loadable on resume.
+    worker_pid: Optional[int] = None
+    torch_num_threads: Optional[int] = None
+    thread_env: Optional[dict] = None
 
 
 def ppo_seed(base_seed: int, k: int) -> int:

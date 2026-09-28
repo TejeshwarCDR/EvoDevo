@@ -26,4 +26,4 @@ if [[ -z "$CAMPAIGN_ID" || ! -f "$OUTPUT_ROOT/$CAMPAIGN_ID/manifest.json" ]]; th
   echo "No campaign manifest found" >&2
   exit 1
 fi
-exec .venv/bin/python -m evodevo.campaign.dashboard --campaign "$CAMPAIGN_ID" --output-root "$OUTPUT_ROOT"
+exec .venv/bin/python -m evodevo.campaign status --campaign "$CAMPAIGN_ID" --output-root "$OUTPUT_ROOT"

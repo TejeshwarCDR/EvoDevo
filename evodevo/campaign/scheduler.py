@@ -300,8 +300,10 @@ def resume_command(args, campaign_id):
     return shlex.join(command)
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
+def cli_main(argv=None, prog="python -m evodevo.campaign"):
+    """Scheduler CLI logic. Invoked ONLY via `python -m evodevo.campaign`
+    (evodevo/campaign/__main__.py), which pins thread limits first."""
+    parser = argparse.ArgumentParser(prog=prog, description=__doc__)
     parser.add_argument("--campaign-id")
     parser.add_argument("--resume")
     parser.add_argument("--config", default="evodevo/experiments/configs/benchmark.yaml")
@@ -355,4 +357,8 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    main()
+    # Running this module as __main__ makes every spawned PPO worker re-import
+    # it (as __mp_main__) before its initializer pins thread counts -- the
+    # BrokenProcessPool bug fixed in the entry-point commit. Refuse outright.
+    sys.exit("error: do not run `python -m evodevo.campaign.scheduler`; "
+             "use `python -m evodevo.campaign` (evodevo/campaign/__main__.py).")
