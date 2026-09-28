@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: scripts/campaign/run_campaign.sh [--resume ID|latest] [--campaign-id ID] [--config FILE] [--output-root DIR] [--mirror-dir DIR|--no-mirror] [--workers N] [--mode real|surrogate] [--grace-s SEC] [--no-notify] [--allow-same-disk-mirror] [--dry-run [--launch-at ISO]] [--stamp TEXT]"
+  echo "Usage: scripts/campaign/run_campaign.sh [--resume ID|latest] [--campaign-id ID] [--config FILE] [--output-root DIR] [--mirror-dir DIR|--no-mirror] [--workers N] [--mode real|surrogate|validation] [--grace-s SEC] [--prefetch N] [--no-notify] [--allow-same-disk-mirror] [--dry-run [--launch-at ISO]] [--stamp TEXT]"
 }
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -16,6 +16,7 @@ NO_MIRROR=0
 WORKERS=20
 MODE=real
 GRACE_S=120
+PREFETCH=4
 NO_NOTIFY=0
 ALLOW_SAME_DISK=0
 DRY_RUN=0
@@ -33,6 +34,7 @@ while [[ $# -gt 0 ]]; do
     --workers) WORKERS="$2"; shift 2 ;;
     --mode) MODE="$2"; shift 2 ;;
     --grace-s) GRACE_S="$2"; shift 2 ;;
+    --prefetch) PREFETCH="$2"; shift 2 ;;
     --no-notify) NO_NOTIFY=1; shift ;;
     --allow-same-disk-mirror) ALLOW_SAME_DISK=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
@@ -46,7 +48,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   # Writes nothing: no run directory, tmux session, mirror copy or bytecode.
   DRY=(env PYTHONDONTWRITEBYTECODE=1 "EVODEVO_NOTIFY_CONFIG=${EVODEVO_NOTIFY_CONFIG:-$REPO_ROOT/campaign.local.yaml}"
        .venv/bin/python -m evodevo.campaign --dry-run --config "$CONFIG" --output-root "$OUTPUT_ROOT"
-       --workers "$WORKERS" --mode "$MODE")
+       --workers "$WORKERS" --mode "$MODE" --prefetch "$PREFETCH")
   if [[ -n "$RESUME" ]]; then DRY+=(--resume "$RESUME"); elif [[ -n "$CAMPAIGN_ID" ]]; then DRY+=(--campaign-id "$CAMPAIGN_ID"); fi
   if [[ "$NO_MIRROR" -eq 1 ]]; then DRY+=(--no-mirror); elif [[ -n "$MIRROR_DIR" ]]; then DRY+=(--mirror-dir "$MIRROR_DIR"); fi
   if [[ "$NO_NOTIFY" -eq 1 ]]; then DRY+=(--no-notify); fi
@@ -107,7 +109,7 @@ fi
 ulimit -n 65535
 RUN_DIR="$OUTPUT_ROOT/$CAMPAIGN_ID"
 NOTIFY_CONFIG="${EVODEVO_NOTIFY_CONFIG:-$REPO_ROOT/campaign.local.yaml}"
-CMD=(env "EVODEVO_NOTIFY_CONFIG=$NOTIFY_CONFIG" .venv/bin/python -m evodevo.campaign --config "$CONFIG" --output-root "$OUTPUT_ROOT" --workers "$WORKERS" --mode "$MODE" --grace-s "$GRACE_S")
+CMD=(env "EVODEVO_NOTIFY_CONFIG=$NOTIFY_CONFIG" .venv/bin/python -m evodevo.campaign --config "$CONFIG" --output-root "$OUTPUT_ROOT" --workers "$WORKERS" --mode "$MODE" --grace-s "$GRACE_S" --prefetch "$PREFETCH")
 if [[ -n "$RESUME" ]]; then CMD+=(--resume "$RESUME"); else CMD+=(--campaign-id "$CAMPAIGN_ID"); fi
 if [[ "$NO_MIRROR" -eq 1 ]]; then CMD+=(--no-mirror); else CMD+=(--mirror-dir "$MIRROR_DIR"); fi
 if [[ "$NO_NOTIFY" -eq 1 ]]; then CMD+=(--no-notify); fi

@@ -8,6 +8,8 @@ nothing about the PPO protocol can differ between arms.
 from __future__ import annotations
 
 import json
+import hashlib
+import math
 import os
 import time
 import traceback as traceback_module
@@ -60,6 +62,7 @@ class PPOTask:
     # keeping it on the task makes spawned-worker crash/timeout tests exercise
     # the real attribution path without importing PPO.
     debug_meta: Optional[dict] = None
+    validation_meta: Optional[dict] = None
 
 
 @dataclass
@@ -81,6 +84,30 @@ class PPOTaskResult:
     worker_pid: Optional[int] = None
     torch_num_threads: Optional[int] = None
     thread_env: Optional[dict] = None
+    started_at: Optional[float] = None
+    finished_at: Optional[float] = None
+    validation_base_duration_s: Optional[float] = None
+    validation_planned_duration_s: Optional[float] = None
+
+
+def validation_task_metadata(profile: dict, *, run_key: str, arm: str, task: str,
+                             generation: int, eval_index: int, ppo_k: int,
+                             fitness: float) -> dict:
+    """Deterministic draw from the estimate's per-(arm, task) lognormal."""
+    mean, sd = profile["duration_distribution"][f"{arm}|{task}"]
+    sigma2 = math.log(1 + (sd / mean) ** 2)
+    mu, sigma = math.log(mean) - sigma2 / 2, math.sqrt(sigma2)
+    identity = f"{run_key}|{generation}|{eval_index}|{ppo_k}|validation-v1"
+    seed = int.from_bytes(hashlib.sha256(identity.encode()).digest()[:8], "big")
+    base = float(np.random.default_rng(seed).lognormal(mu, sigma))
+    return {
+        "base_duration_s": base,
+        "time_scale": float(profile["time_scale"][task]),
+        "e_over_p_ratio": float(profile["e_over_p_ratio"]),
+        "e_core_ids": list(profile["e_core_ids"]),
+        "fitness": float(fitness),
+        "stamp": profile["stamp"],
+    }
 
 
 def ppo_seed(base_seed: int, k: int) -> int:

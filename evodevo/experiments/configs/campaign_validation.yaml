@@ -1,0 +1,12 @@
+# Validation-only full campaign grid. The launcher refuses this profile unless
+# --mode validation and --stamp "VALIDATION - NOT A RESULT" are both present.
+profile: campaign_validation
+encoders: [direct, nca, rule_based, {encoder: rule_based, variant: monotone}]
+tasks: [Walker-v0, UpStepper-v0]
+seeds: [0, 1, 2, 3, 4]
+configs_root: evodevo/experiments/configs
+output_dir: results/runs
+surrogate: false
+factors:
+  dev_steps: 100
+  init_condition: center_seed

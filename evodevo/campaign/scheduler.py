@@ -17,6 +17,7 @@ import signal
 import subprocess
 import sys
 import time
+from bisect import bisect_right
 from collections import deque
 
 from evodevo.core.config import ExperimentConfig
@@ -24,7 +25,8 @@ from evodevo.core.factors import extract_factors
 from evodevo.encoders import get_encoder
 from evodevo.evaluation.ppo_runner import (EvalResult, PPOTask, PPOTaskResult,
                                             aggregate_seed_results, evaluate_body_surrogate,
-                                            evaluate_ppo_task, ppo_seed)
+                                            evaluate_ppo_task, ppo_seed,
+                                            validation_task_metadata)
 from evodevo.evolution.ea import EvolutionRun
 from evodevo.evolution.logging import RunLogger
 from evodevo.parallel.affinity import pin_current_process
@@ -144,8 +146,14 @@ class CampaignScheduler:
         run.tracker.logger = logger
         return encoder, config, run, logger, directory
 
-    def _run_phase(self, active, pool, phase, outputs):
+    def _run_phase(self, active, pool, phase, outputs, phase_started_at=None):
         """Continuously dispatch one D7 phase with per-run generation barriers."""
+        phase_started_at = phase_started_at or time.time()
+        scheduler_intervals = []
+        task_intervals = []
+        component_busy = {name: 0.0 for name in ("prepare", "finish", "journal", "refill")}
+        prefetched_submissions = 0
+        max_inflight = 0
         journaled = self.journal.indexed()
         core = DispatchCore(self.affinity_plan.n_workers, self.prefetch)
         core.begin_phase(phase.task, (ctx[0].run_key for ctx in active))
@@ -157,6 +165,7 @@ class CampaignScheduler:
             arm_order.setdefault(rp.arm, len(arm_order))
 
         def prepare(ctx):
+            wall_started, measured_started = time.time(), time.perf_counter()
             rp, encoder, config, run, _logger, directory = ctx
             candidates = run.propose()
             generations[rp.run_key] = {
@@ -191,6 +200,19 @@ class CampaignScheduler:
                     task = PPOTask(rp.run_key, config.encoder, config.task, ppo_seed(config.seed, k),
                         candidate.generation, candidate.genome_id, candidate.eval_index, k,
                         candidate.body, connections, config.ppo_timesteps, config.ppo_eval_episodes, directory)
+                    if self.mode == "validation":
+                        surrogate = evaluate_body_surrogate(
+                            candidate.body, task=config.task, seed=ppo_seed(config.seed, k))
+                        validation_profile = {
+                            **self.plan.validation_profile,
+                            "e_core_ids": list(self.topology.e_core_ids),
+                        }
+                        task.validation_meta = validation_task_metadata(
+                            validation_profile, run_key=rp.run_key, arm=rp.arm,
+                            task=config.task, generation=candidate.generation,
+                            eval_index=candidate.eval_index, ppo_k=k,
+                            fitness=surrogate.fitness,
+                        )
                     if (rp.run_key, candidate.eval_index, k) not in journaled:
                         work.append(DispatchItem(
                             task_id=(task.run_key, task.eval_index, task.ppo_k),
@@ -202,8 +224,12 @@ class CampaignScheduler:
             barrier = core.report_ready(rp.run_key, generations[rp.run_key]["generation"], work)
             if barrier is not None:
                 barriers.append(barrier)
+            wall_finished = time.time()
+            component_busy["prepare"] += time.perf_counter() - measured_started
+            scheduler_intervals.append((wall_started, wall_finished, "prepare"))
 
         def finish_generation(barrier):
+            wall_started, measured_started = time.time(), time.perf_counter()
             rp, encoder, config, run, _logger, directory = by_run[barrier.run_key]
             state = generations.pop(rp.run_key)
             if state["generation"] != barrier.generation:
@@ -239,6 +265,9 @@ class CampaignScheduler:
                 results.append(dispatched)
             run.tell(results)
             write_checkpoint(run, os.path.join(directory, "checkpoint"))
+            wall_finished = time.time()
+            component_busy["finish"] += time.perf_counter() - measured_started
+            scheduler_intervals.append((wall_started, wall_finished, "finish"))
             if run.done:
                 outputs[rp.run_key] = run.result()
                 _logger.close()
@@ -247,13 +276,21 @@ class CampaignScheduler:
                 prepare(by_run[rp.run_key])
 
         def refill():
+            nonlocal prefetched_submissions, max_inflight
+            wall_started, measured_started = time.time(), time.perf_counter()
             if pool is not None and not self.stop_requested:
                 while (dispatch_item := core.next_task()) is not None:
                     task, _hash = dispatch_item.payload
                     pool.submit_ppo_task(task, timeout_s=phase.timeout_s)
+                    if core.inflight_count > self.affinity_plan.n_workers:
+                        prefetched_submissions += 1
+                    max_inflight = max(max_inflight, core.inflight_count)
             self._dispatch_status(core.inflight_count, core.ready_count, phase.task,
                                   {key: ctx[3].generation for key, ctx in by_run.items()
                                    if not ctx[3].done})
+            wall_finished = time.time()
+            component_busy["refill"] += time.perf_counter() - measured_started
+            scheduler_intervals.append((wall_started, wall_finished, "refill"))
 
         for ctx in active:
             if ctx[3].done:
@@ -281,17 +318,83 @@ class CampaignScheduler:
             if completed is None:
                 break
             task, result = completed
+            if result.started_at is not None and result.finished_at is not None:
+                task_intervals.append((result.started_at, result.finished_at,
+                                       result.worker_slot, task.run_key,
+                                       task.generation, task.eval_index, task.ppo_k))
+            wall_started, measured_started = time.time(), time.perf_counter()
             identity = (task.run_key, task.eval_index, task.ppo_k)
             state = generations[task.run_key]
             candidate = next(c for c in state["candidates"] if c.eval_index == task.eval_index)
             h = genome_hash(by_run[task.run_key][1], candidate.genome)
             self.journal.append_task(task, result, h)
             journaled[identity] = {"genome_hash": h, "result": dataclasses.asdict(result)}
+            wall_finished = time.time()
+            component_busy["journal"] += time.perf_counter() - measured_started
+            scheduler_intervals.append((wall_started, wall_finished, "journal"))
             barrier = core.complete(identity)
             if barrier is not None:
                 barriers.append(barrier)
             else:
                 refill()
+        phase_finished_at = time.time()
+        makespan = max(0.0, phase_finished_at - phase_started_at)
+
+        def overlap(interval, start, end):
+            return max(0.0, min(interval[1], end) - max(interval[0], start))
+
+        steady_start = phase_started_at + 0.05 * makespan
+        steady_end = phase_started_at + 0.90 * makespan
+        whole_busy = sum(overlap(row, phase_started_at, phase_finished_at)
+                         for row in task_intervals)
+        steady_busy = sum(overlap(row, steady_start, steady_end) for row in task_intervals)
+        merged = []
+        for start, end, _component in sorted(scheduler_intervals):
+            if merged and start <= merged[-1][1]:
+                merged[-1][1] = max(merged[-1][1], end)
+            else:
+                merged.append([start, end])
+        merged_starts = [row[0] for row in merged]
+        starts_during_busy = 0
+        for row in task_intervals:
+            index = bisect_right(merged_starts, row[0]) - 1
+            starts_during_busy += int(index >= 0 and row[0] <= merged[index][1])
+        worker_count = self.affinity_plan.n_workers
+        steady_span = max(0.0, steady_end - steady_start)
+        phase_metrics = {
+            "task": phase.task,
+            "status": "complete" if core.phase_complete else "stopped",
+            "started_at": phase_started_at, "ended_at": phase_finished_at,
+            "makespan_s": makespan, "worker_count": worker_count,
+            "worker_busy_s": whole_busy,
+            "worker_utilization": whole_busy / (worker_count * makespan) if makespan else 0.0,
+            "steady_state_window": {"start": steady_start, "end": steady_end,
+                                    "excluded_first_fraction": 0.05,
+                                    "excluded_last_fraction": 0.10},
+            "steady_state_worker_busy_s": steady_busy,
+            "steady_state_worker_utilization": (
+                steady_busy / (worker_count * steady_span) if steady_span else 0.0),
+            "scheduler_busy_s": sum(component_busy.values()),
+            "scheduler_busy_fraction": (sum(component_busy.values()) / makespan if makespan else 0.0),
+            "scheduler_busy_by_component_s": component_busy,
+            "completed_timed_tasks": len(task_intervals),
+            "prefetch": self.prefetch,
+            "max_inflight": max_inflight,
+            "prefetched_submissions": prefetched_submissions,
+            "tasks_started_while_scheduler_busy": starts_during_busy,
+        }
+        metrics_path = os.path.join(self.root, "phase_metrics.json")
+        all_metrics = {}
+        if os.path.isfile(metrics_path):
+            with open(metrics_path, encoding="utf-8") as handle:
+                all_metrics = json.load(handle)
+        all_metrics[phase.task] = phase_metrics
+        temporary = metrics_path + ".tmp"
+        with open(temporary, "w", encoding="utf-8") as handle:
+            json.dump(all_metrics, handle, indent=2, sort_keys=True)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, metrics_path)
         return core.phase_complete
 
     def run(self):
@@ -304,7 +407,7 @@ class CampaignScheduler:
         signal.signal(signal.SIGINT, self._request_stop)
         signal.signal(signal.SIGTERM, self._request_stop)
         pool = (EvaluationPool(self.affinity_plan.n_workers, self.affinity_plan, "real", max_retries=2,
-                               ignore_sigint=True) if self.mode == "real" else None)
+                               ignore_sigint=True) if self.mode in {"real", "validation"} else None)
         try:
             for phase in self.plan.phases:  # D7 barrier: no phase interleaving.
                 if phase_status.get(phase.task, {}).get("status") == "complete":
@@ -313,7 +416,8 @@ class CampaignScheduler:
                 phase_status[phase.task] = {"status": "running", "started_at": phase_start}
                 self._manifest(phase=phase.task, phase_status=phase_status)
                 active = [(rp, *self._make_run(rp)) for rp in phase.runs]
-                phase_complete = self._run_phase(active, pool, phase, outputs)
+                phase_complete = self._run_phase(active, pool, phase, outputs,
+                                                 phase_started_at=phase_start)
                 if not phase_complete:
                     for _rp, _encoder, _config, run, logger, _directory in active:
                         if not run.done:
@@ -374,7 +478,7 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
     parser.add_argument("--config", default="evodevo/experiments/configs/benchmark.yaml")
     parser.add_argument("--output-root", default="results/campaign")
     parser.add_argument("--workers", type=int, default=20)
-    parser.add_argument("--mode", choices=("real", "surrogate"), default="real")
+    parser.add_argument("--mode", choices=("real", "surrogate", "validation"), default="real")
     parser.add_argument("--mirror-dir")
     parser.add_argument("--no-mirror", action="store_true")
     parser.add_argument("--grace-s", type=float, default=120)
@@ -424,6 +528,7 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
             parser.error("no campaign to resume")
         campaign_id = max(candidates, key=lambda d: os.path.getmtime(os.path.join(root, d, "manifest.json")))
     manifest_path = os.path.join(args.output_root, campaign_id, "manifest.json")
+    manifest = {}
     if args.resume:
         if not os.path.isfile(manifest_path):
             parser.error(f"no manifest for {campaign_id}")
@@ -439,6 +544,13 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
             parser.error(f"campaign {campaign_id} already exists; use --resume {campaign_id}")
         from evodevo.experiments.benchmark import BenchmarkConfig
         plan = CampaignPlan.from_benchmark(BenchmarkConfig.from_yaml(args.config))
+    from .plan import VALIDATION_STAMP
+    validation_plan = plan.validation_profile is not None
+    if validation_plan != (args.mode == "validation"):
+        parser.error("campaign_validation profile and --mode validation must be used together")
+    effective_stamp = args.stamp or manifest.get("artifact_stamp")
+    if validation_plan and effective_stamp != VALIDATION_STAMP:
+        parser.error(f"validation runs require --stamp {VALIDATION_STAMP!r}")
     from .launch_checks import launch_refusals
     more, launch_record = launch_refusals(args)
     refusals += more

@@ -73,7 +73,7 @@ def _run_ppo_task(task, timeout_s, attempt_token=0):
     """Worker entry point for campaign PPO units; heavy imports stay lazy."""
     import dataclasses
     import signal
-    from evodevo.evaluation.ppo_runner import PPOTaskResult, evaluate_ppo_task
+    from evodevo.evaluation.ppo_runner import PPOTaskResult, _rss_mb, evaluate_ppo_task
 
     previous = None
     if timeout_s is not None and hasattr(signal, "setitimer"):
@@ -91,7 +91,20 @@ def _run_ppo_task(task, timeout_s, attempt_token=0):
         active_tokens[slot] = attempt_token
     try:
         debug = getattr(task, "debug_meta", None)
-        if debug is not None:
+        validation = getattr(task, "validation_meta", None)
+        if validation is not None:
+            cpu_ids = list(_WORKER_STATE.get("cpu_ids", []))
+            is_e_core = bool(cpu_ids and cpu_ids[0] in set(validation["e_core_ids"]))
+            factor = validation["e_over_p_ratio"] if is_e_core else 1.0
+            planned = validation["base_duration_s"] * validation["time_scale"] * factor
+            time.sleep(planned)
+            result = PPOTaskResult(
+                validation["fitness"], True, None, time.time() - started,
+                _rss_mb(), None, [], None, None, None, None,
+                validation_base_duration_s=validation["base_duration_s"],
+                validation_planned_duration_s=planned,
+            )
+        elif debug is not None:
             time.sleep(float(debug.get("sleep_s", 0.0)))
             if debug.get("os_exit"):
                 os._exit(int(debug["os_exit"]))
@@ -114,10 +127,12 @@ def _run_ppo_task(task, timeout_s, attempt_token=0):
     from evodevo.parallel.threading_control import THREAD_ENV_VARS
 
     torch_threads = sys.modules["torch"].get_num_threads() if "torch" in sys.modules else None
+    finished = time.time()
     return dataclasses.replace(result, worker_slot=_WORKER_STATE.get("slot"),
                                cpu_ids=list(_WORKER_STATE.get("cpu_ids", [])),
                                worker_pid=os.getpid(), torch_num_threads=torch_threads,
-                               thread_env={var: os.environ.get(var) for var in THREAD_ENV_VARS})
+                               thread_env={var: os.environ.get(var) for var in THREAD_ENV_VARS},
+                               started_at=started, finished_at=finished)
 
 
 def _worker_initializer(slot_queue, slots: tuple, ignore_sigint: bool = False,

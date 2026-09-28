@@ -314,6 +314,7 @@ def run_continuous_dispatch(run_durs, factors, serial_costs, *, ready0=0.0,
     sequence = itertools.count()
     finish = [0.0] * n_runs
     busy_worker_s = 0.0
+    worker_intervals = []
     scheduler_busy_s = 0.0
     server_free = ready0
 
@@ -336,6 +337,7 @@ def run_continuous_dispatch(run_durs, factors, serial_costs, *, ready0=0.0,
             run, generation, index = dispatch_item.payload
             duration = float(run_durs[run][generation, index]) * factors[worker]
             busy_worker_s += duration
+            worker_intervals.append((at, at + duration))
             push(at + duration, "worker_done", (worker, dispatch_item))
 
     def refill(at):
@@ -402,10 +404,18 @@ def run_continuous_dispatch(run_durs, factors, serial_costs, *, ready0=0.0,
     if not core.phase_complete:
         raise AssertionError("continuous simulation ended before its phase barrier")
     makespan = max(finish, default=ready0) - ready0
+    steady_start = ready0 + 0.05 * makespan
+    steady_end = ready0 + 0.90 * makespan
+    steady_busy_s = sum(max(0.0, min(end, steady_end) - max(start, steady_start))
+                        for start, end in worker_intervals)
+    steady_span = max(0.0, steady_end - steady_start)
     return makespan, finish, {
         "worker_utilization": busy_worker_s / (n_workers * makespan) if makespan else 0.0,
+        "steady_state_worker_utilization": (
+            steady_busy_s / (n_workers * steady_span) if steady_span else 0.0),
         "scheduler_busy_fraction": scheduler_busy_s / makespan if makespan else 0.0,
         "worker_busy_s": busy_worker_s,
+        "steady_state_worker_busy_s": steady_busy_s,
         "scheduler_busy_s": scheduler_busy_s,
     }
 

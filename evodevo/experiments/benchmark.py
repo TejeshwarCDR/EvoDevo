@@ -82,6 +82,7 @@ PRIMARY_MATRIX = "primary_matrix"
 # differ BETWEEN tasks, never between arms on one task (every arm on a task
 # gets the identical resolved value, so check_fairness still holds).
 CAMPAIGN = "campaign"
+CAMPAIGN_VALIDATION = "campaign_validation"
 PER_TASK_PROFILE_FIELDS = ("ppo_timesteps", "ppo_seeds")
 CAMPAIGN_REQUIRED_FIELDS = (
     "population_size", "offspring_size", "eval_budget", "ppo_timesteps", "ppo_seeds", "ppo_seed_aggregation",
@@ -106,6 +107,17 @@ PROFILES = {
         # D6 application (UpStepper-v0: registered knee; Walker-v0: fallback rule).
         "ppo_timesteps": {"Walker-v0": 1_000_000, "UpStepper-v0": 1_200_000},
         # D16: K PPO trainings per genome; genome fitness = aggregation over them.
+        "ppo_seeds": {"Walker-v0": 1, "UpStepper-v0": 2},
+        "ppo_seed_aggregation": "max",
+    },
+    # Exact campaign grid, but runnable only through the campaign launcher's
+    # validation mode, whose PPO workers sleep for scaled measured durations.
+    # Keeping a distinct profile makes accidental scientific use fail loud.
+    CAMPAIGN_VALIDATION: {
+        "population_size": 15,
+        "offspring_size": 15,
+        "eval_budget": 300,
+        "ppo_timesteps": {"Walker-v0": 1_000_000, "UpStepper-v0": 1_200_000},
         "ppo_seeds": {"Walker-v0": 1, "UpStepper-v0": 2},
         "ppo_seed_aggregation": "max",
     },
@@ -143,7 +155,7 @@ class PpoSeedsNotImplementedError(NotImplementedError):
 
 def validate_profile(profile_kwargs: dict, tasks, profile_name: str = CAMPAIGN) -> None:
     """Schema validation for a resolved profile dict (see CampaignProfileError)."""
-    if profile_name == CAMPAIGN:
+    if profile_name in {CAMPAIGN, CAMPAIGN_VALIDATION}:
         missing = [k for k in CAMPAIGN_REQUIRED_FIELDS if k not in profile_kwargs]
         if missing:
             raise CampaignProfileError(f"profile '{profile_name}' is missing required field(s) {missing}")

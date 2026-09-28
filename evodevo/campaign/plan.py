@@ -7,7 +7,11 @@ import json
 from pathlib import Path
 from dataclasses import dataclass
 
-from evodevo.experiments.benchmark import BenchmarkConfig, resolve_configs, _resolved_arm_kwargs
+from evodevo.experiments.benchmark import (CAMPAIGN, CAMPAIGN_VALIDATION,
+    BenchmarkConfig, resolve_configs, _resolved_arm_kwargs)
+
+
+VALIDATION_STAMP = "VALIDATION - NOT A RESULT"
 
 
 @dataclass(frozen=True)
@@ -36,17 +40,19 @@ class PhasePlan:
 class CampaignPlan:
     phases: tuple[PhasePlan, ...]
     guard_outcome: str = "all four approved campaign arms"
+    validation_profile: dict | None = None
 
     @classmethod
     def from_dict(cls, payload):
         return cls(tuple(PhasePlan(p["task"], tuple(RunPlan(**run) for run in p["runs"]),
                                    p["ppo_timesteps"], p["ppo_seeds"], p["aggregation"],
                                    p.get("timeout_s")) for p in payload["phases"]),
-                   payload.get("guard_outcome", "all four approved campaign arms"))
+                   payload.get("guard_outcome", "all four approved campaign arms"),
+                   payload.get("validation_profile"))
 
     @classmethod
     def from_benchmark(cls, benchmark: BenchmarkConfig):
-        if benchmark.profile != "campaign":
+        if benchmark.profile not in {CAMPAIGN, CAMPAIGN_VALIDATION}:
             raise ValueError("CampaignPlan requires the campaign profile")
         resolved = resolve_configs(benchmark)
         estimate_path = Path(__file__).resolve().parents[2] / "results/campaign_prep/final_estimate/final_estimate.json"
@@ -72,7 +78,16 @@ class CampaignPlan:
             phases.append(PhasePlan(task, tuple(runs), sample.ppo_timesteps,
                                     sample.ppo_seeds, sample.ppo_seed_aggregation,
                                     timeout_s=4 * p95_ecore))
-        return cls(tuple(phases))
+        validation = None
+        if benchmark.profile == CAMPAIGN_VALIDATION:
+            validation = {
+                "stamp": VALIDATION_STAMP,
+                "time_scale": {"Walker-v0": 1 / 100, "UpStepper-v0": 1 / 250},
+                "e_over_p_ratio": 2.3172,
+                "duration_distribution": t_ppo,
+                "distribution_source": str(estimate_path),
+            }
+        return cls(tuple(phases), validation_profile=validation)
 
     def to_dict(self):
         return dataclasses.asdict(self)
