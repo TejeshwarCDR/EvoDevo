@@ -296,6 +296,10 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
     contrast = [r for r in pairwise if {r["arm_a"], r["arm_b"]} == {"rule_based", "rule_based_monotone"}]
     _csv(output / "stats/rule_based_vs_monotone.csv", contrast, fields)
     summary = three_way_table(data)
+    if status == "PARTIAL":
+        summary["status"] = status
+        summary["completion_fraction"] = fraction
+        summary["n_seeds"] = summary["encoder"].map({arm: len(values) for arm, values in finals.items()})
     summary.to_csv(output / "stats/summary.csv", index=False)
     primary = pd.DataFrame(_primary_summary(finals, status, fraction))
     primary.to_csv(output / "stats/final_fitness_summary.csv", index=False)
@@ -455,6 +459,7 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
     _atomic_text(output / "MILESTONE_REPORT.md", report)
     files = sorted(str(path.relative_to(output)) for path in output.rglob("*") if path.is_file())
     _atomic_text(output / "package_manifest.json", json.dumps({"task": task, "snapshot": snapshot,
+                  "status": status,
                   "completion_fraction": fraction, "generated_at": time.time(),
                   "files": files}, indent=2, sort_keys=True) + "\n")
     missing = [name for name in REQUIRED if not (output / name).is_file()]
