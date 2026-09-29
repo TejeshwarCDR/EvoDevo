@@ -45,13 +45,18 @@ def test_run_script_dry_run_writes_nothing_and_prints_everything(tmp_path):
     for needle in ("PLAN (D7 phase order) -- guard outcome: all four approved campaign arms",
                    "phase 1: Walker-v0: 20 runs", "ppo_timesteps=1,000,000; K (ppo_seeds)=1",
                    "phase 2: UpStepper-v0: 20 runs", "ppo_timesteps=1,200,000; K (ppo_seeds)=2",
-                   "CALENDAR from launch 2026-10-01 00:00", "Walker milestone", "Walker-v0 phase end",
-                   "campaign end", "2026-10-06", "2026-10-17", "config hash: ", "git commit: ", "dirty tree: ",
+                   "THERMAL-VALIDATED PROJECTION",
+                   "projected total: about 434.4 h (18.1 days)",
+                   "config hash: ", "git commit: ", "dirty tree: ",
                    "DISK (", "main (", "mirror (", "MIRROR PHYSICAL DISK", "same physical disk: True",
-                   "NOTIFIER:", "configured (shell_command)", "CPU PLACEMENT", "worker  0: cpu", "scheduler: cpus",
+                   "NOTIFIER:", "configured (shell_command)",
+                   "CPU PLACEMENT (computed, not applied): profile=thermal-validated; 18 workers",
+                   "worker  0: cpu 0 (P-primary)", "worker 17: cpu 25 (E-core)",
+                   "scheduler: cpus [26, 27] (E-core)",
                    "OPERATIONAL ENVIRONMENT", "systemd KillUserProcesses", "sshd active", "existing tmux sessions",
                    "LAUNCH CHECKS: WOULD BE REFUSED", "share physical disk"):
         assert needle in out, (needle, out)
+    assert "CALENDAR from launch" in out
 
 
 def test_dry_run_of_a_non_campaign_design_shows_no_calendar(tmp_path):

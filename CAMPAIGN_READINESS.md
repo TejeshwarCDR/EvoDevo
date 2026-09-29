@@ -1,5 +1,18 @@
 # EvoDevo campaign readiness
 
+> **Production thermal update — 2026-09-30.** This report's retained
+> 20-worker / 403.2-hour capacity discussion is historical validation
+> evidence, not the launch configuration.  The active production contract is
+> 18 workers: P CPUs 0,2,4,6,8,10,12,14 and E CPUs 16–25, with E26–27 reserved
+> for scheduler/control work; turbo enabled; P policies 0–15 capped at 4.2
+> GHz; RAPL PL1=125 W and PL2=160 W.  The matching 960-genome real-PPO run
+> completed in 22.3 minutes at 42.96 genomes/min, 84 C peak / 77 C p95, with
+> no throttle increment or worker failure.  It rate-scales the full campaign
+> to approximately 434 h (18.1 days), with the Walker phase/milestone around
+> 132 h (5.5 days).  Source: `results/thermal_worker_study/FINAL_SELECTION_20260930.md`.
+> `scripts/campaign/run_production_campaign.sh` is the required power-held
+> production entry point; it fails closed on any topology or control mismatch.
+
 Fresh single-pass report, 2026-09-29. It describes only the current repository
 state. The scientific campaign has not been started. Validation campaigns are
 explicitly stamped `VALIDATION - NOT A RESULT`.

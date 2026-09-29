@@ -32,7 +32,7 @@ from evodevo.evaluation.ppo_runner import (EvalResult, PPOTask, PPOTaskResult,
 from evodevo.evolution.ea import EvolutionRun
 from evodevo.evolution.logging import RunLogger
 from evodevo.parallel.affinity import pin_current_process
-from evodevo.parallel.topology import allocation_order, cpu_slots, detect_topology
+from evodevo.parallel.topology import AffinityPlan, allocation_order, cpu_slots, detect_topology
 from evodevo.parallel.worker_pool import EvaluationPool
 from evodevo.morphology.metrics import body_hash as compute_body_hash
 from evodevo.morphology.validate import validate_body
@@ -44,7 +44,17 @@ from .journal import ResultJournal
 from .milestone import run_subprocess
 from .mirror import sync
 from .plan import CampaignPlan
+from .production import PROFILE as PRODUCTION_CPU_PROFILE, WORKER_CPUS as PRODUCTION_WORKER_CPUS
+from .production import contract as production_contract
+from .production import placement as production_placement
 from .status import CampaignStatus, status_footer
+
+
+# `FINAL_SELECTION_20260930.md` validated this exact P8+E10 placement under
+# RAPL/frequency controls.  The launcher separately fails closed unless those
+# controls are attested; this constant only covers affinity.
+DEFAULT_WORKERS = len(PRODUCTION_WORKER_CPUS)
+DEFAULT_CPU_PROFILE = PRODUCTION_CPU_PROFILE
 
 
 def genome_hash(encoder, genome) -> str:
@@ -52,19 +62,45 @@ def genome_hash(encoder, genome) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
-def cpu_placement(topology, workers):
-    """(worker AffinityPlan, scheduler CPUs): workers take allocation_order
-    (P-core primaries, then E-cores, then P-core siblings) one CPU each; the
-    scheduler gets every CPU no worker uses. Pure: nothing is pinned here."""
-    affinity_plan = cpu_slots(topology, workers)
-    used = {cpu for slot in affinity_plan.slots for cpu in slot}
-    return affinity_plan, [cpu for cpu in allocation_order(topology) if cpu not in used]
+def cpu_placement(topology, workers, cpu_profile=DEFAULT_CPU_PROFILE):
+    """Return ``(worker AffinityPlan, scheduler CPUs)`` without pinning.
+
+    ``thermal-validated`` is the exact selected P8+E10 placement, with
+    E26--27 reserved for scheduler/control work. ``standard`` follows the
+    topology allocation order. ``e-cores`` remains available for historical
+    validation evidence.
+    """
+    if cpu_profile == PRODUCTION_CPU_PROFILE:
+        return production_placement(topology, workers)
+    if cpu_profile == "standard":
+        affinity_plan = cpu_slots(topology, workers)
+        used = {cpu for slot in affinity_plan.slots for cpu in slot}
+        return affinity_plan, [cpu for cpu in allocation_order(topology) if cpu not in used]
+    if cpu_profile != "e-cores":
+        raise ValueError(f"unknown CPU profile {cpu_profile!r}")
+    if workers < 1:
+        raise ValueError(f"workers must be >= 1, got {workers}")
+    e_cpus = list(topology.e_core_ids)
+    if not e_cpus:
+        raise ValueError("the e-cores CPU profile requires detected E-cores")
+    if workers >= len(e_cpus):
+        raise ValueError(
+            f"the e-cores CPU profile supports at most {len(e_cpus) - 1} workers; "
+            "at least one E-core must remain for the scheduler"
+        )
+    worker_cpus = e_cpus[:workers]
+    affinity_plan = AffinityPlan(
+        n_workers=workers, slots=tuple((cpu,) for cpu in worker_cpus),
+        oversubscribed=False, allocation_order=tuple(allocation_order(topology)),
+    )
+    return affinity_plan, e_cpus[workers:]
 
 
 class CampaignScheduler:
-    def __init__(self, plan, campaign_id: str, output_root="results/campaign", workers=20,
+    def __init__(self, plan, campaign_id: str, output_root="results/campaign", workers=DEFAULT_WORKERS,
                  mode="real", grace_s=120, mirror_dir=None, no_mirror=False,
-                 allow_same_disk_mirror=False, prefetch=4, local_config=None):
+                 allow_same_disk_mirror=False, prefetch=4, local_config=None,
+                 cpu_profile="standard"):
         self.plan, self.campaign_id, self.mode, self.grace_s = plan, campaign_id, mode, grace_s
         self.allow_same_disk_mirror = allow_same_disk_mirror
         self.root = os.path.join(output_root, campaign_id)
@@ -76,7 +112,8 @@ class CampaignScheduler:
         self.prefetch = prefetch
         topology = detect_topology()
         self.topology = topology
-        self.affinity_plan, self.scheduler_cpus = cpu_placement(topology, workers)
+        self.cpu_profile = cpu_profile
+        self.affinity_plan, self.scheduler_cpus = cpu_placement(topology, workers, cpu_profile)
         self.scheduler_affinity = pin_current_process(self.scheduler_cpus) if self.scheduler_cpus else None
         self.stop_requested = False
 
@@ -96,6 +133,9 @@ class CampaignScheduler:
                    "plan": self.plan.to_dict(), "guard_outcome": self.plan.guard_outcome,
                    "scheduler_cpus": self.scheduler_cpus,
                    "topology": self.topology.to_dict(),
+                   "cpu_profile": self.cpu_profile,
+                   "production_contract": (production_contract()
+                                           if self.cpu_profile == PRODUCTION_CPU_PROFILE else None),
                    "worker_slots": self.affinity_plan.to_dict(),
                    "scheduler_affinity": dataclasses.asdict(self.scheduler_affinity)
                    if dataclasses.is_dataclass(self.scheduler_affinity) else self.scheduler_affinity,
@@ -541,10 +581,18 @@ class CampaignScheduler:
 
 
 def resume_command(args, campaign_id):
-    command = ["scripts/campaign/run_campaign.sh", "--resume", campaign_id,
-               "--config", args.config, "--output-root", args.output_root,
-               "--workers", str(args.workers), "--mode", args.mode,
-               "--grace-s", str(args.grace_s)]
+    production = getattr(args, "cpu_profile", "standard") == PRODUCTION_CPU_PROFILE
+    if production:
+        command = ["scripts/campaign/run_production_campaign.sh", "--resume", campaign_id,
+                   "--config", args.config, "--output-root", args.output_root,
+                   "--grace-s", str(args.grace_s)]
+    else:
+        command = ["scripts/campaign/run_campaign.sh", "--resume", campaign_id,
+                   "--config", args.config, "--output-root", args.output_root,
+                   "--workers", str(args.workers), "--mode", args.mode,
+                   "--grace-s", str(args.grace_s)]
+    if not production and getattr(args, "cpu_profile", "standard") != "standard":
+        command.extend(["--cpu-profile", args.cpu_profile])
     if getattr(args, "prefetch", 4) != 4:
         command.extend(["--prefetch", str(args.prefetch)])
     command.extend(["--no-mirror"] if args.no_mirror else ["--mirror-dir", args.mirror_dir])
@@ -567,7 +615,10 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
     parser.add_argument("--resume")
     parser.add_argument("--config", default="evodevo/experiments/configs/benchmark.yaml")
     parser.add_argument("--output-root", default="results/campaign")
-    parser.add_argument("--workers", type=int, default=20)
+    parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
+    parser.add_argument("--cpu-profile", choices=(PRODUCTION_CPU_PROFILE, "standard", "e-cores"),
+                        default=DEFAULT_CPU_PROFILE,
+                        help="worker CPU allocation (default: thermal-validated P8+E10 production profile)")
     parser.add_argument("--mode", choices=("real", "surrogate", "validation"), default="real")
     parser.add_argument("--mirror-dir")
     parser.add_argument("--no-mirror", action="store_true")
@@ -582,6 +633,8 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
     parser.add_argument("--allow-same-disk-mirror", action="store_true",
                         help="explicitly accept a mirror on the SAME physical disk as the results "
                              "(recorded in the manifest; permanent dashboard warning)")
+    parser.add_argument("--production-power", action="store_true",
+                        help=argparse.SUPPRESS)
     parser.add_argument("--stamp", help="label stamped on every artifact, e.g. 'VALIDATION - NOT A RESULT' "
                         "(manifest, STAMP.txt, milestone figures/report/tables); never result-affecting")
     parser.add_argument("--dry-run", action="store_true",
@@ -592,6 +645,11 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
     parser.add_argument("--check-only", action="store_true",
                         help="run every launch refusal check, print the result, start nothing")
     args = parser.parse_args(argv)
+    # Direct invocation must not silently bypass the validated production
+    # power contract.  The root production wrapper establishes these controls;
+    # this check makes a missing wrapper fail closed before anything starts.
+    if args.mode == "real" and args.cpu_profile == PRODUCTION_CPU_PROFILE:
+        args.production_power = True
     if args.prefetch < 0:
         parser.error("--prefetch must be >= 0")
     if not args.mirror_dir and not args.no_mirror:
@@ -602,6 +660,10 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
         parser.error("--allow-same-disk-mirror requires --mirror-dir")
     if args.resume and args.campaign_id:
         parser.error("--resume and --campaign-id are mutually exclusive")
+    try:
+        cpu_placement(detect_topology(), args.workers, args.cpu_profile)
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.dry_run:
         from evodevo.experiments.benchmark import BenchmarkConfig
         from .dry_run import render
@@ -631,6 +693,16 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
         current = CampaignPlan.from_benchmark(BenchmarkConfig.from_yaml(args.config))
         if current.config_hash != plan.config_hash or current.config_hash != manifest.get("config_hash"):
             parser.error("campaign config-hash mismatch")
+        requested_slots, requested_scheduler_cpus = cpu_placement(
+            detect_topology(), args.workers, args.cpu_profile)
+        if manifest.get("worker_slots") != requested_slots.to_dict():
+            parser.error("campaign worker-affinity mismatch on resume")
+        if manifest.get("scheduler_cpus") != requested_scheduler_cpus:
+            parser.error("campaign scheduler-affinity mismatch on resume")
+        if manifest.get("cpu_profile", "standard") != args.cpu_profile:
+            parser.error("campaign CPU-profile mismatch on resume")
+        if args.cpu_profile == PRODUCTION_CPU_PROFILE and manifest.get("production_contract") != production_contract():
+            parser.error("campaign production thermal configuration mismatch on resume")
     else:
         if os.path.isfile(manifest_path):
             parser.error(f"campaign {campaign_id} already exists; use --resume {campaign_id}")
@@ -654,7 +726,7 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
     scheduler = CampaignScheduler(plan, campaign_id, args.output_root, args.workers,
         args.mode, args.grace_s, args.mirror_dir, args.no_mirror,
         allow_same_disk_mirror=args.allow_same_disk_mirror, prefetch=args.prefetch,
-        local_config=args.local_config)
+        local_config=args.local_config, cpu_profile=args.cpu_profile)
     scheduler._manifest(git_commit=subprocess.check_output(["git", "rev-parse", "HEAD"],
         cwd=repo_root, text=True).strip(), launch_checks=launch_record,
         no_notify=bool(args.no_notify))

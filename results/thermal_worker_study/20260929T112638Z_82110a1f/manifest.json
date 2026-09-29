@@ -1,0 +1,24 @@
+{
+  "project_dirty": true,
+  "run_id": "20260929T112638Z_82110a1f",
+  "stages": {
+    "concurrency_sweep": {
+      "duration_s": null,
+      "end_time": null,
+      "error": null,
+      "git_commit": "82110a1f",
+      "output_path": null,
+      "start_time": "2026-09-29T11:27:43.074721+00:00",
+      "status": "running"
+    },
+    "machine_profile": {
+      "duration_s": 1.2720129489898682,
+      "end_time": "2026-09-29T11:26:39.638227+00:00",
+      "error": null,
+      "git_commit": "82110a1f",
+      "output_path": "results/thermal_worker_study/20260929T112638Z_82110a1f/stages/machine_profile.json",
+      "start_time": "2026-09-29T11:26:38.365861+00:00",
+      "status": "done"
+    }
+  }
+}

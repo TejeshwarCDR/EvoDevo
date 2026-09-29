@@ -700,7 +700,7 @@ def test_launcher_starts_and_cleans_tiny_surrogate_campaign():
         try:
             started = subprocess.run(["bash", "scripts/campaign/run_campaign.sh", "--campaign-id", "smoke",
                 "--config", str(config), "--output-root", str(run_root), "--no-mirror",
-                "--workers", "1", "--mode", "surrogate"], cwd=repo, env=env,
+                "--workers", "1", "--cpu-profile", "standard", "--mode", "surrogate"], cwd=repo, env=env,
                 capture_output=True, text=True, timeout=20)
             assert started.returncode == 0, started.stderr + started.stdout
             deadline = time.monotonic() + 30
@@ -738,7 +738,7 @@ def test_launcher_starts_and_cleans_tiny_surrogate_campaign():
         config.write_text(config.read_text().replace("eval_budget: 2", "eval_budget: 3"))
         mismatch = subprocess.run(["bash", "scripts/campaign/run_campaign.sh", "--resume", "smoke",
             "--config", str(config), "--output-root", str(run_root), "--no-mirror",
-            "--workers", "1", "--mode", "surrogate"], cwd=repo, env=env,
+            "--workers", "1", "--cpu-profile", "standard", "--mode", "surrogate"], cwd=repo, env=env,
             capture_output=True, text=True, timeout=20)
         assert mismatch.returncode != 0
         assert "config-hash mismatch" in mismatch.stderr

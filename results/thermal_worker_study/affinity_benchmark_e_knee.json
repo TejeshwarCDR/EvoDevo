@@ -1,0 +1,6201 @@
+{
+  "settings": {
+    "profiles": [
+      "e8",
+      "e10"
+    ],
+    "genomes": 120,
+    "timesteps": 20000,
+    "sample_interval_s": 1.0,
+    "abort_temp_c": 96.0,
+    "cooldown_temp_c": 55.0
+  },
+  "plans": {
+    "e8": {
+      "n_workers": 8,
+      "slots": [
+        [
+          16
+        ],
+        [
+          17
+        ],
+        [
+          18
+        ],
+        [
+          19
+        ],
+        [
+          20
+        ],
+        [
+          21
+        ],
+        [
+          22
+        ],
+        [
+          23
+        ]
+      ],
+      "oversubscribed": false,
+      "allocation_order": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        1,
+        3,
+        5,
+        7,
+        9,
+        11,
+        13,
+        15
+      ]
+    },
+    "e10": {
+      "n_workers": 10,
+      "slots": [
+        [
+          16
+        ],
+        [
+          17
+        ],
+        [
+          18
+        ],
+        [
+          19
+        ],
+        [
+          20
+        ],
+        [
+          21
+        ],
+        [
+          22
+        ],
+        [
+          23
+        ],
+        [
+          24
+        ],
+        [
+          25
+        ]
+      ],
+      "oversubscribed": false,
+      "allocation_order": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        1,
+        3,
+        5,
+        7,
+        9,
+        11,
+        13,
+        15
+      ]
+    }
+  },
+  "results": [
+    {
+      "profile": "e8",
+      "cpu_ids": [
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "n_workers": 8,
+      "n_genomes": 120,
+      "n_valid": 61,
+      "worker_failures": 0,
+      "wall_clock_s": 543.8366224765778,
+      "genomes_per_minute": 13.239270219081455,
+      "valid_genomes_per_minute": 6.729962361366406,
+      "worker_utilization": 0.9511575358458416,
+      "observed_worker_cpus": [
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "affinity_verified": true,
+      "pool_stats": {
+        "tasks_completed": 120,
+        "tasks_failed": 0,
+        "tasks_timed_out": 0,
+        "tasks_retried": 0,
+        "workers_restarted": 0,
+        "peak_rss_mb_aggregate": 404.609375,
+        "peak_rss_mb_by_worker_pid": {
+          "698756": 404.26953125,
+          "698752": 403.91015625,
+          "698759": 404.09375,
+          "698755": 404.02734375,
+          "698758": 404.3203125,
+          "698761": 404.609375,
+          "698760": 404.27734375,
+          "698757": 404.2421875
+        }
+      },
+      "return_code": 0,
+      "aborted": false,
+      "abort_reason": null,
+      "package_temp_critical_c": 100.0,
+      "package_temp_start_c": 50.0,
+      "package_temp_max_c": 75.0,
+      "package_temp_end_c": 59.0,
+      "throttle_count_start": 2727636,
+      "throttle_count_end": 2727636,
+      "throttle_counter_incremented": false,
+      "telemetry": [
+        {
+          "elapsed_s": 0.0008504390716552734,
+          "package_temp_c": 50.0,
+          "cpu_percent_overall": 0.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 1.0051853656768799,
+          "package_temp_c": 68.0,
+          "cpu_percent_overall": 27.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 2.009838342666626,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 3.0153398513793945,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 4.022093296051025,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 5.028674840927124,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 29.3,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 6.035131454467773,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 29.2,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 7.041990280151367,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 8.04856276512146,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 9.055351257324219,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 10.06203317642212,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 11.068419694900513,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 12.07471513748169,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 13.081250190734863,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 14.085813760757446,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 15.089197158813477,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 16.093746185302734,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 17.098498344421387,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 29.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 18.10311269760132,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 19.10720157623291,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 20.111188411712646,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 21.11519694328308,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 22.1191885471344,
+          "package_temp_c": 70.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 23.123521089553833,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 24.127861976623535,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 25.132150888442993,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 26.136627674102783,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 27.14088010787964,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 28.145711183547974,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 29.150247812271118,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 30.15474581718445,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 31.158747911453247,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 32.16212224960327,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 33.165125608444214,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 34.169189453125,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 35.17312455177307,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 29.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 36.176090717315674,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 37.179137229919434,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 38.18212556838989,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 39.18513870239258,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 40.1891233921051,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 41.19312310218811,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 42.19612383842468,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 43.20012283325195,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 44.204124450683594,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 45.20812225341797,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 46.21212291717529,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 47.216129541397095,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 48.22012543678284,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 49.2231228351593,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 50.22712206840515,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 51.23012065887451,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 52.23412299156189,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 53.23814678192139,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 54.24212646484375,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 55.246124267578125,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 56.250123500823975,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 57.25412654876709,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 58.25718712806702,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 59.26118469238281,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 60.26512694358826,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 61.268123388290405,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 62.27119064331055,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 63.27512311935425,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 64.27919864654541,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 30.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 65.28312253952026,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 66.28611469268799,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 67.28912258148193,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 68.2931182384491,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 69.2971179485321,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 70.30012035369873,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 71.30313563346863,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 29.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 72.30713200569153,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 73.31011652946472,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 74.31411457061768,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 75.31711745262146,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 76.32111144065857,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 77.32412433624268,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 78.3271861076355,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 79.33120489120483,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 80.33512449264526,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 81.33920168876648,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 82.3432228565216,
+          "package_temp_c": 70.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 83.34711623191833,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 84.35111474990845,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 85.35512185096741,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 86.35818910598755,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 87.36211895942688,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 88.36512207984924,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 89.36819648742676,
+          "package_temp_c": 70.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 90.37219071388245,
+          "package_temp_c": 69.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 91.37611889839172,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 92.38018655776978,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 93.384197473526,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 94.38821053504944,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 95.39211821556091,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 96.39512348175049,
+          "package_temp_c": 68.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 97.39911246299744,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 98.40211248397827,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 99.405113697052,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 100.40811276435852,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 101.41110944747925,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 102.41411232948303,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 103.41708993911743,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 104.4210901260376,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 105.42515015602112,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 106.42912268638611,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 107.4321219921112,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 108.43512201309204,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 109.43912553787231,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 110.44312524795532,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 111.44712543487549,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 112.4502022266388,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 113.45412492752075,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 114.45813035964966,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 115.4621274471283,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 116.46612691879272,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 117.47012710571289,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 118.47412538528442,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 119.47812819480896,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 120.48212480545044,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 121.48612642288208,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 122.49012994766235,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 123.49413800239563,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 124.49713325500488,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 125.50112628936768,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 126.50412702560425,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 127.50712990760803,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 128.51012468338013,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 129.51312947273254,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 29.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 130.51713633537292,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 131.52012968063354,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 132.52311372756958,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 133.52609038352966,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 134.52912092208862,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 135.53211975097656,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 136.5351219177246,
+          "package_temp_c": 70.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 137.5381317138672,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 138.54212760925293,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 139.5451271533966,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 140.54912686347961,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 141.55313920974731,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 142.5561420917511,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 143.55912685394287,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 144.56212425231934,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 145.56519770622253,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 146.56912875175476,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 147.5722086429596,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 148.57612657546997,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 149.57912731170654,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 150.58212327957153,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 151.58612823486328,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 152.58912825584412,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 153.59312891960144,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 154.5971221923828,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 155.6011266708374,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 156.6041247844696,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 157.60713005065918,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 158.61012744903564,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 159.6141266822815,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 160.61718940734863,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 161.62112879753113,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 162.62412786483765,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 163.62812876701355,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 164.6311252117157,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 165.6341471672058,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 166.63719058036804,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 167.64112496376038,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 168.64512634277344,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 169.64920258522034,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 170.6531310081482,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 171.6571273803711,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 172.66112637519836,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 173.6651256084442,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 174.66912269592285,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 175.6721293926239,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 176.67512440681458,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 177.6781268119812,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 178.68113565444946,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 179.68512558937073,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 180.68821144104004,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 181.69215059280396,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 182.69512367248535,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 183.69813060760498,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 184.70212626457214,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 185.70512914657593,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 186.70912885665894,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 187.7131268978119,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 188.71612548828125,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 189.71912503242493,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 29.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 190.72446846961975,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 191.73060083389282,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 192.7372064590454,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 193.74320435523987,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 194.74921202659607,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 195.7558240890503,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 196.76235699653625,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 197.76721143722534,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 198.77019691467285,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 199.77418994903564,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 200.7788667678833,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 201.78348016738892,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 202.78743958473206,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 203.7923104763031,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 204.7968487739563,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 205.80158734321594,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 206.8057222366333,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 207.81053280830383,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 208.81512904167175,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 209.81973028182983,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 210.8237817287445,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 211.82713723182678,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 212.8311243057251,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 213.83512115478516,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 214.83812618255615,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 215.84212374687195,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 216.84512734413147,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 217.84912610054016,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 218.8521273136139,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 219.85512256622314,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 220.8591229915619,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 221.86313915252686,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 222.86712217330933,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 223.87114238739014,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 224.87512302398682,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 225.8791241645813,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 226.88411617279053,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 227.8904674053192,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 228.89412760734558,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 229.89712715148926,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 230.901123046875,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 231.90412712097168,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 232.9081244468689,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 233.91212558746338,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 234.91619038581848,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 235.92012333869934,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 236.9231243133545,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 237.92712569236755,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 238.9311261177063,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 239.93413257598877,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 240.93712854385376,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 241.94112849235535,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 242.94519996643066,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 243.94912552833557,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 244.9531261920929,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 245.95612859725952,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 246.96012997627258,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 247.96412444114685,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 248.96790051460266,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 29.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 249.97209358215332,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 250.97668600082397,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 29.3,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 251.9801332950592,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 252.98412442207336,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 253.9881238937378,
+          "package_temp_c": 70.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 254.99213099479675,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 255.9961395263672,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 257.000125169754,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 258.0041253566742,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 259.0081238746643,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 260.0111291408539,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 261.0141272544861,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 262.01813220977783,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 263.02220606803894,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 264.02519631385803,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 265.0298237800598,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 266.034481048584,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 267.0390057563782,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 268.04362392425537,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 269.0482966899872,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 270.0527572631836,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 271.0571870803833,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 272.0617301464081,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 273.06646251678467,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 274.0710883140564,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 275.0757236480713,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 276.08030343055725,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 277.084730386734,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 278.0893085002899,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 279.0938365459442,
+          "package_temp_c": 70.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 280.0985760688782,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 281.10312700271606,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 282.1071996688843,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 283.11119556427,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 284.1140925884247,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 285.11719036102295,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 286.1213915348053,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 287.1255233287811,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 288.12911558151245,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 289.1321144104004,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 290.1351137161255,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 291.1381139755249,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 292.14112854003906,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 29.2,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 293.1451234817505,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 294.14814591407776,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 295.15213322639465,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 296.1561369895935,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 297.1601233482361,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 298.1641249656677,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 299.16819953918457,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 300.17218542099,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 301.17618799209595,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 302.18078804016113,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 303.1856484413147,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 304.18974256515503,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 305.19400095939636,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 306.1988887786865,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 307.2021346092224,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 308.2060899734497,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 29.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 309.2101263999939,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 310.214129447937,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 311.2171251773834,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 312.2211215496063,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 313.22512197494507,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 314.22908878326416,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 315.2331278324127,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 316.23712158203125,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 317.24012517929077,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 318.2441248893738,
+          "package_temp_c": 70.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 319.24812054634094,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 320.2521221637726,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 321.2551212310791,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 322.25812458992004,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 323.26112389564514,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 324.2640902996063,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 325.2681224346161,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 326.27212166786194,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 327.27612018585205,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 328.28013920783997,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 329.2841212749481,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 330.288489818573,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 331.2931809425354,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 332.2981126308441,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 333.30268955230713,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 334.30722761154175,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 335.3111855983734,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 336.31519389152527,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 337.319974899292,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 338.32380962371826,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 339.32774448394775,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 340.3327593803406,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 341.3370985984802,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 342.3423960208893,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 343.34882521629333,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 344.3555397987366,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 345.3619394302368,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 346.36862683296204,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 347.37546610832214,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 348.3818657398224,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 349.38855242729187,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 350.39533042907715,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 351.4001386165619,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 352.4031238555908,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 353.4071226119995,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 354.4111227989197,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 355.41412258148193,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 356.41712951660156,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 357.4201304912567,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 358.42312574386597,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 359.4271264076233,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 360.431125164032,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 361.4351930618286,
+          "package_temp_c": 70.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 362.4391276836395,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 363.44312477111816,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 364.44712805747986,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 365.4501280784607,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 366.4531240463257,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 367.4561288356781,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 368.4591271877289,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 29.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 369.46212577819824,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 370.465128660202,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 371.4681234359741,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 372.4711539745331,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 373.47512340545654,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 374.4791216850281,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 375.4821312427521,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 376.48512387275696,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 377.4882309436798,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 378.492148399353,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 379.49612498283386,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 380.4991281032562,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 381.50312423706055,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 382.50712394714355,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 383.51012420654297,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 384.5131285190582,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 385.5161237716675,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 386.5191259384155,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 387.52312684059143,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 388.5261344909668,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 389.52912521362305,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 390.53312373161316,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 391.53715658187866,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 392.54112339019775,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 393.5441246032715,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 394.5471234321594,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 395.5511269569397,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 396.554132938385,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 397.5571241378784,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 398.56112575531006,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 399.56412625312805,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 400.5680904388428,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 401.57113003730774,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 402.5751211643219,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 403.5791246891022,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 404.5831365585327,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 405.58712434768677,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 406.59112453460693,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 407.5951249599457,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 408.59912395477295,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 409.60213804244995,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 410.60612535476685,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 411.6101245880127,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 412.61413049697876,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 413.6181263923645,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 414.62112760543823,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 415.6241295337677,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 416.6281249523163,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 417.63112616539,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 418.63412952423096,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 419.63719415664673,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 420.64112615585327,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 421.64512848854065,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 422.64912390708923,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 423.65213322639465,
+          "package_temp_c": 70.0,
+          "cpu_percent_overall": 29.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 424.65612506866455,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 425.66012716293335,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 426.6632294654846,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 427.66712522506714,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 29.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 428.67112016677856,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 429.6751215457916,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 430.67911887168884,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 431.68311953544617,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 432.68712735176086,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 433.69012904167175,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 434.6941292285919,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 435.69812297821045,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 436.70212626457214,
+          "package_temp_c": 70.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 437.7061264514923,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 438.70912623405457,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 439.71212697029114,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 440.7151255607605,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 441.71912598609924,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 442.7221260070801,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 443.72612142562866,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 444.7290894985199,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 445.732088804245,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 446.7351236343384,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 447.7391278743744,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 448.7431261539459,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 449.7461278438568,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 450.7490904331207,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 451.7521195411682,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 452.75573348999023,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 453.7601737976074,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 454.7648825645447,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 455.7681407928467,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 456.77212476730347,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 457.7760908603668,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 458.7801241874695,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 459.78412652015686,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 29.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 460.78712701797485,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 461.7911241054535,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 462.7951295375824,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 463.7991247177124,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 464.80312180519104,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 465.8071274757385,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 466.81113719940186,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 467.8151252269745,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 468.81912636756897,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 469.8231272697449,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 470.8261249065399,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 471.8301270008087,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 472.83412623405457,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 473.838130235672,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 474.8411331176758,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 475.84512662887573,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 476.84912180900574,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 477.8531303405762,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 478.8561301231384,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 27.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 479.86012601852417,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 25.2,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 480.86412596702576,
+          "package_temp_c": 70.0,
+          "cpu_percent_overall": 23.5,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 481.86812925338745,
+          "package_temp_c": 68.0,
+          "cpu_percent_overall": 18.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 482.8721270561218,
+          "package_temp_c": 67.0,
+          "cpu_percent_overall": 18.2,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 483.8761262893677,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 484.88012504577637,
+          "package_temp_c": 65.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 485.8841378688812,
+          "package_temp_c": 67.0,
+          "cpu_percent_overall": 18.4,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 486.8881275653839,
+          "package_temp_c": 67.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 487.89212799072266,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.5,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 488.89612650871277,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 489.9001247882843,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 490.90413331985474,
+          "package_temp_c": 65.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 491.90812635421753,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 492.9121232032776,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 493.91612696647644,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 494.9201235771179,
+          "package_temp_c": 67.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 495.924124956131,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 496.9281289577484,
+          "package_temp_c": 65.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 497.9321331977844,
+          "package_temp_c": 67.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 498.9361288547516,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 499.940123796463,
+          "package_temp_c": 68.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 500.9441239833832,
+          "package_temp_c": 67.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 501.94813537597656,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 502.95212602615356,
+          "package_temp_c": 62.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 503.9561252593994,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 504.9601218700409,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 505.9641251564026,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 506.9681239128113,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 507.97212290763855,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 508.97613501548767,
+          "package_temp_c": 65.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 509.98015117645264,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 510.98412442207336,
+          "package_temp_c": 67.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 511.9881248474121,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 512.9921250343323,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 513.9961831569672,
+          "package_temp_c": 63.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 515.0011358261108,
+          "package_temp_c": 63.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 516.0051233768463,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 517.0091247558594,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 518.0131232738495,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 519.0171287059784,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.2,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 520.0211238861084,
+          "package_temp_c": 67.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 521.02512550354,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 522.0292048454285,
+          "package_temp_c": 62.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 523.0341258049011,
+          "package_temp_c": 64.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 524.0381236076355,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 525.0421237945557,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 526.0461947917938,
+          "package_temp_c": 63.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 527.0501334667206,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 528.0541236400604,
+          "package_temp_c": 65.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 529.0581276416779,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 530.0621247291565,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 531.0661191940308,
+          "package_temp_c": 65.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 532.0701291561127,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 533.0741264820099,
+          "package_temp_c": 67.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 534.0781247615814,
+          "package_temp_c": 65.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 535.0821239948273,
+          "package_temp_c": 63.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 536.0861229896545,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 16.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 537.0901265144348,
+          "package_temp_c": 64.0,
+          "cpu_percent_overall": 14.5,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 538.0941274166107,
+          "package_temp_c": 63.0,
+          "cpu_percent_overall": 14.5,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 539.0981242656708,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 14.5,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 540.1021254062653,
+          "package_temp_c": 65.0,
+          "cpu_percent_overall": 14.5,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 541.1061248779297,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 14.5,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 542.1101233959198,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 14.4,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 543.114120721817,
+          "package_temp_c": 59.0,
+          "cpu_percent_overall": 9.6,
+          "thermal_throttle_count": 2727636
+        }
+      ]
+    },
+    {
+      "profile": "e10",
+      "cpu_ids": [
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25
+      ],
+      "n_workers": 10,
+      "n_genomes": 120,
+      "n_valid": 61,
+      "worker_failures": 0,
+      "wall_clock_s": 447.49362111091614,
+      "genomes_per_minute": 16.08961482428685,
+      "valid_genomes_per_minute": 8.178887535679149,
+      "worker_utilization": 0.912994449000909,
+      "observed_worker_cpus": [
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25
+      ],
+      "affinity_verified": true,
+      "pool_stats": {
+        "tasks_completed": 120,
+        "tasks_failed": 0,
+        "tasks_timed_out": 0,
+        "tasks_retried": 0,
+        "workers_restarted": 0,
+        "peak_rss_mb_aggregate": 404.09375,
+        "peak_rss_mb_by_worker_pid": {
+          "699828": 403.81640625,
+          "699836": 403.90234375,
+          "699831": 403.4609375,
+          "699832": 403.625,
+          "699833": 403.6640625,
+          "699834": 403.99609375,
+          "699830": 404.09375,
+          "699825": 403.55859375,
+          "699835": 403.51171875,
+          "699829": 403.87109375
+        }
+      },
+      "return_code": 0,
+      "aborted": false,
+      "abort_reason": null,
+      "package_temp_critical_c": 100.0,
+      "package_temp_start_c": 49.0,
+      "package_temp_max_c": 86.0,
+      "package_temp_end_c": 57.0,
+      "throttle_count_start": 2727636,
+      "throttle_count_end": 2727636,
+      "throttle_counter_incremented": false,
+      "telemetry": [
+        {
+          "elapsed_s": 0.0007114410400390625,
+          "package_temp_c": 49.0,
+          "cpu_percent_overall": 0.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 1.0047600269317627,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 31.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 2.007721185684204,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 36.2,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 3.010720729827881,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 4.013727426528931,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 5.016738176345825,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 6.020728826522827,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 7.023735523223877,
+          "package_temp_c": 85.0,
+          "cpu_percent_overall": 36.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 8.026741743087769,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 9.029826164245605,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 10.033735990524292,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 11.03673005104065,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 12.039691686630249,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 13.042726755142212,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 14.04572582244873,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 15.048728227615356,
+          "package_temp_c": 77.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 16.051724910736084,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 17.054725646972656,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 18.058722972869873,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 19.061723947525024,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 20.06473207473755,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 21.067729949951172,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 22.070723056793213,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 23.073726654052734,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 24.07672667503357,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 25.079729795455933,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 26.082724571228027,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 27.085726499557495,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 28.0887291431427,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 29.091736793518066,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 30.094737768173218,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 31.097723960876465,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 32.10172390937805,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 33.104735374450684,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 34.107725620269775,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 35.110718965530396,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 36.11372685432434,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 37.11672401428223,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 38.11972951889038,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 39.122721910476685,
+          "package_temp_c": 81.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 40.12571477890015,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 41.128722190856934,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 42.131725549697876,
+          "package_temp_c": 81.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 43.134690046310425,
+          "package_temp_c": 76.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 44.13771462440491,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 45.14072632789612,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 46.14372682571411,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 47.14672780036926,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.5,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 48.149691104888916,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 49.1527259349823,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 50.15571594238281,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 51.158724308013916,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 52.16172122955322,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 53.16472411155701,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 54.16822814941406,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 55.17205834388733,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 56.17569637298584,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 57.17978072166443,
+          "package_temp_c": 76.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 58.18412184715271,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 59.18792653083801,
+          "package_temp_c": 77.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 60.19178819656372,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 61.196112632751465,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 62.20019817352295,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 63.20369505882263,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 64.20770716667175,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 65.21071600914001,
+          "package_temp_c": 81.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 66.21372699737549,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 67.21668934822083,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 68.21971678733826,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 69.22273111343384,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 70.22571539878845,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 71.22869062423706,
+          "package_temp_c": 83.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 72.23168802261353,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 73.23531651496887,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 74.23974561691284,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 75.2428023815155,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 76.24633526802063,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 77.25034952163696,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 78.25421714782715,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 79.25856351852417,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 80.26278352737427,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 81.26643943786621,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 82.27100110054016,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 83.27479195594788,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 84.2787868976593,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 85.2827980518341,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 86.286789894104,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 87.29074120521545,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 88.29380440711975,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 89.29798531532288,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 90.30223941802979,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 91.30646777153015,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 92.31079697608948,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 93.3144257068634,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 94.31912112236023,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 95.3254075050354,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 96.32868838310242,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 97.33171343803406,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 98.33471608161926,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 99.33793473243713,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 100.34080266952515,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 101.34438371658325,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 102.34872627258301,
+          "package_temp_c": 85.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 103.35199165344238,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 104.35614562034607,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 105.36043572425842,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 106.3647141456604,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 107.36907482147217,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 108.37333798408508,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 109.37678670883179,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 110.38078212738037,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 111.38479614257812,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 112.38894367218018,
+          "package_temp_c": 77.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 113.39169478416443,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 114.39578557014465,
+          "package_temp_c": 81.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 115.39873147010803,
+          "package_temp_c": 86.0,
+          "cpu_percent_overall": 36.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 116.40218544006348,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 117.40623784065247,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 118.41048979759216,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 119.41486859321594,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 120.41879034042358,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 121.4227647781372,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 122.42732262611389,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 123.43178510665894,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 124.43609237670898,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 125.43981504440308,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 126.44282746315002,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 127.44693660736084,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 128.4512803554535,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 129.45540499687195,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 130.45868849754333,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 131.46171879768372,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 132.4647183418274,
+          "package_temp_c": 76.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 133.4677233695984,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 134.47073078155518,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 135.4737184047699,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 136.4766879081726,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 137.4797167778015,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 138.48271822929382,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 139.4857165813446,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 140.4887249469757,
+          "package_temp_c": 81.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 141.49173283576965,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 142.49473571777344,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 143.49873304367065,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 144.5017294883728,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 145.50473308563232,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 146.50772547721863,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 147.51074123382568,
+          "package_temp_c": 76.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 148.51472854614258,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 149.51772594451904,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 150.52072858810425,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 151.52373361587524,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 152.52672362327576,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 153.5307264328003,
+          "package_temp_c": 77.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 154.53372740745544,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 155.53672885894775,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 156.5397264957428,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 157.54273176193237,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 158.54569149017334,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 159.5487310886383,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 160.55173063278198,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 161.55471754074097,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 162.5584843158722,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 163.56302428245544,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 164.56731796264648,
+          "package_temp_c": 76.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 165.5713608264923,
+          "package_temp_c": 77.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 166.57564973831177,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 167.5797894001007,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 168.58379530906677,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 169.58679103851318,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 170.5909721851349,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 171.59520840644836,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 172.5987253189087,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 173.6017279624939,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 174.60479283332825,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 175.60835909843445,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 176.61171984672546,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 177.61572885513306,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 178.61872553825378,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.2,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 179.62169289588928,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 36.4,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 180.62472414970398,
+          "package_temp_c": 77.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 181.62769079208374,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 182.63072180747986,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 183.63372325897217,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 184.6367208957672,
+          "package_temp_c": 77.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 185.63971734046936,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 186.6427240371704,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 187.64572310447693,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 188.6487271785736,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 189.65179061889648,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 190.65572953224182,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 191.6587963104248,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 192.6617386341095,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 193.66611552238464,
+          "package_temp_c": 77.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 194.6704592704773,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 195.67491245269775,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 196.67874026298523,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 197.68278408050537,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 198.68578433990479,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 199.6901252269745,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 200.69372057914734,
+          "package_temp_c": 76.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 201.69671726226807,
+          "package_temp_c": 81.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 202.69972014427185,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 203.70271921157837,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 204.7057180404663,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 205.70872521400452,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 206.7117199897766,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 207.71472191810608,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 208.71772360801697,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 209.72072672843933,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 210.72372913360596,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 211.72772121429443,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 212.73072743415833,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 213.73373889923096,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 214.73669052124023,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 215.73971939086914,
+          "package_temp_c": 77.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 216.7427134513855,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 217.74572920799255,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 218.7487211227417,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 219.75171494483948,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 220.75473141670227,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 221.75771307945251,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 222.76071691513062,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 223.76372241973877,
+          "package_temp_c": 81.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 224.76672387123108,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 225.7697114944458,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 226.7727177143097,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 227.77571892738342,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 228.7787127494812,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 229.781724691391,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 230.78472113609314,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 231.78773403167725,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 232.79073214530945,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 233.7937240600586,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 234.79671716690063,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 235.7997181415558,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 236.8027195930481,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 237.8057496547699,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 36.2,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 238.8086884021759,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 239.81171464920044,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 240.81572198867798,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 241.81868839263916,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 242.82172393798828,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 243.824725151062,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 244.82772302627563,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 245.8307168483734,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 246.83371996879578,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 247.8367314338684,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 248.83972716331482,
+          "package_temp_c": 77.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 249.84271383285522,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 250.84571814537048,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 251.8487150669098,
+          "package_temp_c": 83.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 252.85246014595032,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 253.85679411888123,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 254.86082005500793,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 255.8647825717926,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 256.8682382106781,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 257.8717997074127,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 258.8747498989105,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 259.87779903411865,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 260.8821876049042,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 261.88660955429077,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 262.891006231308,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 263.89503240585327,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 264.89878845214844,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 265.9030420780182,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 266.9067828655243,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 267.90969371795654,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 268.9127790927887,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 269.9167449474335,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 270.9205882549286,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 271.92378783226013,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 272.92779636383057,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 273.93078804016113,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 274.9351553916931,
+          "package_temp_c": 77.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 275.93932485580444,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 276.9437439441681,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 277.94730591773987,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 278.9515907764435,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 279.9547896385193,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 280.9587893486023,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 281.961793422699,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 282.9647901058197,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 283.96778202056885,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 284.97176003456116,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 285.97473096847534,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 286.9782166481018,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 287.98179173469543,
+          "package_temp_c": 76.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 288.98569226264954,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 289.98981857299805,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 290.99380350112915,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 291.99769473075867,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 293.0019688606262,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 294.0057830810547,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 295.00878262519836,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 296.01169633865356,
+          "package_temp_c": 81.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 297.0153524875641,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 298.01990389823914,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 299.02369475364685,
+          "package_temp_c": 83.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 300.02779722213745,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 301.03196358680725,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 36.2,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 302.0363323688507,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 303.0397274494171,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 304.04272961616516,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 305.0464916229248,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 306.05098509788513,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 307.0553665161133,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 308.05926990509033,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 309.0637631416321,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 310.068167924881,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 311.0723738670349,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 312.07667779922485,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 313.0811667442322,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 314.08522033691406,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 315.0896496772766,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 316.0940947532654,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 317.0982484817505,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 318.102769613266,
+          "package_temp_c": 81.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 319.1072287559509,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 320.1109414100647,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 321.11525559425354,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 322.1194894313812,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 323.12331199645996,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 324.12773728370667,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 325.1323230266571,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 326.1362178325653,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 327.1407039165497,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 328.14479899406433,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 329.148503780365,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 330.1527409553528,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 331.157021522522,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 332.16128182411194,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 333.1647267341614,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 334.1667892932892,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 335.1697964668274,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 336.1737902164459,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 337.1783802509308,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 338.18230295181274,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 339.18668580055237,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 340.1909866333008,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 341.1948673725128,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 342.1988949775696,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 343.20311188697815,
+          "package_temp_c": 76.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 344.20766377449036,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 345.2120690345764,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 346.21596217155457,
+          "package_temp_c": 77.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 347.2205579280853,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 348.2248845100403,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 349.2290997505188,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 350.23313760757446,
+          "package_temp_c": 81.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 351.2361099720001,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 352.2404308319092,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 353.24453568458557,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 354.24814462661743,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 355.25247979164124,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 356.2569591999054,
+          "package_temp_c": 77.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 357.2614498138428,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 358.26535749435425,
+          "package_temp_c": 76.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 359.2697534561157,
+          "package_temp_c": 85.0,
+          "cpu_percent_overall": 36.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 360.27292132377625,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 361.2771546840668,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 362.2812285423279,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 363.2855544090271,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 36.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 364.2894477844238,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 365.29397892951965,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 366.29774808883667,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 367.3017988204956,
+          "package_temp_c": 77.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 368.30579566955566,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 369.310186624527,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 370.31369519233704,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 371.3179974555969,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 372.32178497314453,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 373.3264756202698,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 374.3307731151581,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 375.3350729942322,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 376.33879137039185,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 377.34169459342957,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 378.34578919410706,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 379.34878945350647,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 380.35269474983215,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 381.3568081855774,
+          "package_temp_c": 79.0,
+          "cpu_percent_overall": 36.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 382.36079812049866,
+          "package_temp_c": 82.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 383.3646981716156,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 384.36833333969116,
+          "package_temp_c": 80.0,
+          "cpu_percent_overall": 35.9,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 385.37179160118103,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 33.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 386.3757412433624,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 32.4,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 387.3786942958832,
+          "package_temp_c": 76.0,
+          "cpu_percent_overall": 32.3,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 388.3831503391266,
+          "package_temp_c": 76.0,
+          "cpu_percent_overall": 32.3,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 389.38763093948364,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 32.3,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 390.3919897079468,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 32.3,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 391.39573311805725,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 32.3,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 392.40053391456604,
+          "package_temp_c": 78.0,
+          "cpu_percent_overall": 32.4,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 393.40411829948425,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 32.3,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 394.4087965488434,
+          "package_temp_c": 77.0,
+          "cpu_percent_overall": 32.3,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 395.4125945568085,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 32.3,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 396.4174213409424,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 32.3,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 397.4218008518219,
+          "package_temp_c": 76.0,
+          "cpu_percent_overall": 32.4,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 398.42479133605957,
+          "package_temp_c": 76.0,
+          "cpu_percent_overall": 32.3,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 399.42833614349365,
+          "package_temp_c": 77.0,
+          "cpu_percent_overall": 32.3,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 400.43233823776245,
+          "package_temp_c": 76.0,
+          "cpu_percent_overall": 32.3,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 401.4357273578644,
+          "package_temp_c": 76.0,
+          "cpu_percent_overall": 32.3,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 402.4398002624512,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 32.3,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 403.44371366500854,
+          "package_temp_c": 75.0,
+          "cpu_percent_overall": 32.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 404.44671297073364,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 28.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 405.4497125148773,
+          "package_temp_c": 74.0,
+          "cpu_percent_overall": 27.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 406.45368695259094,
+          "package_temp_c": 73.0,
+          "cpu_percent_overall": 21.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 407.45768666267395,
+          "package_temp_c": 70.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 408.461713552475,
+          "package_temp_c": 72.0,
+          "cpu_percent_overall": 18.1,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 409.46580696105957,
+          "package_temp_c": 69.0,
+          "cpu_percent_overall": 18.0,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 410.46972274780273,
+          "package_temp_c": 71.0,
+          "cpu_percent_overall": 16.4,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 411.4737150669098,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 9.2,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 412.4777162075043,
+          "package_temp_c": 66.0,
+          "cpu_percent_overall": 7.3,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 413.48173332214355,
+          "package_temp_c": 64.0,
+          "cpu_percent_overall": 7.3,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 414.4857895374298,
+          "package_temp_c": 56.0,
+          "cpu_percent_overall": 3.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 415.492045879364,
+          "package_temp_c": 57.0,
+          "cpu_percent_overall": 3.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 416.4994761943817,
+          "package_temp_c": 56.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 417.5065677165985,
+          "package_temp_c": 57.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 418.51397466659546,
+          "package_temp_c": 55.0,
+          "cpu_percent_overall": 3.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 419.5214273929596,
+          "package_temp_c": 53.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 420.5290105342865,
+          "package_temp_c": 56.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 421.53610157966614,
+          "package_temp_c": 53.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 422.5437047481537,
+          "package_temp_c": 56.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 423.5515868663788,
+          "package_temp_c": 56.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 424.5591595172882,
+          "package_temp_c": 56.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 425.565798997879,
+          "package_temp_c": 59.0,
+          "cpu_percent_overall": 3.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 426.5722472667694,
+          "package_temp_c": 56.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 427.577712059021,
+          "package_temp_c": 57.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 428.58268451690674,
+          "package_temp_c": 56.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 429.586683511734,
+          "package_temp_c": 56.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 430.5907235145569,
+          "package_temp_c": 57.0,
+          "cpu_percent_overall": 3.8,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 431.59571862220764,
+          "package_temp_c": 56.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 432.5997214317322,
+          "package_temp_c": 56.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 433.60368514060974,
+          "package_temp_c": 56.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 434.60768818855286,
+          "package_temp_c": 56.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 435.6127076148987,
+          "package_temp_c": 52.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 436.6167116165161,
+          "package_temp_c": 55.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 437.6217210292816,
+          "package_temp_c": 53.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 438.62571120262146,
+          "package_temp_c": 56.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 439.6297106742859,
+          "package_temp_c": 53.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 440.63371181488037,
+          "package_temp_c": 53.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 441.6387143135071,
+          "package_temp_c": 53.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 442.6437213420868,
+          "package_temp_c": 56.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 443.6477110385895,
+          "package_temp_c": 55.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 444.6516840457916,
+          "package_temp_c": 53.0,
+          "cpu_percent_overall": 3.6,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 445.65569400787354,
+          "package_temp_c": 56.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        },
+        {
+          "elapsed_s": 446.65971326828003,
+          "package_temp_c": 57.0,
+          "cpu_percent_overall": 3.7,
+          "thermal_throttle_count": 2727636
+        }
+      ]
+    }
+  ]
+}

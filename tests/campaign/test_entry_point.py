@@ -148,7 +148,8 @@ def test_real_ppo_cli_smoke(tmp_path):
     for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
         env.pop(var, None)
     command = [sys.executable, "-m", "evodevo.campaign", "--config", str(config), "--output-root", str(root),
-               "--campaign-id", "cli-smoke", "--workers", "4", "--mode", "real", "--no-mirror"]
+               "--campaign-id", "cli-smoke", "--workers", "4", "--cpu-profile", "standard",
+               "--mode", "real", "--no-mirror"]
     result = subprocess.run(command, cwd=REPO_ROOT, capture_output=True, text=True, timeout=1200, env=env)
     output = result.stdout + result.stderr
     assert "BrokenProcessPool" not in output
@@ -194,6 +195,7 @@ def test_real_cli_graceful_group_sigint_exits_promptly(tmp_path):
     root = tmp_path / "campaigns"
     process = subprocess.Popen([sys.executable, "-m", "evodevo.campaign", "--config", str(config),
                                 "--output-root", str(root), "--campaign-id", "stop", "--workers", "20",
+                                "--cpu-profile", "standard",
                                 "--mode", "real", "--no-mirror", "--grace-s", "120"],
                                cwd=REPO_ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                text=True, start_new_session=True)

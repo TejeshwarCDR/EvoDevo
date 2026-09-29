@@ -24,7 +24,7 @@ from evodevo.parallel.threading_control import configure_threading
 configure_threading(1, strict=False)
 
 from evodevo.campaign.plan import CampaignPlan
-from evodevo.campaign.scheduler import CampaignScheduler
+from evodevo.campaign.scheduler import CampaignScheduler, DEFAULT_CPU_PROFILE, DEFAULT_WORKERS
 from evodevo.campaign.checkpoint import latest_checkpoint
 from evodevo.core.config import ExperimentConfig
 from evodevo.core.factors import extract_factors
@@ -73,7 +73,9 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="evodevo/experiments/configs/benchmark.yaml")
     parser.add_argument("--output-root", required=True)
-    parser.add_argument("--workers", type=int, default=20)
+    parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
+    parser.add_argument("--cpu-profile", choices=("thermal-validated", "standard", "e-cores"),
+                        default=DEFAULT_CPU_PROFILE)
     parser.add_argument("--evaluator", choices=("surrogate", "real"), default="surrogate")
     parser.add_argument("--existing-campaign-dir")
     parser.add_argument("--notifier-config", help="validation-only notifier config; defaults to an isolated nonexistent path")
@@ -98,6 +100,7 @@ def main(argv=None):
             workers=args.workers,
             mode="surrogate",
             no_mirror=True,
+            cpu_profile=args.cpu_profile,
         ).run()
 
     checked = []

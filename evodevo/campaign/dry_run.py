@@ -56,13 +56,14 @@ def operational_environment() -> dict:
     return {"kill_user_processes": kill, "sshd": sshd, "tmux_sessions": tmux}
 
 
-def estimate_applies(plan) -> tuple[bool, str]:
+def design_applies(plan) -> tuple[bool, str]:
     """The committed estimate models ONE design: the accepted campaign
     profile (4 arms x seeds 0-4, pop 15 / eval_budget 300, D6 timesteps,
     D16 K). Anything else gets no calendar rather than a wrong one."""
     from evodevo.experiments.benchmark import CAMPAIGN, PROFILES
     profile = PROFILES[CAMPAIGN]
-    design = json.loads(FINAL_ESTIMATE.read_text())["final_configuration"]["design"]
+    estimate = json.loads(FINAL_ESTIMATE.read_text())
+    design = estimate["final_configuration"]["design"]
     for phase in plan.phases:
         arms = sorted({run.arm for run in phase.runs})
         seeds = sorted({run.seed for run in phase.runs})
@@ -74,6 +75,23 @@ def estimate_applies(plan) -> tuple[bool, str]:
         if actual != expected:
             return False, f"{phase.task}: plan {actual} != estimated design {expected}"
     return True, "plan matches the estimated design exactly"
+
+
+def estimate_applies(plan, workers: int) -> tuple[bool, str]:
+    applies, reason = design_applies(plan)
+    if not applies:
+        return applies, reason
+    estimated_workers = json.loads(FINAL_ESTIMATE.read_text())["inputs"]["workers"]["n"]
+    if workers != estimated_workers:
+        return False, (f"worker count {workers} != committed estimate's "
+                       f"{estimated_workers}; no stale calendar is shown")
+    return True, reason
+
+
+def production_projection_applies(plan, args) -> bool:
+    from .production import PROFILE, WORKER_CPUS
+    return (args.workers == len(WORKER_CPUS) and args.cpu_profile == PROFILE
+            and design_applies(plan)[0])
 
 
 def render(args, plan, campaign_id) -> str:
@@ -106,17 +124,35 @@ def render(args, plan, campaign_id) -> str:
     out.append("")
 
     estimate = json.loads(FINAL_ESTIMATE.read_text())
-    applies, why = estimate_applies(plan)
+    applies, why = estimate_applies(plan, args.workers)
+    production_applies = production_projection_applies(plan, args)
     launch = dt.datetime.fromisoformat(args.launch_at) if args.launch_at else dt.datetime.now().replace(
         second=0, microsecond=0)
     result = estimate["guard_sequence"][-1]["result"]
     walker, upstepper, total = result["walker_phase_h"], result["upstepper_phase_h"], result["total_h"]
-    out.append(f"ESTIMATE ({FINAL_ESTIMATE.relative_to(REPO_ROOT)}, {estimate['n_trials']} Monte Carlo "
-               f"trials; pre-registered budget guard: p95 <= {GUARD_H:.0f} h -> guard step applied: "
-               f"{estimate['guard_outcome']})")
-    if not applies:
+    if production_applies:
+        from .production_runtime import projection
+        measured = projection()
+        out.append(f"THERMAL-VALIDATED PROJECTION ({measured['source']}; measured "
+                   f"{measured['measured_genomes_per_minute']:.2f} genomes/min)")
+        out.append(f"  projected total: about {measured['total_h']:.1f} h "
+                   f"({measured['total_h'] / 24:.1f} days); this is a rate-scaled projection, "
+                   "not a new confidence interval")
+        out.append(f"  Walker-v0 phase: about {measured['walker_h']:.1f} h; UpStepper-v0 phase: "
+                   f"about {measured['upstepper_h']:.1f} h")
+        out.append(f"  Walker milestone at about {100 * measured['walker_fraction']:.1f}% of total runtime")
+        out.append(f"  CALENDAR from launch {_stamp(launch)} (local time; approximate)")
+        out.append(f"    Walker milestone / phase end: {_stamp(launch + dt.timedelta(hours=measured['walker_h']))}")
+        out.append(f"    campaign end:                 {_stamp(launch + dt.timedelta(hours=measured['total_h']))}")
+    elif not applies:
+        out.append(f"ESTIMATE ({FINAL_ESTIMATE.relative_to(REPO_ROOT)}, {estimate['n_trials']} Monte Carlo "
+                   f"trials; pre-registered budget guard: p95 <= {GUARD_H:.0f} h -> guard step applied: "
+                   f"{estimate['guard_outcome']})")
         out.append(f"  NOT APPLICABLE to this plan ({why}); no calendar is shown.")
     else:
+        out.append(f"ESTIMATE ({FINAL_ESTIMATE.relative_to(REPO_ROOT)}, {estimate['n_trials']} Monte Carlo "
+                   f"trials; pre-registered budget guard: p95 <= {GUARD_H:.0f} h -> guard step applied: "
+                   f"{estimate['guard_outcome']})")
         out.append(f"  total: mean {total['mean']:.1f} h, p5 {total['p5']:.1f} h, p95 {total['p95']:.1f} h "
                    f"({'within' if total['p95'] <= GUARD_H else 'OVER'} the {GUARD_H:.0f} h guard)")
         out.append(f"  Walker-v0 phase: mean {walker['mean']:.1f} h (p5 {walker['p5']:.1f}, p95 {walker['p95']:.1f}); "
@@ -135,11 +171,12 @@ def render(args, plan, campaign_id) -> str:
 
     refusals, record = launch_refusals(args)
     disk = json.loads(DISK_ESTIMATE.read_text())
+    disk_applies = applies or production_applies
     need = disk["three_x_total_bytes"] / 1e9
     main_free = _free_gb(args.output_root)
     out.append(f"DISK ({DISK_ESTIMATE.relative_to(REPO_ROOT)}): projected {disk['total_bytes'] / 1e9:.1f} GB; "
                f"D10 3x margin requires {need:.1f} GB free"
-               + ("" if applies else " (projection is for the estimated design, not this plan)"))
+               + ("" if disk_applies else " (projection is for the estimated design, not this plan)"))
     out.append(f"  main ({_existing(args.output_root)}): {main_free:.1f} GB free -> "
                f"{'OK' if main_free >= need else 'INSUFFICIENT'}")
     if args.no_mirror:
@@ -164,11 +201,12 @@ def render(args, plan, campaign_id) -> str:
     out.append("")
 
     topology = detect_topology()
-    affinity, scheduler_cpus = cpu_placement(topology, args.workers)
+    affinity, scheduler_cpus = cpu_placement(topology, args.workers, args.cpu_profile)
     kinds = {core.logical_id: ("P-primary" if core.kind == "P" and core.is_physical_primary else
                                "P-sibling" if core.kind == "P" else core.kind + "-core")
              for core in topology.cores}
-    out.append(f"CPU PLACEMENT (computed, not applied): {args.workers} workers, one CPU each"
+    out.append(f"CPU PLACEMENT (computed, not applied): profile={args.cpu_profile}; "
+               f"{args.workers} workers, one CPU each"
                + (" -- OVERSUBSCRIBED" if affinity.oversubscribed else ""))
     for slot, cpus in enumerate(affinity.slots):
         out.append(f"  worker {slot:>2}: cpu {','.join(map(str, cpus))} ({kinds.get(cpus[0], '?')})")

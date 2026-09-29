@@ -7,13 +7,15 @@ from pathlib import Path
 import pytest
 from evodevo.campaign.plan import CampaignPlan, PhasePlan, RunPlan
 from evodevo.campaign.journal import ResultJournal
-from evodevo.campaign.scheduler import CampaignScheduler, resume_command
+from evodevo.campaign.production import E_WORKER_CPUS, P_WORKER_CPUS, SCHEDULER_CPUS
+from evodevo.campaign.scheduler import CampaignScheduler, cpu_placement, resume_command
 from evodevo.core.config import ExperimentConfig
 from evodevo.core.factors import extract_factors
 from evodevo.encoders import get_encoder
 from evodevo.evaluation.ppo_runner import evaluate_body_surrogate
 from evodevo.evolution.ea import run_ea
 from evodevo.evolution.logging import RunLogger
+from evodevo.parallel.topology import detect_topology
 
 
 def _plan(tmp_path):
@@ -42,6 +44,53 @@ def test_resume_command_preserves_every_nondefault_launch_option():
         "--config", "/tmp/custom benchmark.yaml", "--output-root", "/tmp/campaigns",
         "--workers", "8", "--mode", "surrogate", "--grace-s", "45.0",
         "--mirror-dir", "/mnt/mirror disk"]
+
+
+def test_thermal_profile_resume_uses_the_power_held_production_launcher():
+    args = argparse.Namespace(config="campaign.yaml", output_root="results/campaign",
+        workers=18, cpu_profile="thermal-validated", mode="real", grace_s=120.0,
+        no_mirror=False, mirror_dir="/mnt/backup", prefetch=4, no_notify=False,
+        allow_same_disk_mirror=False, stamp=None, local_config=None)
+    assert shlex.split(resume_command(args, "campaign-01")) == [
+        "scripts/campaign/run_production_campaign.sh", "--resume", "campaign-01",
+        "--config", "campaign.yaml", "--output-root", "results/campaign",
+        "--grace-s", "120.0", "--mirror-dir", "/mnt/backup"]
+
+
+def test_e_core_profile_reserves_two_e_cores_for_scheduler():
+    topology = detect_topology()
+    if len(topology.e_core_ids) < 12:
+        pytest.skip("thermal campaign profile targets the 12-E-core lab machine")
+    workers, scheduler_cpus = cpu_placement(topology, 10, "e-cores")
+    assert [slot[0] for slot in workers.slots] == list(topology.e_core_ids[:10])
+    assert scheduler_cpus == list(topology.e_core_ids[10:])
+    assert not ({slot[0] for slot in workers.slots} & set(scheduler_cpus))
+
+
+def test_e_core_profile_refuses_to_consume_scheduler_reserve():
+    topology = detect_topology()
+    if len(topology.e_core_ids) < 12:
+        pytest.skip("thermal campaign profile targets the 12-E-core lab machine")
+    with pytest.raises(ValueError, match="at least one E-core must remain"):
+        cpu_placement(topology, len(topology.e_core_ids), "e-cores")
+
+
+def test_thermal_validated_profile_is_exact_and_reserves_control_e_cores():
+    topology = detect_topology()
+    if topology.logical_count < 28:
+        pytest.skip("thermal campaign profile targets the 28-logical-CPU lab machine")
+    workers, scheduler_cpus = cpu_placement(topology, 18, "thermal-validated")
+    assert [slot[0] for slot in workers.slots] == list(P_WORKER_CPUS + E_WORKER_CPUS)
+    assert scheduler_cpus == list(SCHEDULER_CPUS)
+    assert not ({slot[0] for slot in workers.slots} & set(scheduler_cpus))
+
+
+def test_thermal_validated_profile_refuses_any_other_worker_count():
+    topology = detect_topology()
+    if topology.logical_count < 28:
+        pytest.skip("thermal campaign profile targets the 28-logical-CPU lab machine")
+    with pytest.raises(ValueError, match="exactly 18 workers"):
+        cpu_placement(topology, 17, "thermal-validated")
 
 
 def test_surrogate_shared_phase_matches_serial_and_resume(tmp_path, monkeypatch):

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: scripts/campaign/run_campaign.sh [--resume ID|latest] [--campaign-id ID] [--config FILE] [--local-config FILE] [--output-root DIR] [--mirror-dir DIR|--no-mirror] [--workers N] [--mode real|surrogate|validation] [--grace-s SEC] [--prefetch N] [--no-notify] [--allow-same-disk-mirror] [--dry-run [--launch-at ISO]] [--stamp TEXT]"
+  echo "Usage: scripts/campaign/run_campaign.sh [--resume ID|latest] [--campaign-id ID] [--config FILE] [--local-config FILE] [--output-root DIR] [--mirror-dir DIR|--no-mirror] [--workers N] [--cpu-profile thermal-validated|standard|e-cores] [--mode real|surrogate|validation] [--grace-s SEC] [--prefetch N] [--no-notify] [--allow-same-disk-mirror] [--wait-for-campaign] [--dry-run [--launch-at ISO]] [--stamp TEXT]"
 }
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -13,7 +13,11 @@ OUTPUT_ROOT="results/campaign"
 CONFIG="evodevo/experiments/configs/benchmark.yaml"
 MIRROR_DIR=""
 NO_MIRROR=0
-WORKERS=20
+# Validated production configuration: 8 P-core primaries plus E16--25;
+# E26--27 remain exclusively available to scheduler/control work.  Real mode
+# additionally refuses launch unless RAPL/frequency/turbo state is verified.
+WORKERS=18
+CPU_PROFILE=thermal-validated
 MODE=real
 GRACE_S=120
 PREFETCH=4
@@ -23,6 +27,7 @@ DRY_RUN=0
 LAUNCH_AT=""
 STAMP=""
 LOCAL_CONFIG=""
+WAIT_FOR_CAMPAIGN=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --help|-h) usage; exit 0 ;;
@@ -34,11 +39,13 @@ while [[ $# -gt 0 ]]; do
     --mirror-dir) MIRROR_DIR="$2"; shift 2 ;;
     --no-mirror) NO_MIRROR=1; shift ;;
     --workers) WORKERS="$2"; shift 2 ;;
+    --cpu-profile) CPU_PROFILE="$2"; shift 2 ;;
     --mode) MODE="$2"; shift 2 ;;
     --grace-s) GRACE_S="$2"; shift 2 ;;
     --prefetch) PREFETCH="$2"; shift 2 ;;
     --no-notify) NO_NOTIFY=1; shift ;;
     --allow-same-disk-mirror) ALLOW_SAME_DISK=1; shift ;;
+    --wait-for-campaign) WAIT_FOR_CAMPAIGN=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     --launch-at) LAUNCH_AT="$2"; shift 2 ;;
     --stamp) STAMP="$2"; shift 2 ;;
@@ -50,7 +57,8 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   # Writes nothing: no run directory, tmux session, mirror copy or bytecode.
   DRY=(env PYTHONDONTWRITEBYTECODE=1 "EVODEVO_NOTIFY_CONFIG=${EVODEVO_NOTIFY_CONFIG:-$REPO_ROOT/campaign.local.yaml}"
        .venv/bin/python -m evodevo.campaign --dry-run --config "$CONFIG" --output-root "$OUTPUT_ROOT"
-       --workers "$WORKERS" --mode "$MODE" --prefetch "$PREFETCH")
+       --workers "$WORKERS" --cpu-profile "$CPU_PROFILE" --mode "$MODE" --prefetch "$PREFETCH")
+  if [[ "$MODE" == real ]]; then DRY+=(--production-power); fi
   if [[ -n "$LOCAL_CONFIG" ]]; then DRY+=(--local-config "$LOCAL_CONFIG"); fi
   if [[ -n "$RESUME" ]]; then DRY+=(--resume "$RESUME"); elif [[ -n "$CAMPAIGN_ID" ]]; then DRY+=(--campaign-id "$CAMPAIGN_ID"); fi
   if [[ "$NO_MIRROR" -eq 1 ]]; then DRY+=(--no-mirror); elif [[ -n "$MIRROR_DIR" ]]; then DRY+=(--mirror-dir "$MIRROR_DIR"); fi
@@ -112,7 +120,8 @@ fi
 ulimit -n 65535
 RUN_DIR="$OUTPUT_ROOT/$CAMPAIGN_ID"
 NOTIFY_CONFIG="${LOCAL_CONFIG:-${EVODEVO_NOTIFY_CONFIG:-$REPO_ROOT/campaign.local.yaml}}"
-CMD=(env "EVODEVO_NOTIFY_CONFIG=$NOTIFY_CONFIG" .venv/bin/python -m evodevo.campaign --config "$CONFIG" --output-root "$OUTPUT_ROOT" --workers "$WORKERS" --mode "$MODE" --grace-s "$GRACE_S" --prefetch "$PREFETCH")
+CMD=(env "EVODEVO_NOTIFY_CONFIG=$NOTIFY_CONFIG" .venv/bin/python -m evodevo.campaign --config "$CONFIG" --output-root "$OUTPUT_ROOT" --workers "$WORKERS" --cpu-profile "$CPU_PROFILE" --mode "$MODE" --grace-s "$GRACE_S" --prefetch "$PREFETCH")
+if [[ "$MODE" == real ]]; then CMD+=(--production-power); fi
 if [[ -n "$LOCAL_CONFIG" ]]; then CMD+=(--local-config "$LOCAL_CONFIG"); fi
 if [[ -n "$RESUME" ]]; then CMD+=(--resume "$RESUME"); else CMD+=(--campaign-id "$CAMPAIGN_ID"); fi
 if [[ "$NO_MIRROR" -eq 1 ]]; then CMD+=(--no-mirror); else CMD+=(--mirror-dir "$MIRROR_DIR"); fi
@@ -160,4 +169,27 @@ tmux "${TMUX_ARGS[@]}" new-window -d -t evodevo-campaign -n scheduler \
 tmux "${TMUX_ARGS[@]}" new-window -d -t evodevo-campaign -n monitor \
   "env EVODEVO_NOTIFY_CONFIG=$NOTIFY_QUOTED .venv/bin/python -m evodevo.campaign.monitor --campaign '$CAMPAIGN_ID' --output-root '$OUTPUT_ROOT'"
 echo "Started campaign $CAMPAIGN_ID in tmux session evodevo-campaign."
+if [[ "$WAIT_FOR_CAMPAIGN" -eq 1 ]]; then
+  # This mode is used only by the root power-control supervisor.  Keeping this
+  # user-owned process alive lets its parent retain the selected RAPL/frequency
+  # controls until the scheduler has actually stopped, rather than restoring
+  # them immediately after detaching into tmux.
+  interrupted=0
+  stop_and_return() {
+    interrupted=1
+    trap - INT TERM HUP
+    scripts/campaign/stop_campaign.sh --campaign "$CAMPAIGN_ID" --output-root "$OUTPUT_ROOT" --grace-s "$GRACE_S" || true
+  }
+  trap stop_and_return INT TERM HUP
+  while scheduler_alive "$CAMPAIGN_ID"; do sleep 5; done
+  trap - INT TERM HUP
+  if tmux "${TMUX_ARGS[@]}" has-session -t evodevo-campaign 2>/dev/null; then
+    OWNER="$(tmux "${TMUX_ARGS[@]}" show-environment -t evodevo-campaign EVODEVO_CAMPAIGN_ID 2>/dev/null || true)"
+    if [[ "$OWNER" == "EVODEVO_CAMPAIGN_ID=$CAMPAIGN_ID" ]]; then
+      tmux "${TMUX_ARGS[@]}" kill-session -t evodevo-campaign
+    fi
+  fi
+  if [[ "$interrupted" -eq 1 ]]; then exit 128; fi
+  exit 0
+fi
 if [[ -t 0 && -t 1 ]]; then tmux "${TMUX_ARGS[@]}" attach-session -t evodevo-campaign; fi

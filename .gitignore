@@ -29,3 +29,9 @@ results/campaign_prep/
 results/campaign/
 campaign.local.yaml
 CAMPAIGN_COMPLETE.txt
+
+# Large derived views of the thermal study.  The final selection report,
+# benchmark harness, analysis script and raw JSON telemetry are versioned;
+# these can be regenerated from them.
+results/thermal_worker_study/FINAL_SELECTION_*.json
+results/thermal_worker_study/SELECTION_GATES_*

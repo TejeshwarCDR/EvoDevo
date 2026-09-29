@@ -1,0 +1,9 @@
+{"kind": "stage_start", "payload": {}, "stage": "machine_profile", "ts": "2026-09-29T11:26:38.367601+00:00"}
+{"kind": "measurement", "payload": {"disk_write_rate_mb_s": 378.96}, "stage": "machine_profile", "ts": "2026-09-29T11:26:39.637567+00:00"}
+{"kind": "stage_end", "payload": {"duration_s": 1.2720129489898682}, "stage": "machine_profile", "ts": "2026-09-29T11:26:39.638598+00:00"}
+{"kind": "stage_start", "payload": {}, "stage": "concurrency_sweep", "ts": "2026-09-29T11:26:39.640335+00:00"}
+{"kind": "measurement", "payload": {"n_genomes": 160, "visit_order": [12, 14, 8, 16, 10, 18], "workload_hash": "15e34acba139f7c19f8e39f4ed8740f96231d1e2671b920bdffafc4bc095b5ce"}, "stage": "concurrency_sweep", "ts": "2026-09-29T11:26:39.663904+00:00"}
+{"kind": "measurement", "payload": {"warm_up_level_start": 8}, "stage": "concurrency_sweep", "ts": "2026-09-29T11:26:39.664160+00:00"}
+{"kind": "stage_start", "payload": {}, "stage": "concurrency_sweep", "ts": "2026-09-29T11:27:43.080141+00:00"}
+{"kind": "measurement", "payload": {"n_genomes": 160, "visit_order": [14, 18, 16, 10, 8, 12], "workload_hash": "15e34acba139f7c19f8e39f4ed8740f96231d1e2671b920bdffafc4bc095b5ce"}, "stage": "concurrency_sweep", "ts": "2026-09-29T11:27:43.138541+00:00"}
+{"kind": "measurement", "payload": {"warm_up_level_start": 8}, "stage": "concurrency_sweep", "ts": "2026-09-29T11:27:43.138806+00:00"}
