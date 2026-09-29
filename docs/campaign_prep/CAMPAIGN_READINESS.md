@@ -1,5 +1,10 @@
 # EvoDevo Campaign Readiness
 
+## Regenerated 2026-09-29 — final pre-launch status
+
+**Verdict: READY, subject only to the operator-owned launch checklist. The real campaign has NOT been started.** This current status supersedes the historical 2026-09-28 report retained below for provenance. See the repository-root copy for the complete current summary: continuous dispatch passed the unchanged 405.9 h p95 guard; conformance, Step-6 recovery/equivalence, 40-run flake evidence, operational hardening, and the real-PPO launcher mini validation all passed. Full suite: 1089 passed, 33 warnings, 891.19 s. Remaining operator items are notifier delivery, cooling/reservation, persistent backup mount, an otherwise idle machine (including AnyDesk), and ending the old `evodevo-preflight` session before any real launch.
+
+
 Regenerated 2026-09-28 after fixing the blocking launcher bug and every gap in
 the previous report (commit `ab8f73d`), then re-running the full validation
 **through the real launcher** (`scripts/campaign/run_campaign.sh` →

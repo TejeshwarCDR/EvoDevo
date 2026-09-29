@@ -1,5 +1,48 @@
 # EvoDevo Campaign Readiness
 
+## Regenerated 2026-09-29 — final pre-launch status
+
+**Verdict: READY, subject only to the operator-owned launch checklist. The real
+campaign has NOT been started.** This current status supersedes the historical
+2026-09-28 report retained below for provenance.
+
+- Git readiness checkpoint: `d455a83` plus `fcdaae2`; tree clean after the
+  report commit. The pre-registered plan remains unedited. Continuous
+  per-run dispatch is ADR-conformant; the unchanged guard passed at 403.2 h
+  mean / 405.9 h p95 (base p95 <= 432 h), Walker milestone 30.5%.
+- Step 5 conformance passed: Walker 4,750.776 s vs 4,766.727 s simulated
+  (0.335%), 99.692% vs 99.536% steady utilization; UpStepper 4,410.275 s vs
+  4,458.073 s (1.072%), 98.495% vs 97.854%. Both are inside the 5% / 3-point
+  gates. The remote-aware idle gate retains competing-work detection while
+  allowing bounded AnyDesk/GNOME/Xorg/VS Code/Claude/Codex baseline activity.
+- Step 6 re-proofs passed: 12,000 surrogate records and 480 real-PPO records
+  matched serial references; 20 surrogate and 3 real SIGKILL resumes matched;
+  10/10 graceful stops completed in 0.048–1.913 s with no survivors; crash,
+  timeout, hash/config refusal paths passed.
+- Step 7: 20 idle + 20 eight-busy-loop `tests/campaign` runs passed (40
+  consecutive). The old intermittent failure was not reproduced and is
+  explicitly unproven, not claimed fixed.
+- Step 8: dashboard/heartbeat worker utilization, sustained low-utilization
+  and >40 GiB worker-RSS alerts, NTFS-safe tree checks, transcript projection
+  (0.13 MB/18 d), `--local-config`, commented local-config example, and
+  dry-run operational facts are implemented. Long-task/RSS sampling limits
+  are documented in `docs/decisions.md`.
+- Step 9 real launcher/tmux/PPO mini validation passed: 480 body+genome
+  records; 204 valid evaluations => exactly 305 journal tasks/policies; all
+  policies reload; 20 distinct worker CPUs, spare scheduler siblings, one
+  thread, inhibitor, phase/daily alerts, milestone package, and final
+  761-file mirror/checksum verification passed. Full suite: 1089 passed,
+  33 warnings, 891.19 s.
+- Operator checklist before a real launch: confirm notifier delivery; reserve
+  the machine/cooling; confirm backup mount persistence; make the machine
+  otherwise idle (including stop AnyDesk); and end the old
+  `evodevo-preflight` tmux session. The dry-run reports sshd active and
+  `KillUserProcesses` unavailable from this session; verify that policy at
+  launch. Use `scripts/campaign/run_campaign.sh --dry-run --mirror-dir
+  /mnt/evodevo-backup --launch-at <next-00:00>` then the same launcher without
+  `--dry-run`. Never use same-disk mirror or no-notify for the real campaign.
+
+
 Regenerated 2026-09-28 after fixing the blocking launcher bug and every gap in
 the previous report (commit `ab8f73d`), then re-running the full validation
 **through the real launcher** (`scripts/campaign/run_campaign.sh` →
