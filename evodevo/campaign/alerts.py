@@ -21,6 +21,11 @@ REN_NOTIFY_S = 6 * 3600
 HEARTBEAT_S = 24 * 3600
 TEMPERATURE_SUSTAIN_S = 10 * 60
 PARTIAL_STALL_S = 3600
+LOW_UTILIZATION_S = 2 * 3600
+WORKER_RSS_LIMIT_BYTES = 40 * 1024 ** 3
+# Step 5 steady-state measurements, minus the fixed 15 percentage-point
+# production guard margin.  These are operational thresholds, not estimates.
+UTILIZATION_FLOOR = {"Walker-v0": 0.996922 - 0.15, "UpStepper-v0": 0.984949 - 0.15}
 
 
 DEFAULT_NOTIFY_CONFIG = "campaign.local.yaml"
@@ -88,6 +93,7 @@ class AlertManager:
         self._last_notice = {}
         self._temp_since = None
         self._low_rate_since = None
+        self._low_utilization_since = None
         self._last_heartbeat = None
         self._last_throttle_count = None
         self._temp_24h = deque()
@@ -133,6 +139,12 @@ class AlertManager:
                 self._low_rate_since = self._low_rate_since or stamp
             else:
                 self._low_rate_since = None
+        if name == "worker_utilization" and stamp >= cutoff:
+            details = row.get("details", {})
+            if details.get("below_floor"):
+                self._low_utilization_since = self._low_utilization_since or stamp
+            else:
+                self._low_utilization_since = None
 
     def _refresh_locked(self, handle, *, restore_timers=False):
         handle.seek(self._journal_offset)
@@ -228,6 +240,20 @@ class AlertManager:
             self._low_rate_since = None
         self.evaluate("partial_stall", self._low_rate_since is not None and stamp - self._low_rate_since >= PARTIAL_STALL_S,
                       {"current_per_h": rate, "median_24h_per_h": median})
+        task = snapshot.get("phase")
+        floor = UTILIZATION_FLOOR.get(task)
+        utilisation = snapshot.get("worker_utilization_last_hour")
+        final_tail = snapshot.get("phase_completion_fraction", 0.0) >= 0.95
+        below = (isinstance(utilisation, (int, float)) and floor is not None and
+                 utilisation < floor and not final_tail)
+        self._low_utilization_since = self._low_utilization_since or stamp if below else None
+        self.evaluate("worker_utilization", self._low_utilization_since is not None and
+                      stamp - self._low_utilization_since >= LOW_UTILIZATION_S,
+                      {"last_hour_busy_fraction": utilisation, "floor": floor,
+                       "phase": task, "below_floor": below, "excluded_final_5pct": final_tail})
+        rss = snapshot.get("worker_rss_bytes")
+        self.evaluate("worker_rss", isinstance(rss, (int, float)) and rss > WORKER_RSS_LIMIT_BYTES,
+                      {"rss_bytes": rss, "limit_bytes": WORKER_RSS_LIMIT_BYTES})
         if self._last_heartbeat is None or stamp - self._last_heartbeat >= HEARTBEAT_S:
             self.heartbeat(snapshot)
 

@@ -7,10 +7,11 @@ import time
 from pathlib import Path
 
 from evodevo.campaign.alerts import AlertManager, REN_NOTIFY_S
-from evodevo.campaign.dashboard import _when, collect, render
+from evodevo.campaign.dashboard import _when, collect, render, worker_utilization
 from evodevo.campaign.monitor import SNAPSHOT_S, monitor_once, slowest_ecore_p95_s
 from evodevo.campaign.mirror import sync, verify_mirror, verify_checksum_manifest
 from evodevo.campaign.milestone import build, REQUIRED, run_subprocess
+from evodevo.campaign.path_safety import assert_ntfs_safe_tree, ntfs_unsafe_paths
 
 
 class SpyNotifier:
@@ -142,6 +143,42 @@ def test_all_alert_conditions_and_daily_heartbeat(tmp_path):
             "swap", "mirror_failed", "partial_stall", "daily_heartbeat"} <= active
     temp = next(r for r in reversed(rows) if r["condition"] == "temperature")
     assert temp["details"]["throttled"] is True
+
+
+def test_utilization_and_worker_rss_alerts_are_sustained_and_tail_safe(tmp_path):
+    clock = [1000.0]
+    spy = SpyNotifier()
+    alerts = AlertManager(tmp_path / "alerts.jsonl", notifier=spy, now=lambda: clock[0])
+    snapshot = {"phase": "Walker-v0", "worker_utilization_last_hour": 0.5,
+                "phase_completion_fraction": 0.5, "worker_rss_bytes": 41 * 1024 ** 3,
+                "main_disk_free_gb": 200, "mirror_disk_free_gb": 200}
+    alerts.inspect(snapshot, p95_ecore_s=100)
+    clock[0] += 2 * 3600 + 1
+    alerts.inspect(snapshot, p95_ecore_s=100)
+    active = {json.loads(line)["condition"] for line in (tmp_path / "alerts.jsonl").read_text().splitlines()
+              if json.loads(line)["status"] == "active"}
+    assert {"worker_utilization", "worker_rss"} <= active
+    snapshot["phase_completion_fraction"] = 0.96
+    clock[0] += 60
+    alerts.inspect(snapshot, p95_ecore_s=100)
+    rows = [json.loads(line) for line in (tmp_path / "alerts.jsonl").read_text().splitlines()]
+    assert [row for row in rows if row["condition"] == "worker_utilization"][-1]["status"] == "clear"
+
+
+def test_worker_utilization_clips_task_intervals_to_each_window():
+    rows = [{"result": {"started_at": 50.0, "finished_at": 150.0}},
+            {"result": {"started_at": 125.0, "finished_at": 175.0}}]
+    assert worker_utilization(rows, 2, 100.0, 200.0) == 0.5
+
+
+def test_campaign_and_snapshot_names_are_ntfs_safe(tmp_path):
+    safe = tmp_path / "campaign" / "milestones" / "snapshots" / "20260929T000000Z"
+    safe.mkdir(parents=True)
+    (safe / "package_manifest.json").write_text("{}")
+    assert_ntfs_safe_tree(tmp_path / "campaign")
+    bad = tmp_path / "campaign" / "bad:name"
+    bad.mkdir()
+    assert ntfs_unsafe_paths(tmp_path / "campaign") == ["bad:name"]
 
 
 def test_temperature_throttle_requires_tjmax_proximity(tmp_path):

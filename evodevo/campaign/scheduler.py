@@ -61,12 +61,14 @@ def cpu_placement(topology, workers):
 class CampaignScheduler:
     def __init__(self, plan, campaign_id: str, output_root="results/campaign", workers=20,
                  mode="real", grace_s=120, mirror_dir=None, no_mirror=False,
-                 allow_same_disk_mirror=False, prefetch=4):
+                 allow_same_disk_mirror=False, prefetch=4, local_config=None):
         self.plan, self.campaign_id, self.mode, self.grace_s = plan, campaign_id, mode, grace_s
         self.allow_same_disk_mirror = allow_same_disk_mirror
         self.root = os.path.join(output_root, campaign_id)
         self.journal = ResultJournal(os.path.join(self.root, "journal.jsonl"))
-        self.alerts = AlertManager(os.path.join(self.root, "alerts.jsonl"))
+        from .alerts import Notifier, load_local_config
+        self.alerts = AlertManager(os.path.join(self.root, "alerts.jsonl"),
+                                   notifier=Notifier(load_local_config(local_config)))
         self.mirror_dir, self.no_mirror = mirror_dir, no_mirror
         self.prefetch = prefetch
         topology = detect_topology()
@@ -102,12 +104,27 @@ class CampaignScheduler:
             json.dump(current, handle, indent=2, sort_keys=True)
         os.replace(temporary, path)
 
-    def _dispatch_status(self, running: int, queued: int, task=None, generations=None):
+    @staticmethod
+    def _worker_rss_bytes(pids):
+        total = 0
+        for pid in pids:
+            try:
+                for line in open(f"/proc/{pid}/status", encoding="ascii", errors="replace"):
+                    if line.startswith("VmRSS:"):
+                        total += int(line.split()[1]) * 1024
+                        break
+            except (OSError, ValueError, IndexError):
+                continue
+        return total
+
+    def _dispatch_status(self, running: int, queued: int, task=None, generations=None, worker_pids=()):
         path = os.path.join(self.root, "dispatch_status.json")
         temporary = path + ".tmp"
         with open(temporary, "w", encoding="utf-8") as handle:
             json.dump({"tasks_running": running, "tasks_queued": queued,
                        "task": task, "run_generations": generations or {},
+                       "worker_pids": list(worker_pids),
+                       "worker_rss_bytes": self._worker_rss_bytes(worker_pids),
                        "updated_at": time.time()}, handle)
         os.replace(temporary, path)
 
@@ -287,7 +304,7 @@ class CampaignScheduler:
                     max_inflight = max(max_inflight, core.inflight_count)
             self._dispatch_status(core.inflight_count, core.ready_count, phase.task,
                                   {key: ctx[3].generation for key, ctx in by_run.items()
-                                   if not ctx[3].done})
+                                   if not ctx[3].done}, pool.worker_pids if pool is not None else ())
             wall_finished = time.time()
             component_busy["refill"] += time.perf_counter() - measured_started
             scheduler_intervals.append((wall_started, wall_finished, "refill"))
@@ -472,6 +489,8 @@ def resume_command(args, campaign_id):
         command.append("--allow-same-disk-mirror")
     if getattr(args, "stamp", None):
         command.extend(["--stamp", args.stamp])
+    if getattr(args, "local_config", None):
+        command.extend(["--local-config", args.local_config])
     return shlex.join(command)
 
 
@@ -493,6 +512,8 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
     parser.add_argument("--no-notify", action="store_true",
                         help="explicitly run a REAL campaign with no out-of-band notifier "
                              "(recorded in the manifest; permanent dashboard warning)")
+    parser.add_argument("--local-config",
+                        help="notifier config path (default: campaign.local.yaml; environment remains supported)")
     parser.add_argument("--allow-same-disk-mirror", action="store_true",
                         help="explicitly accept a mirror on the SAME physical disk as the results "
                              "(recorded in the manifest; permanent dashboard warning)")
@@ -567,7 +588,8 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
         return 0
     scheduler = CampaignScheduler(plan, campaign_id, args.output_root, args.workers,
         args.mode, args.grace_s, args.mirror_dir, args.no_mirror,
-        allow_same_disk_mirror=args.allow_same_disk_mirror, prefetch=args.prefetch)
+        allow_same_disk_mirror=args.allow_same_disk_mirror, prefetch=args.prefetch,
+        local_config=args.local_config)
     scheduler._manifest(git_commit=subprocess.check_output(["git", "rev-parse", "HEAD"],
         cwd=repo_root, text=True).strip(), launch_checks=launch_record,
         no_notify=bool(args.no_notify))

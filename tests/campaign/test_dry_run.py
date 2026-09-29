@@ -49,6 +49,7 @@ def test_run_script_dry_run_writes_nothing_and_prints_everything(tmp_path):
                    "campaign end", "2026-10-06", "2026-10-17", "config hash: ", "git commit: ", "dirty tree: ",
                    "DISK (", "main (", "mirror (", "MIRROR PHYSICAL DISK", "same physical disk: True",
                    "NOTIFIER:", "configured (shell_command)", "CPU PLACEMENT", "worker  0: cpu", "scheduler: cpus",
+                   "OPERATIONAL ENVIRONMENT", "systemd KillUserProcesses", "sshd active", "existing tmux sessions",
                    "LAUNCH CHECKS: WOULD BE REFUSED", "share physical disk"):
         assert needle in out, (needle, out)
 

@@ -1,0 +1,6 @@
+# Local notification configuration for an EvoDevo campaign.
+# Copy to campaign.local.yaml (which is intentionally ignored) and uncomment
+# exactly the delivery channel(s) you own.  Values are never committed.
+
+# ntfy_topic_url: https://ntfy.example.org/your-private-topic
+# shell_command: ["/absolute/path/to/your-notifier", "--campaign", "evodevo"]

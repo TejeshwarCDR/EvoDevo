@@ -541,6 +541,11 @@ class EvaluationPool:
     def ppo_failure_counts(self) -> dict:
         return {key: value for key, value in self._ppo_failure_count.items() if value}
 
+    @property
+    def worker_pids(self) -> list[int]:
+        """Live worker PIDs for read-only campaign health telemetry."""
+        return [int(pid) for pid in self._ppo_worker_pids if int(pid) > 0]
+
     def map_ppo_tasks(self, tasks: Iterable, timeout_s: float | None = None,
                       should_stop=None, grace_s: float = 120):
         """Compatibility iterator over the asynchronous PPO interface."""

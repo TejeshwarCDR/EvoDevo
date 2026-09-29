@@ -160,3 +160,24 @@ def test_run_script_refuses_without_notifier_before_creating_tmux(tmp_path):
         assert not (tmp_path / "out" / "nonotify").exists()
     finally:
         subprocess.run(["tmux", "-L", socket, "kill-server"], capture_output=True)
+
+
+def test_explicit_local_config_is_used_for_launch_checks(tmp_path):
+    notify = tmp_path / "local.yaml"
+    notify.write_text("shell_command: 'true'\n")
+    config = tmp_path / "smoke.yaml"
+    config.write_text(
+        "profile: campaign\nencoders: [direct]\ntasks: [Walker-v0]\nseeds: [0]\n"
+        f"configs_root: {REPO_ROOT}/evodevo/experiments/configs\noutput_dir: results/runs\n"
+        "surrogate: false\nfactors: {dev_steps: 100, init_condition: center_seed}\n"
+        "profile_overrides: {population_size: 2, offspring_size: 2, eval_budget: 2, "
+        "ppo_timesteps: {Walker-v0: 500}, ppo_seeds: {Walker-v0: 1}}\n")
+    result = subprocess.run([sys.executable, "-m", "evodevo.campaign", "--check-only", "--config", str(config),
+                             "--output-root", str(tmp_path / "out"), "--campaign-id", "local", "--mode", "real",
+                             "--no-mirror", "--local-config", str(notify)], cwd=REPO_ROOT,
+                            capture_output=True, text=True, timeout=180)
+    if project_is_dirty(REPO_ROOT):
+        assert "dirty" in result.stderr
+    else:
+        assert result.returncode == 0, result.stderr
+        assert str(notify) in result.stdout

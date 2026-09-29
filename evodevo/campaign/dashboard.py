@@ -27,6 +27,27 @@ GUARD_H = 432.0
 E_CORE_FACTOR = 2.3172
 
 
+def worker_utilization(rows, worker_count, start, end):
+    """Aggregate completed PPO wall time over an observation window.
+
+    The journal's worker start/finish timestamps are authoritative for
+    completed work.  Clipping each interval makes this useful for both the
+    current hour and a phase-to-date view without double-counting time outside
+    the requested window.
+    """
+    span = max(0.0, end - start)
+    if worker_count <= 0 or span <= 0:
+        return 0.0
+    busy = 0.0
+    for row in rows:
+        result = row.get("result", {})
+        began, finished = result.get("started_at"), result.get("finished_at")
+        if not isinstance(began, (int, float)) or not isinstance(finished, (int, float)):
+            continue
+        busy += max(0.0, min(end, finished) - max(start, began))
+    return min(1.0, busy / (worker_count * span))
+
+
 def _json(path, default=None):
     try:
         with open(path, encoding="utf-8") as handle:
@@ -206,6 +227,10 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
     completed_phase = sum(len(_rows(os.path.join(root, "runs", r["arm"], task,
                                             f"seed_{r['seed']}", "run_log.jsonl"))) for r in runs)
     phase_total = sum(int(r["config"]["eval_budget"]) for r in runs)
+    worker_count = len(manifest.get("worker_slots", {}).get("slots", []))
+    phase_started = float(status.get(task, {}).get("started_at", manifest.get("started_at", now)))
+    phase_utilization = worker_utilization(journal, worker_count, phase_started, now)
+    last_hour_utilization = worker_utilization(journal, worker_count, max(phase_started, now - 3600), now)
     remaining_fraction = max(0.0, 1 - completed_phase / phase_total) if phase_total else 0.0
     prior_key = "walker_phase_h" if task == "Walker-v0" else "upstepper_phase_h"
     prior_band = prior.get(prior_key, {})
@@ -266,10 +291,15 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
         "elapsed_s": elapsed, "phase_completed": completed_phase, "phase_total": phase_total,
         "generation": generation, "tasks_running": dispatch.get("tasks_running", 0),
         "tasks_queued": dispatch.get("tasks_queued", 0), "completed_evaluations": completed_evals,
+        "worker_rss_bytes": dispatch.get("worker_rss_bytes"),
         "total_evaluations": total_evals, "completed_ppo": completed_ppo,
         "throughput_now_per_h": recent, "throughput_average_per_h": completed_ppo * 3600 / elapsed if elapsed else 0.0,
         "hourly_rates_24h": hourly_rates,
         "phase_eta_s": phase_eta, "campaign_eta_s": campaign_eta, "eta_source": eta_source,
+        "worker_count": worker_count, "worker_utilization_since_phase_start": phase_utilization,
+        "worker_utilization_last_hour": last_hour_utilization,
+        "phase_completion_fraction": (completed_phase / phase_total if phase_total else 0.0),
+        "phase_started_at": phase_started,
         "future_eta_source": "prior" if future_high else None,
         # Latest-bound ETA while Walker-v0 runs; the actual time once reached.
         "walker_milestone_epoch": (now + phase_eta[1] if task == "Walker-v0"
@@ -300,6 +330,7 @@ def render(snapshot: dict, tty: bool = False) -> str:
         lines.append(f"{arm:<22} {cells}")
     lines.extend([
         f"Running {snapshot['tasks_running']} queued {snapshot['tasks_queued']} | PPO/h now {snapshot['throughput_now_per_h']:.1f}, average {snapshot['throughput_average_per_h']:.1f}",
+        f"Worker utilization: {100 * snapshot.get('worker_utilization_last_hour', 0):.1f}% last 1 h; {100 * snapshot.get('worker_utilization_since_phase_start', 0):.1f}% since phase start",
         f"ETA ({snapshot['eta_source']}): phase {_duration(snapshot['phase_eta_s'][0])}–{_duration(snapshot['phase_eta_s'][1])}; campaign {_duration(snapshot['campaign_eta_s'][0])}–{_duration(snapshot['campaign_eta_s'][1])}" + (" (future phase: prior)" if snapshot.get("future_eta_source") else ""),
         f"Walker milestone ({'reached' if snapshot.get('walker_milestone_reached') else 'latest'}): {_when(snapshot['walker_milestone_epoch'])}; P2 {snapshot['p2_mean_h']} h mean / {snapshot['p2_p95_h']} h p95; projected total {_hours_range(snapshot.get('projection_total_h'))}; >432 h: {snapshot['projection_exceeds_432h']}",
         f"CPU {snapshot.get('cpu_percent', 'n/a')}% per-core {snapshot.get('per_core_percent', [])}; temp {snapshot.get('temperature_c', 'n/a')} °C; RAM {snapshot.get('ram_used_gb', 'n/a')} GB; swap {snapshot.get('swap_used_gb', 'n/a')} GB",

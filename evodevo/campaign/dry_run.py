@@ -37,6 +37,25 @@ def _stamp(when: dt.datetime) -> str:
     return when.strftime("%Y-%m-%d %H:%M %a")
 
 
+def _command_output(*command):
+    try:
+        return subprocess.run(command, text=True, capture_output=True, timeout=10,
+                              check=False).stdout.strip() or "not available"
+    except (OSError, subprocess.SubprocessError):
+        return "not available"
+
+
+def operational_environment() -> dict:
+    """Read-only facts relevant to detached multi-day campaign survival."""
+    session = os.environ.get("XDG_SESSION_ID", "self")
+    kill = _command_output("loginctl", "show-session", session, "-p", "KillUserProcesses", "--value")
+    sshd = _command_output("systemctl", "is-active", "sshd")
+    if sshd == "not available" or sshd in {"inactive", "unknown"}:
+        sshd = _command_output("systemctl", "is-active", "ssh")
+    tmux = _command_output("tmux", "list-sessions")
+    return {"kill_user_processes": kill, "sshd": sshd, "tmux_sessions": tmux}
+
+
 def estimate_applies(plan) -> tuple[bool, str]:
     """The committed estimate models ONE design: the accepted campaign
     profile (4 arms x seeds 0-4, pop 15 / eval_budget 300, D6 timesteps,
@@ -154,6 +173,12 @@ def render(args, plan, campaign_id) -> str:
     for slot, cpus in enumerate(affinity.slots):
         out.append(f"  worker {slot:>2}: cpu {','.join(map(str, cpus))} ({kinds.get(cpus[0], '?')})")
     out.append(f"  scheduler: cpus {scheduler_cpus} ({', '.join(sorted({kinds.get(c, '?') for c in scheduler_cpus}))})")
+    out.append("")
+    environment = operational_environment()
+    out.append("OPERATIONAL ENVIRONMENT (info only; no service or session is changed)")
+    out.append(f"  systemd KillUserProcesses: {environment['kill_user_processes']}")
+    out.append(f"  sshd active: {environment['sshd']}")
+    out.append(f"  existing tmux sessions: {environment['tmux_sessions']}")
     out.append("")
     out.append("LAUNCH CHECKS: " + ("PASS -- a real launch would be accepted" if not refusals and not dirty
                                      else "WOULD BE REFUSED:"))
