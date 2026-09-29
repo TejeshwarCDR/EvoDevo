@@ -678,6 +678,8 @@ def test_launcher_starts_and_cleans_tiny_surrogate_campaign():
     if shutil.which("tmux") is None:
         return
     repo = Path(__file__).resolve().parents[2]
+    completion_marker = repo / "CAMPAIGN_COMPLETE.txt"
+    marker_existed = completion_marker.exists()
     with tempfile.TemporaryDirectory(prefix="evodevo-launch-") as directory:
         root = Path(directory)
         config = root / "benchmark.yaml"
@@ -727,6 +729,10 @@ def test_launcher_starts_and_cleans_tiny_surrogate_campaign():
                 "--output-root", str(run_root), "--grace-s", "0"], cwd=repo, env=env,
                 capture_output=True, text=True, timeout=20)
             subprocess.run(["tmux", "-L", socket, "kill-server"], capture_output=True)
+            # This is a synthetic campaign. Preserve a pre-existing operator
+            # marker, but do not leave the test's compulsory marker at repo root.
+            if not marker_existed:
+                completion_marker.unlink(missing_ok=True)
         assert subprocess.run(["tmux", "-L", socket, "has-session", "-t", "evodevo-campaign"],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
         config.write_text(config.read_text().replace("eval_budget: 2", "eval_budget: 3"))
