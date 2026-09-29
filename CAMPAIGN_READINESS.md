@@ -566,3 +566,46 @@ Already everything is run — this checklist verifies the notification/dashboard
 - [x] ASCII fallback renders without box-drawing or emoji.
 - [x] Existing alert deduplication, rate limiting, trigger thresholds, and raw journal schema are unchanged; only `display_message` is added.
 - [x] No existing test was broken silently; no exact raw alert-literal assertion existed, and heartbeat timing assertions were deliberately updated for the new 18:00 requirement.
+
+## 14. Final Comprehensive Verification (2026-09-29)
+
+### Full-suite result
+
+` .venv/bin/pytest -q ` completed from a clean committed repository state:
+**1093 passed, 33 warnings in 1141.20s (0:19:01)**. The simulator-backed slow,
+integration, campaign launcher, real-PPO, parallel worker/affinity, preflight,
+and visualization tests were included. The 33 warnings are existing dependency
+or deliberately exercised missing-run/render warnings; no test failed.
+
+The three launcher tests initially blocked by an untracked audit attachment
+were rerun after establishing a clean baseline: **3 passed in 60.99s**.
+
+### Notification and dashboard result
+
+The Section 13 checklist is fully satisfied. Full-suite coverage confirms the
+new shared status context, status footer, 18:00 resume-safe heartbeat,
+phase/start/complete notifications, completion retry-and-marker behavior,
+alert recovery and durable de-duplication, dashboard banner/progress/ETA/
+freshness, final screen, ASCII mode, and unchanged raw alert-journal behavior.
+
+### Verification fixes and cleanup
+
+No scheduling, evaluation, selection, dispatch, journal, checkpoint, or
+scientific semantics were changed. Two test-hygiene fixes were made: the
+required repository-root `CAMPAIGN_COMPLETE.txt` marker is ignored by Git, and
+the test session preserves any pre-existing marker while removing only markers
+created by synthetic integration tests. The tracked order-independence audit's
+wall-clock measurement was restored after its documented test side effect.
+
+No real campaign was started; `campaign.local.yaml` was not read or modified;
+no verification-owned campaign process, tmux session, root completion marker,
+or drill artifact remains. The pre-existing operator-owned
+`evodevo-preflight` tmux session remains attached and was not touched.
+
+### Final readiness verdict: **NOT READY**
+
+The code and complete test suite are finalized and green, but the genuine
+Section 12 dispatch-policy/432-hour guard discrepancy remains unresolved, and
+the operator-owned notifier, launch-day mirror re-check, cooling, and machine
+reservation gates remain outstanding. Do not mark the campaign READY or start
+it until those gates are closed.
