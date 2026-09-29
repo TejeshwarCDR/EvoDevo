@@ -2,8 +2,9 @@
 # Run one supervised child under reversible, host-wide Intel CPU power controls.
 #
 # This script deliberately refuses to start without root and restores every
-# value it changes on normal exit, error, or INT/TERM.  It is for controlled
-# benchmark runs only: do not wrap the scientific campaign with it.
+# value it changes on normal exit, error, or INT/TERM.  It is used for
+# controlled benchmarks and by the dedicated production supervisor; do not
+# invoke it directly for a scientific campaign.
 #
 # Example (an operator supplies the sudo credential interactively):
 #   sudo scripts/campaign/with_cpu_power_cap.sh --p-max-mhz 4200 --p-cpus 0-15 \
