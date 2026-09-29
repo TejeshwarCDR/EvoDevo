@@ -28,3 +28,4 @@ external/evogym/
 results/campaign_prep/
 results/campaign/
 campaign.local.yaml
+CAMPAIGN_COMPLETE.txt
