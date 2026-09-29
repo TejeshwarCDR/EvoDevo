@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from evodevo.campaign.plan import CampaignPlan, PhasePlan, RunPlan
+from evodevo.campaign.journal import ResultJournal
 from evodevo.campaign.scheduler import CampaignScheduler, resume_command
 from evodevo.core.config import ExperimentConfig
 from evodevo.core.factors import extract_factors
@@ -135,6 +136,36 @@ def test_surrogate_stop_is_observed_at_the_next_generation_boundary(tmp_path, mo
     for rp in plan.phases[0].runs:
         relative = Path("runs") / rp.arm / rp.task / f"seed_{rp.seed}" / "run_log.jsonl"
         assert _records(tmp_path / "stoppable" / relative) == _records(tmp_path / "uninterrupted" / relative)
+
+
+def test_resume_aborts_loudly_on_journal_genome_hash_mismatch(tmp_path, monkeypatch):
+    plan = _plan(tmp_path)
+    monkeypatch.setattr("evodevo.campaign.scheduler.run_subprocess", lambda *a, **k: {"ok": True})
+    import evodevo.campaign.scheduler as module
+    original = module.write_checkpoint
+    scheduler = CampaignScheduler(plan, "hash-mismatch", output_root=tmp_path, workers=2,
+                                  mode="surrogate", no_mirror=True)
+
+    def stop_after_first_checkpoint(*args, **kwargs):
+        path = original(*args, **kwargs)
+        scheduler.stop_requested = True
+        return path
+
+    monkeypatch.setattr(module, "write_checkpoint", stop_after_first_checkpoint)
+    scheduler.run()
+    monkeypatch.setattr(module, "write_checkpoint", original)
+    ResultJournal(tmp_path / "hash-mismatch" / "journal.jsonl").append({
+        "run_key": "direct/Walker-v0/seed_0",
+        "generation": 1,
+        "genome_id": 3,
+        "eval_index": 3,
+        "ppo_k": 0,
+        "genome_hash": "deliberately-wrong",
+        "result": {},
+    })
+    with pytest.raises(RuntimeError, match="genome-hash mismatch"):
+        CampaignScheduler(plan, "hash-mismatch", output_root=tmp_path, workers=2,
+                          mode="surrogate", no_mirror=True).run()
 
 
 def test_milestone_failure_cannot_abort_completed_phase(tmp_path, monkeypatch):
