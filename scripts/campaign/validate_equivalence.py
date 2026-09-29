@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -71,10 +72,13 @@ def main(argv=None):
     parser.add_argument("--workers", type=int, default=20)
     parser.add_argument("--evaluator", choices=("surrogate", "real"), default="surrogate")
     parser.add_argument("--existing-campaign-dir")
+    parser.add_argument("--notifier-config", help="validation-only notifier config; defaults to an isolated nonexistent path")
     args = parser.parse_args(argv)
 
     root = Path(args.output_root).resolve()
     root.mkdir(parents=True, exist_ok=True)
+    notifier_config = Path(args.notifier_config).resolve() if args.notifier_config else root / ".validation-notifier.yaml"
+    os.environ["EVODEVO_NOTIFY_CONFIG"] = str(notifier_config)
     plan = CampaignPlan.from_benchmark(BenchmarkConfig.from_yaml(args.config))
     if args.existing_campaign_dir:
         campaign_dir = Path(args.existing_campaign_dir).resolve()
@@ -133,6 +137,7 @@ def main(argv=None):
         "config": str(Path(args.config)),
         "evaluator": args.evaluator,
         "interleaved_campaign_dir": str(campaign_dir),
+        "notifier_config": str(notifier_config),
         "campaign_config_hash": plan.config_hash,
         "workers": args.workers,
         "runs_checked": len(checked),

@@ -304,6 +304,12 @@ class CampaignScheduler:
         while not core.phase_complete:
             while barriers:
                 finish_generation(barriers.popleft())
+                # Surrogate generations have no pool work, so preparing the
+                # next generation immediately produces another barrier.  Do
+                # not recursively drain the entire phase without returning
+                # to the outer loop's graceful-stop check.
+                if self.stop_requested:
+                    break
             refill()
             if core.phase_complete:
                 break

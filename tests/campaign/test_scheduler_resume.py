@@ -95,6 +95,48 @@ def test_resume_repairs_log_rows_not_covered_by_checkpoint(tmp_path, monkeypatch
         assert _records(tmp_path / "resumed" / relative) == _records(tmp_path / "baseline" / relative)
 
 
+def test_surrogate_stop_is_observed_at_the_next_generation_boundary(tmp_path, monkeypatch):
+    """A zero-worker surrogate barrier must not recursively drain the phase.
+
+    This is the deterministic form of a SIGINT arriving during surrogate
+    evaluation: the current generation is checkpointed, then the scheduler
+    must return control to its stop check instead of immediately preparing
+    every remaining generation in the inner barrier loop.
+    """
+    plan = _plan(tmp_path)
+    monkeypatch.setattr("evodevo.campaign.scheduler.run_subprocess", lambda *a, **k: {"ok": True})
+    import evodevo.campaign.scheduler as module
+    original = module.write_checkpoint
+    scheduler = CampaignScheduler(plan, "stoppable", output_root=tmp_path, workers=2,
+                                  mode="surrogate", no_mirror=True)
+    calls = [0]
+
+    def request_stop_after_checkpoint(*args, **kwargs):
+        result = original(*args, **kwargs)
+        calls[0] += 1
+        if calls[0] == 1:
+            scheduler.stop_requested = True
+        return result
+
+    monkeypatch.setattr(module, "write_checkpoint", request_stop_after_checkpoint)
+    scheduler.run()
+    manifest = json.loads((tmp_path / "stoppable" / "manifest.json").read_text())
+    assert manifest["status"] == "stopped"
+    completed = sum(
+        len(path.read_text().splitlines())
+        for path in (tmp_path / "stoppable" / "runs").rglob("run_log.jsonl")
+    )
+    assert completed == 3
+    monkeypatch.setattr(module, "write_checkpoint", original)
+    CampaignScheduler(plan, "stoppable", output_root=tmp_path, workers=2,
+                      mode="surrogate", no_mirror=True).run()
+    CampaignScheduler(plan, "uninterrupted", output_root=tmp_path, workers=2,
+                      mode="surrogate", no_mirror=True).run()
+    for rp in plan.phases[0].runs:
+        relative = Path("runs") / rp.arm / rp.task / f"seed_{rp.seed}" / "run_log.jsonl"
+        assert _records(tmp_path / "stoppable" / relative) == _records(tmp_path / "uninterrupted" / relative)
+
+
 def test_milestone_failure_cannot_abort_completed_phase(tmp_path, monkeypatch):
     plan = _plan(tmp_path)
     monkeypatch.setattr("evodevo.campaign.scheduler.run_subprocess", lambda *a, **k:
