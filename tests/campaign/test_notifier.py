@@ -108,7 +108,7 @@ def _check_only(tmp_path, *extra, notify_config):
     env = dict(os.environ, EVODEVO_NOTIFY_CONFIG=str(notify_config))
     return subprocess.run([sys.executable, "-m", "evodevo.campaign", "--check-only", "--config", str(config),
                            "--output-root", str(tmp_path / "out"), "--campaign-id", "gate", "--mode", "real",
-                           "--no-mirror", *extra], cwd=REPO_ROOT, capture_output=True, text=True,
+                           "--cpu-profile", "standard", "--no-mirror", *extra], cwd=REPO_ROOT, capture_output=True, text=True,
                           timeout=180, env=env)
 
 
@@ -150,7 +150,7 @@ def test_run_script_refuses_without_notifier_before_creating_tmux(tmp_path):
     env = dict(os.environ, EVODEVO_TMUX_SOCKET=socket, EVODEVO_NOTIFY_CONFIG=str(tmp_path / "absent.yaml"))
     try:
         result = subprocess.run(["bash", "scripts/campaign/run_campaign.sh", "--campaign-id", "nonotify",
-                                 "--output-root", str(tmp_path / "out"), "--no-mirror", "--mode", "real"],
+                                 "--output-root", str(tmp_path / "out"), "--no-mirror", "--cpu-profile", "standard", "--mode", "real"],
                                 cwd=REPO_ROOT, capture_output=True, text=True, timeout=180, env=env)
         assert result.returncode != 0
         if not project_is_dirty(REPO_ROOT):
@@ -174,7 +174,7 @@ def test_explicit_local_config_is_used_for_launch_checks(tmp_path):
         "ppo_timesteps: {Walker-v0: 500}, ppo_seeds: {Walker-v0: 1}}\n")
     result = subprocess.run([sys.executable, "-m", "evodevo.campaign", "--check-only", "--config", str(config),
                              "--output-root", str(tmp_path / "out"), "--campaign-id", "local", "--mode", "real",
-                             "--no-mirror", "--local-config", str(notify)], cwd=REPO_ROOT,
+                             "--cpu-profile", "standard", "--no-mirror", "--local-config", str(notify)], cwd=REPO_ROOT,
                             capture_output=True, text=True, timeout=180)
     if project_is_dirty(REPO_ROOT):
         assert "dirty" in result.stderr
