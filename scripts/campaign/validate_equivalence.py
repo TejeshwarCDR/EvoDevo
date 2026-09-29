@@ -19,6 +19,10 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
+from evodevo.parallel.threading_control import configure_threading
+
+configure_threading(1, strict=False)
+
 from evodevo.campaign.plan import CampaignPlan
 from evodevo.campaign.scheduler import CampaignScheduler
 from evodevo.campaign.checkpoint import latest_checkpoint
