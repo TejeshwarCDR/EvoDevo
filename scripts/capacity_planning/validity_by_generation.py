@@ -21,7 +21,7 @@ def load(root="results/runs"):
         d[a] = {}
         for s in range(5):
             recs = [json.loads(l) for l in open(f"{root}/{a}/Walker-v0/seed_{s}/run_log.jsonl")]
-            v = np.zeros((GENS, 15)); 
+            v = np.zeros((GENS, 15));
             cnt = np.zeros(GENS)
             for r in recs:
                 g = r["generation"]; v[g, int(cnt[g])] = r["valid"]; cnt[g] += 1
