@@ -38,7 +38,10 @@ def mirror_check(args) -> tuple:
 
 def launch_refusals(args):
     """-> (refusals, record). Empty refusals means the launch may proceed."""
-    notifier = notifier_status(getattr(args, "local_config", None))
+    # Keep the no-argument call shape for existing integrations while an
+    # explicit CLI selection routes to the requested local config.
+    local_config = getattr(args, "local_config", None)
+    notifier = notifier_status(local_config) if local_config else notifier_status()
     refusals = notifier_refusals(args, notifier)
     mirror_refusals, mirror_record = mirror_check(args)
     refusals += mirror_refusals
