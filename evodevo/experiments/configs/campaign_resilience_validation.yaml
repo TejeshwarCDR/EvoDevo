@@ -1,0 +1,25 @@
+# Fast, semantically representative matrix for repeated kill/stop/resume
+# validation.  This is never a scientific result: it preserves both D7
+# phases, every arm, per-run generation barriers, and UpStepper K=2 while
+# reducing the generation width/budget and PPO timesteps.
+profile: campaign
+encoders: [direct, nca, rule_based, {encoder: rule_based, variant: monotone}]
+tasks: [Walker-v0, UpStepper-v0]
+seeds: [0]
+configs_root: evodevo/experiments/configs
+output_dir: results/runs
+surrogate: false
+factors:
+  dev_steps: 100
+  init_condition: center_seed
+profile_overrides:
+  population_size: 3
+  offspring_size: 3
+  eval_budget: 12
+  ppo_timesteps:
+    Walker-v0: 2000
+    UpStepper-v0: 2000
+  ppo_seeds:
+    Walker-v0: 1
+    UpStepper-v0: 2
+  ppo_seed_aggregation: max

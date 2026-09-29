@@ -45,3 +45,15 @@ def test_real_ppo_mini_profile_is_the_required_step6_and_step9_matrix():
     assert [phase.ppo_timesteps for phase in plan.phases] == [2000, 2000]
     assert [phase.ppo_seeds for phase in plan.phases] == [1, 2]
     assert all(phase.aggregation == "max" for phase in plan.phases)
+
+
+def test_resilience_profile_preserves_arms_phases_and_k():
+    config = BenchmarkConfig.from_yaml(
+        str(ROOT / "evodevo/experiments/configs/campaign_resilience_validation.yaml")
+    )
+    plan = CampaignPlan.from_benchmark(config)
+    assert [phase.task for phase in plan.phases] == ["Walker-v0", "UpStepper-v0"]
+    assert [phase.ppo_seeds for phase in plan.phases] == [1, 2]
+    assert all(len(phase.runs) == 4 for phase in plan.phases)
+    assert all(run.config["population_size"] == 3 for phase in plan.phases for run in phase.runs)
+    assert all(run.config["eval_budget"] == 12 for phase in plan.phases for run in phase.runs)
