@@ -1,573 +1,310 @@
-# EvoDevo Campaign Readiness
+# EvoDevo campaign readiness
 
-## Regenerated 2026-09-29 — final pre-launch status
+Fresh single-pass report, 2026-09-29. It describes only the current repository
+state. The scientific campaign has not been started. Validation campaigns are
+explicitly stamped `VALIDATION - NOT A RESULT`.
 
-**Verdict: READY, subject only to the operator-owned launch checklist. The real campaign has NOT been started.** This current status supersedes the historical 2026-09-28 report retained below for provenance. See the repository-root copy for the complete current summary: continuous dispatch passed the unchanged 405.9 h p95 guard; conformance, Step-6 recovery/equivalence, 40-run flake evidence, operational hardening, and the real-PPO launcher mini validation all passed. Full suite: 1089 passed, 33 warnings, 891.19 s. Remaining operator items are notifier delivery, cooling/reservation, persistent backup mount, an otherwise idle machine (including AnyDesk), and ending the old `evodevo-preflight` session before any real launch.
+## 1. Current-state summary and traceability
 
+| Current claim | Evidence commit | Detail in this report |
+|---|---:|---|
+| Production uses continuous, greedy dispatch with per-run generation barriers and strict D7 phase order | `f3d4e0e` (tests first in `f779833`; decision in `5452cfb`) | Sections 3–4 |
+| The production scheduler and capacity model execute the same pure `DispatchCore` policy | `f3d4e0e`, `2cee966` | Sections 4–6 |
+| Base estimate is 403.2 h mean, 400.6 h p5, 405.9 h p95; the 432 h guard applies no descope step | `2cee966` | Section 5 |
+| Timed scheduler/simulator conformance is inside the 5% makespan and 3-point utilization gates | `3fc4e4c` | Section 6 |
+| Equivalence, resume, graceful stop, task-local crash/timeout handling, and refusal paths pass | `725de97` plus fixes `133e4b0`, `cec5dde`, `7b47d67` | Section 7 |
+| Real launcher/tmux/PPO mini-campaign and notification/dashboard checks pass | `d455a83`, `ca6923b`, `f44061d` | Sections 8–9 |
+| Disk projection is 32.9 GB; the 3x requirement is 98.6 GB | estimate artifact committed through `2cee966` | Section 10 |
 
-Regenerated 2026-09-28 after fixing the blocking launcher bug and every gap in
-the previous report (commit `ab8f73d`), then re-running the full validation
-**through the real launcher** (`scripts/campaign/run_campaign.sh` →
-`python -m evodevo.campaign`, in real tmux, real PPO). **The real campaign has
-NOT been started.** Every validation campaign was stamped
-`VALIDATION - NOT A RESULT`, mirrored to the backup disk, verified, and then
-deleted; their evidence is reproduced below.
+Repository reconciliation was performed before writing this report:
 
-**Verdict: NOT READY** — one blocking item (Section 12): the scheduler's real
-dispatch policy is not the policy the pre-registered budget guard was
-evaluated on; modelled on the real policy, the campaign's p95 is about
-**667 h against the 432 h guard**. Everything else validated green.
+- HEAD was attached to `main` at `f44061de597ee6f0a2e5966c7f224711ab8b222a`,
+  ahead of `origin/main`; the worktree was clean, and `git stash list` was empty.
+- `git log --all` and every reflog do contain the dispatch work:
+  `5452cfb` (decision), `f779833` (policy core and tests), `f3d4e0e`
+  (production scheduler), and `2cee966` (shared-policy estimate).
+- The contradictory old body was documentation drift. `2b5e624` prepended a
+  current summary while retaining an obsolete report, and `f44061d` appended a
+  full-suite result but copied the retained obsolete conclusion. That conclusion
+  omitted dispatch commits already in its ancestry, the accepted rows in
+  `docs/decisions.md`, the shared `DispatchCore`, the re-derived estimate, and
+  the conformance/re-proof evidence. It was therefore wrong; the test run itself
+  was not evidence for the obsolete scheduler description.
 
----
+## 2. Git, plan, and locked configuration
 
-## Changes since ab8f73d
+- Pre-registered analysis-plan commit:
+  `f2689b1dbdcba2745160bc4d2a14c83bc021b63a`. The original contract in that
+  commit remains the reference. No change was made to it in this pass. The
+  current file also contains a separately headed later D16 implementation note.
+- Campaign-profile commit: `c7172d1`; configuration lock commit: `feed8ec`.
+- Current campaign: four arms (`direct`, `nca`, `rule_based`,
+  `rule_based_monotone`) x five seeds x two tasks; population/offspring 15/15;
+  300 genomes per run; Walker-v0 first, then UpStepper-v0.
+- PPO budgets: Walker-v0 1,000,000 steps and K=1; UpStepper-v0 1,200,000
+  steps and K=2, aggregated by maximum over completed seeds. Twenty workers are
+  assigned as 8 P-core primaries plus 12 E-cores.
+- Neither `campaign.local.yaml` nor the pre-registered plan was read, edited, or
+  rewritten during this reconciliation. No real campaign was launched.
 
-### Commits (in order; each step committed on its own)
+## 3. Decisions in force
 
-| commit | step | subject |
+`docs/decisions.md` is the authoritative, append-only record. Its scientific
+decisions before the campaign block remain in force, including the current
+resolved architecture, readout, mutation, fairness, analysis, and statistical
+protocol choices; superseded rows remain labeled as such. The campaign and
+readiness decisions are all represented below.
+
+| Date | Decision | Current resolution |
 |---|---|---|
-| `179155f` | 1 | Fix BrokenProcessPool: campaign package imported numpy before worker thread pinning |
-| `5f95a8d` | 2 | Make notifier delivery truthful and refuse unnotified real launches |
-| `3a3c539` | 3 | Require the mirror to be a dedicated mount on a separate physical disk |
-| `2fbd136` | 4 | Add a write-nothing --dry-run to the campaign launcher |
-| `6aa13b3` | 5a | Hold a systemd sleep/idle/lid inhibitor lock around the campaign scheduler |
-| `39d1426` | 6 | Show the reached Walker-milestone time once the Walker phase ends |
-| `2af7767` | 7 prep | Add an explicit artifact stamp for validation campaigns |
-| `cb7180c` | 7 (found) | Fix a launcher race that could leave a "started" campaign not running |
-| `d89f624` | 7 (found) | Assert per-slot CPU pinning in the CLI smoke; guard setsid --wait |
-| `179ae00` | 7 (found) | Never "attach" to a stale campaign session whose scheduler is dead |
-| `26faf94` | 7 (found) | Stop gracefully: campaign workers leave SIGINT to the scheduler |
+| 2026-09-19 | Interpreter | Python 3.10.20 in `.venv`; CPU-only PyTorch |
+| 2026-09-27 | D6 task budgets | Walker 1.0M; UpStepper 1.2M; Walker fallback deviation recorded |
+| 2026-09-27 | MONO | `rule_based_monotone` is co-primary on both tasks |
+| 2026-09-27 | D14 | No optional scope added |
+| 2026-09-27 | D15 | population 15, offspring 15, 300 genomes, seeds 0–4, four arms, Walker then UpStepper |
+| 2026-09-27 | D16 | Walker K=1; UpStepper K=2; max over completed seeds; per-seed logging |
+| 2026-09-27 | Concurrency | 20 workers |
+| 2026-09-27 | Budget guard | 432 h p95; ordered fallbacks monotone Walker-only, drop monotone, then UpStepper K=1 |
+| 2026-09-27 | Infrastructure failures | Two fresh-worker retries; then task-local `infra_failure` sentinel and alert above 0.5% |
+| 2026-09-28 | Preflight provenance | Uncommitted preflight provenance disclosed; code subsequently committed |
+| 2026-09-28 | Artifact policy | Save every valid PPO policy |
+| 2026-09-28 | Walker budget limitation | Checkpoint-noise sensitivity disclosed; budget unchanged |
+| 2026-09-28 | Dispatch policy | **ACCEPTED, Tejeshwar: continuous, per-run barrier (ADR-conformant)**; old global barrier/drained waves rejected |
+| 2026-09-28 | Guard re-application | No fallback applied to the implemented continuous policy |
+| 2026-09-28 | Validation idle gate | Three measured windows; bounded operator stack allowed, competing work refused |
+| 2026-09-28 | Phase timeout sessions | Reuse pool, reset timeout state only after a drained D7 phase |
+| 2026-09-29 | Conformance | Pass at fixed 5% makespan / 3-point utilization gates after one permitted rerun |
+| 2026-09-29 | Graceful surrogate stop | Observe stop after each durably checkpointed generation |
+| 2026-09-29 | Post-dispatch re-proof | Equivalence, recovery, stop, failure, and refusal evidence rerun |
+| 2026-09-29 | Intermittent-suite investigation | Not reproduced in 40 consecutive runs; no unsupported fix claimed |
+| 2026-09-29 | Operational hardening | Durable utilization/RSS telemetry and bounded alerts adopted |
+| 2026-09-29 | Real mini-campaign | Full launcher/tmux/PPO validation passed |
 
-No commit touches `docs/decisions.md` or the pre-registered analysis plan.
-Scheduling, evaluation and result semantics were not changed: every commit is
-entry-point/import, launcher, notifier, mirror, dashboard, telemetry, stamping
-or signal-handling code. Because `26faf94` changes how pool workers are
-started, serial ≡ interleaved was re-run on CLI output produced at `26faf94`
-(Section 5, 7f) and that output was also shown identical to the output
-produced before it.
+The same-day D16 proposal is explicitly superseded by its accepted row. Older
+scientific rows that contain words such as “OPEN” only describe historical
+states and are explicitly superseded by later rows; they are not current
+campaign choices.
 
-### Root-cause postmortem: the spawn/import bug (Step 1)
+## 4. Implemented dispatch policy
 
-**Reproduction (Step 1a, real CLI, 2-minute bound).** `python -m
-evodevo.campaign.scheduler` on a tiny real plan (1 arm × 1 seed × Walker-v0,
-500 timesteps, 2 workers) exited 1 with `BrokenProcessPool`; six workers
-(initial pool plus retries) each raised `ThreadingConfiguredTooLateError`. An
-import tracer injected via `PYTHONPATH` (repository untouched) recorded, in
-**every spawned worker** (children of scheduler PID 409392), the first numpy
-import with this stack:
+`evodevo/campaign/dispatch.py` is a pure, event-driven state machine with no
+I/O. `DispatchCore.begin_phase` fixes the D7 phase and run set;
+`report_ready` accepts exactly one complete generation batch per run;
+`next_task` selects `(generation, tie_key, insertion sequence)` from a heap and
+maintains a bounded `slots + prefetch` window; `complete` opens only that
+task's owning run/generation barrier; `mark_run_complete` closes the phase.
 
-```
-multiprocessing/spawn.py:116 spawn_main -> :125 _main -> :234 prepare -> :258 _fixup_main_from_name
-runpy.py:220 -> runpy.py:110 (import of the parent package)
-evodevo/campaign/__init__.py:3        from .plan import CampaignPlan
-evodevo/campaign/plan.py:10           from evodevo.experiments.benchmark import ...
-evodevo/experiments/benchmark.py:25   import numpy
-```
+Production imports that component in `evodevo/campaign/scheduler.py`. Each run
+can prepare generation g+1 immediately after all of its own generation-g tasks
+complete. `refill()` continuously submits available work and does not drain
+fixed waves. Results are collected by task identity, journaled, then passed to
+the correct run in candidate order, so completion order cannot affect results.
+The outer loop still iterates campaign phases in plan order, preserving the
+Walker-before-UpStepper D7 barrier.
 
-So: **module `evodevo.campaign/__init__.py` (via `plan` → `experiments.benchmark`),
-in each spawned PPO worker process, during multiprocessing's `spawn`
-re-import of the parent's main module (`__mp_main__` =
-`evodevo.campaign.scheduler`)**, imported numpy before the pool initializer's
-`configure_threading(1, strict=True)` ran. (The ab8f73d report named
-`.scheduler` → `ppo_runner` as the first importer; the trace shows it is
-`.plan` → `benchmark`, one line earlier.)
+The capacity model imports the same classes in
+`scripts/capacity_planning/simulate_campaign.py`. Its production path calls the
+same `begin_phase`, `report_ready`, `next_task`, `complete`, and
+`mark_run_complete` transitions. It adds virtual workers and the measured
+single scheduler server; it does not reimplement dispatch ordering. The old
+global-barrier/drained-wave routine is retained only as a named historical
+comparison.
 
-**Fix.** `evodevo/campaign/__init__.py` now imports nothing heavy (lazy
-`__getattr__` re-exports). New entry point `evodevo/campaign/__main__.py`
-whose first statement after importing `threading_control` is
-`configure_threading(1, strict=True)` (load-bearing-import-order comment, as
-in `evodevo.preflight.__main__`); all logic is in `main()`, which imports the
-scheduler lazily and runs only under `if __name__ == "__main__"` (CPython's
-spawn in fact skips re-importing a `pkg.__main__` main module). `scheduler.py`
-refuses to run as `__main__`, naming the new entry point. `run_campaign.sh`,
-`stop_campaign.sh`, `status_campaign.sh` and the tests use `python -m
-evodevo.campaign` (`status` subcommand for the dashboard); nothing runs
-`python -m evodevo.campaign.scheduler`.
+Policy tests were committed before production integration (`f779833`) and
+cover per-run barriers, work conservation/no waves, lowest-generation-first
+priority and deterministic ties, D7 phase refusal/order, and result-order
+independence. Failure tests additionally prove that one crashed or hung task
+is retried and charged only to itself while healthy in-flight tasks remain
+valid.
 
-**Audit of every other process/pool spawner** (`ProcessPoolExecutor`,
-`multiprocessing`, `-m evodevo.`): the only process pool in the campaign
-runtime is `evodevo/parallel/worker_pool.py`. `milestone.run_subprocess`
-(plain `subprocess.run` of `-m evodevo.campaign.milestone`), `alerts.Notifier`
-(`subprocess.run` of the operator's shell command), `mirror.sync` (`rsync`)
-start ordinary subprocesses with no strict thread pinning; `dashboard`,
-`monitor` and `resume` spawn nothing; the preflight pool is launched from
-`evodevo.preflight.__main__`, which already had the correct pattern and whose
-package `__init__` is empty. None shares the flaw.
+## 5. Re-derived estimate and mechanical guard
 
-**Why the earlier suite missed it.** The only test that launched a campaign
-end-to-end through `run_campaign.sh` used `--mode surrogate`, which never
-creates a worker pool; every real-PPO pool test constructed `EvaluationPool`
-directly under pytest, whose `__main__` is pytest's launcher, so the faulty
-re-import never happened. No test combined "real mode" with "the real CLI
-entry point".
+Source: `results/campaign_prep/final_estimate/final_estimate.json`, 500 trials,
+Monte Carlo seed 20260927, production prefetch 4, measured scheduler serial
+costs and journal fsync cost, and the same measured PPO/validity/P–E inputs.
 
-**Tests added** (`tests/campaign/test_entry_point.py`): import purity of
-`evodevo.campaign` and everything imported before `configure_threading` (fresh
-subprocess); import-order regression with a tracing `__import__` hook
-(mirroring the preflight test); refusal when numpy is pre-loaded; refusal of
-`-m evodevo.campaign.scheduler`; launch scripts use the package entry point;
-**real-PPO CLI smoke** through `python -m evodevo.campaign` (1 arm × 1 seed ×
-Walker-v0, population 15, eval_budget 15, ppo_timesteps 500, 4 workers): real
-evaluations complete, no `BrokenProcessPool`, every journaled worker reports
-torch threads = 1 and every thread env var = 1 (`*_DYNAMIC` = `FALSE`), and
-worker slots have distinct CPU sets. Hand-run of the same command: 11 real
-PPO tasks on 4 workers pinned to CPUs 0/2/4/6, all single-threaded.
-**Non-vacuity, performed and reverted:** an eager `import numpy` added to
-`evodevo/campaign/__init__.py` made the import-purity and import-order tests
-fail (main tree; reverted with `git checkout -- evodevo/campaign/__init__.py`,
-tree clean afterwards) and made the real-PPO CLI smoke fail with
-`ThreadingConfiguredTooLateError` (in a throwaway clean worktree, since the
-CLI refuses a dirty tree).
+| Phase | Mean | p5 | p95 |
+|---|---:|---:|---:|
+| Walker-v0 | 123.0 h | 121.9 h | 124.1 h |
+| UpStepper-v0 | 280.2 h | 277.8 h | 282.8 h |
+| Total | **403.2 h** | **400.6 h** | **405.9 h** |
 
-### New defects found during this validation, and fixed
+Walker reaches its milestone at 30.5% of mean total runtime. Predicted total
+worker utilization is 99.75%. For comparison only, the rejected historical
+global-wave policy produces 662.3 h mean and 667.6 h p95 on the same draws.
 
-1. **Launcher race (`cb7180c`).** `script -c 'setsid CMD'`: inside `script`
-   the command is a process-group leader, so `setsid(1)` forks and exits at
-   once; the pane closes and its SIGHUP could kill the child before it left
-   the session — "Started campaign" printed, nothing running (reproduced 1 in
-   12 surrogate launches; also why every transcript was empty, including the
-   ab8f73d runs). Fixed with `setsid --wait`; 20/20 launches pass.
-2. **Stale session "attach" (`179ae00`).** After a scheduler crash/SIGKILL the
-   tmux session survives, and `run_campaign.sh --resume` printed "already
-   running; attaching" and resumed nothing. The launcher now removes the stale
-   session of the campaign being resumed (its recorded scheduler group is
-   dead) and refuses any other launch with an explicit message.
-3. **Graceful stop deadlock (`26faf94`).** `stop_campaign.sh` SIGINTs the
-   scheduler's whole process group, workers included. A live stack dump
-   (faulthandler injected via `PYTHONPATH`) showed a surviving worker blocked
-   on the call-queue lock beside zombie workers, and the scheduler — already
-   marked `stopped` — hung in `concurrent.futures.process._python_exit`
-   joining them; the first real stop took **123 s and ended in SIGTERM**.
-   Campaign pools now start workers with SIGINT ignored, so the scheduler
-   drains in-flight tasks and shuts the pool down itself: real stops now take
-   **4–5 s, exit 0**. The race is timing-dependent (a 4- and a 20-worker CLI
-   test both passed on the old code), so non-vacuity rests on a deterministic
-   pool-level test (workers survive a group SIGINT only when asked; fails with
-   the ignore disabled).
-4. **Dashboard** showed "Walker milestone: n/a" once the Walker phase ended;
-   it now shows the reached time (`39d1426`).
+The pre-registered rule is applied to the base estimate: **405.9 h <= 432 h**,
+leaving 26.1 h headroom. Therefore none of the three fallback steps is applied,
+and the full four-arm, five-seed, Walker K=1 / UpStepper K=2 design remains.
+The t_PPO +10% sensitivity reaches 446.5 h p95, but sensitivities disclose
+input uncertainty and do not replace the pre-registered base-case trigger.
 
-### Every gap in the ab8f73d report and its resolution
+## 6. Timed scheduler/simulator conformance
 
-| # | gap in ab8f73d | resolution | evidence |
-|---|---|---|---|
-| 1 | BLOCKING: real mode crashed every worker through the launcher | Fixed (`179155f`); root cause corrected to `__init__` → `plan` → `benchmark` | CLI smoke; real mini-campaign through the launcher (Section 5) |
-| 2 | Journal count vs expected PPO tasks unverified on a real launcher run | Verified | 305 = 305 (Section 5) |
-| 3 | No notifier; `alerts --test` printed "sent" and exited 0 with nothing configured | `--test` exits 2 with "NO NOTIFIER CONFIGURED - alerts go to alerts.jsonl only", 0 only after verified delivery; real launch refused without a notifier or explicit `--no-notify` (`5f95a8d`) | tests; Section 7. **Operator must still configure the real notifier** (checklist) |
-| 4 | Only mirror candidate (`/dev/sda3`) was the same physical disk | Physical-disk + mountpoint check (`3a3c539`); `/mnt/evodevo-backup` = `/dev/sdb1` on disk `sdb`, results on `/dev/sda7` (disk `sda`); `sda3` now refused | Section 9 |
-| 5 | "`docs/final_decisions.md` absent" | Stale claim copied from PREFLIGHT_READINESS.md: the file exists, committed in `71d946c` | `ls docs/final_decisions.md` |
-| 6 | `run_campaign.sh --dry-run` did not exist | Added (`2fbd136`), writes nothing | Section 8/9, test |
-| 7 | Real serial ≡ interleaved was only shown in-process | Shown on CLI-produced output vs serial `run_ea` | Section 5 (7f) |
-| 8 | Real kill/resume through the launcher not achieved | Achieved: SIGKILL mid-UpStepper, `--resume latest`, bit-identical | Section 6 |
-| 9 | Stop script only tested on surrogate | Tested on real runs; graceful-stop deadlock found and fixed | Section 6 |
-| 10 | Real-PPO evidence only at trivial scale | Inherent to a bounded validation; still disclosed | Section 11 |
-| 11 | Unrelated `evodevo-preflight` tmux session (2026-09-22) on the machine | Still present, still untouched (not created by this work) | Section 7 |
+Evidence commit `3fc4e4c` records `validation-conformance-2`, run through the
+real launcher and tmux after the validation idle gate passed. It exercised the
+full 4-arm x 5-seed x 300-genome grid with scaled synthetic PPO durations,
+Walker scale 1/100 and UpStepper K=2 scale 1/250.
 
----
+| Phase | Real | Simulated | Makespan delta | Real / simulated steady utilization | Point delta |
+|---|---:|---:|---:|---:|---:|
+| Walker-v0 | 4,750.776 s | 4,766.727 s | 0.335% | 99.692% / 99.536% | 0.156 |
+| UpStepper-v0 | 4,410.275 s | 4,458.073 s | 1.072% | 98.495% / 97.854% | 0.641 |
 
-## 1. Git state
+Both phases pass the fixed <=5% makespan and <=3-percentage-point utilization
+gates. They completed 4,658 and 9,316 timed tasks, reached 24 in flight (20
+slots plus prefetch 4), and preserved D7 order. The first attempt exposed a
+stale cross-phase timeout session; `7b47d67` fixed it, a regression test was
+added, and the one permitted rerun passed. Validation artifacts, notifications,
+and the separate-disk 951-file mirror verified; no scientific result was made.
 
-- HEAD validated: `26faf941a147f86bf621cde89f4500760bb6d0a6` ("Stop gracefully:
-  campaign workers leave SIGINT to the scheduler"); this report is committed on
-  top of it, alone.
-- Working tree clean (`git status --porcelain` empty) before the report commit;
-  the only transient change during testing was the documented
-  `results/rule_based/ORDER_INDEPENDENCE_AUDIT.md` timing line, reverted after
-  each full-suite run.
-- Real campaign plan config hash (`CampaignPlan.config_hash`, the manifest
-  lock): `d32171356cedb8e0e9e0e851aa3bd2234fbbdb03c0a17cf44e833dfeefd56fc4`
-  (unchanged since ab8f73d). Benchmark lock hash (`lock_hash.py`):
-  `e5c2aa7547d4e08e6e0dad9e57f5a6e928355b3c671606d867f7709b404af638`.
-- Validation plan hash (all validation campaigns): `54180436e9ef…`.
+## 7. Equivalence, recovery, and refusal evidence
 
-## 2. Decisions locked
+- Full-scale surrogate serial vs interleaved: all 12,000 normalized records,
+  final populations, and `RunResult`s matched.
+- Real-PPO CLI serial vs interleaved: 16 runs and all 480 records matched a
+  single-threaded reference.
+- Resume: 20 randomized surrogate SIGKILL points and 3 real-PPO SIGKILL points
+  resumed equal to uninterrupted baselines with no duplicate completed journal
+  identities. Real kills included cross-generation skew and active UpStepper.
+- Graceful stop: 10/10 SIGINT trials completed in 0.048–1.913 s, left zero
+  process-group survivors, and resumed identically.
+- Targeted failure/refusal coverage passes for timeout continuation, one crash
+  among 19 healthy tasks, two retries followed by `infra_failure`, alerting,
+  genome-hash mismatch, config-hash mismatch, dirty-tree refusal, launcher
+  cleanup, and process-group cleanup.
 
-All campaign rows in `docs/decisions.md` are dated 2026-09-27 and ACCEPTED
-(decided by Tejeshwar); unchanged by this work:
+Evidence is recorded in `725de97`; the graceful-stop fix is `133e4b0`, and the
+explicit genome-hash refusal test is `cec5dde`. `EvaluationPool` tracks and
+replaces a failed future/worker individually, so a crash never assigns a retry
+or failure to unrelated in-flight work.
 
-| decision | status | value |
-|---|---|---|
-| D14 scoping gate | ACCEPTED | no options adopted |
-| D15 population/offspring/budget/seeds/arms/task order | ACCEPTED | 15 / 15 / 300 genomes (20 generations); seeds 0–4; `direct, nca, rule_based, rule_based_monotone`; Walker-v0 then UpStepper-v0 |
-| MONO | ACCEPTED | `rule_based_monotone` co-primary on both tasks |
-| D6 application | ACCEPTED | Walker-v0 1,000,000; UpStepper-v0 1,200,000 timesteps |
-| D6 Walker-v0 fallback rule | ACCEPTED (disclosed deviation) | 1,000,000 |
-| D16 evaluation noise | ACCEPTED (supersedes same-day PROPOSED row) | Walker-v0 K=1; UpStepper-v0 K=2, max over completed seeds |
-| Concurrency | ACCEPTED | 20 workers: 8 P-core primaries + 12 E-cores |
-| Budget guard and outcome | ACCEPTED | p95 > 432 h → descope (a)/(b)/(c); recorded outcome **none** (p95 406.0 h). See Section 12: that p95 was modelled on a dispatch policy the scheduler does not use |
-| Infrastructure failures | ACCEPTED | 2 retries on fresh workers; then `infra_failure`, counted, alerted above 0.5% |
+## 8. Real launcher mini-campaign
 
-`python -m evodevo.campaign --dry-run` reproduces `guard outcome: all four
-approved campaign arms` from the live config.
+Evidence commit `d455a83` records the completed `mini` validation using
+`scripts/campaign/run_campaign.sh`, real tmux, real PPO, 20 workers, a temporary
+file notifier, and a separate-disk mirror. It was stamped
+`VALIDATION - NOT A RESULT`.
 
-## 3. Pre-registered analysis plan
+- Walker completed before UpStepper began. The Walker boundary automatically
+  generated its complete stamped milestone package.
+- All 480 planned evaluation records contain body and genome. The 204 valid
+  evaluations imply exactly 305 PPO tasks under Walker K=1 / UpStepper K=2;
+  journal rows and saved policies are both 305, and every policy reloads.
+- Twenty distinct planned worker CPUs were observed; scheduler CPUs used spare
+  siblings. Every journaled task recorded one Torch thread and single-thread
+  environment settings. The sleep/idle/lid inhibitor was active.
+- Phase-complete and daily-heartbeat messages reached the temporary notifier.
+  The source/mirror checksum manifests verified all 761 files after final sync.
 
-Pre-registered in `docs/decisions.md` by `f2689b1dbdcba2745160bc4d2a14c83bc021b63a`
-on **2026-09-27 17:16:48 +0530**; decisions locked by `a27c61a` (2026-09-27
-20:57:57 +0530). Both precede every commit of this work and any launch (none
-has happened). Not edited.
+No real scientific campaign was started by this validation or by the present
+reporting pass.
 
-## 4. Test results
+## 9. Notification and dashboard layer
 
-- **Full suite at the validated HEAD `26faf94`: 1056 passed, 0 failed, 33 warnings in 840.22 s** (previous report:
-  1021 passed; at `d89f624`, Step 7a: 1052 passed, 0 failed, 33 warnings,
-  835.84 s). Slow (real-PPO) tests included.
+Commit `ca6923b` added the shared status context and was covered by the final
+suite in `f44061d`. Current verified behavior:
 
-Each named test re-run individually at `26faf94` (34 passed, 207 s):
+- campaign start is once-only; phase starts/completions are durable; the daily
+  18:00 local heartbeat is resume-safe and does not replay missed days;
+- completion delivery retries three times and writes the completion marker even
+  if delivery fails; all messages carry phase/overall progress and ETA;
+- the dashboard shows status, both progress values, ETA range, elapsed time,
+  utilization target, and freshness; it renders a final static screen on normal
+  or abnormal exit and has an ASCII fallback;
+- alert rate limits, durable de-duplication, recovery notices, raw journal
+  schema, sustained-low-utilization alert, and >40 GiB worker-RSS alert pass;
+- telemetry is based on completed journal intervals, and RSS is the latest
+  scheduler sample, so a long active task appears at the next completion/status
+  refill rather than continuously.
 
-| named check | test | result |
-|---|---|---|
-| pinned EA bit-identity (surrogate, 4 arms × 5 seeds) | `tests/evolution/test_propose_tell.py::test_pinned_pre_refactor_surrogate_bit_identity` | PASS (20/20) |
-| pinned EA bit-identity (real PPO) | `…::test_pinned_pre_refactor_real_mode_bit_identity` | PASS (4/4 arms) |
-| K=1 bit-identity (evaluate_body vs pre-refactor commit) | `tests/evaluation/test_ppo_runner.py::test_evaluate_body_is_bit_identical_against_pre_refactor_commit` | PASS |
-| real K=2 policies saved and reloadable | `tests/evaluation/test_multiseed.py::test_real_k2_saves_two_reloadable_policies` | PASS |
-| serial ≡ interleaved, surrogate | `tests/campaign/test_scheduler_resume.py::test_surrogate_shared_phase_matches_serial_and_resume` | PASS |
-| serial ≡ interleaved, REAL | Step 7f: 16 serial `run_ea` runs vs CLI campaign output | **PASS** — 480/480 records identical on 14 fields |
-| resume ≡ uninterrupted, surrogate | `…::test_resume_repairs_log_rows_not_covered_by_checkpoint` (+ second half of the test above) | PASS |
-| resume ≡ uninterrupted, REAL | Step 7d: SIGKILL mid-UpStepper + `--resume latest` vs uninterrupted | **PASS** — 480/480 identical; 305 journal tasks identical |
-| checkpoint round-trip | `tests/evolution/test_propose_tell.py::test_generation_boundary_checkpoint_round_trip` | PASS (4/4 arms) |
-| real-PPO CLI smoke / graceful group stop | `tests/campaign/test_entry_point.py::test_real_ppo_cli_smoke`, `::test_real_cli_graceful_group_sigint_exits_promptly` | PASS / PASS |
+## 10. Disk, transcript, and mirror
 
-Test flakiness, stated plainly: while fixing the launcher race, one full
-`tests/campaign` run (1 of 18 after the fix) failed without its output being
-captured. The most likely cause — the smoke test asserting distinct CPU sets
-per worker **pid**, which a retried task on a rebuilt pool legitimately
-violates — was corrected to the real per-slot invariant (`d89f624`); 17
-further runs and every later run passed, but the original failure is not
-proven to be that one.
+`results/campaign_prep/disk/disk_estimate.json` projects 32.85 GB and a 3x
+requirement of 98.56 GB for 40 runs, 12,000 genomes, and up to 18,000 PPO
+trainings/policies. The measured root free space in that artifact is 302.13 GB,
+so the 3x rule passes. The conformance transcript projects to about 0.13 MB over
+18 days, well below the 5 GB hardening threshold.
 
-## 5. Mini-campaign results (through `run_campaign.sh`, real tmux, real PPO)
+The validated mirror was `/dev/sdb1` on physical disk `sdb`, distinct from the
+results filesystem on `sda`; content checksums passed. This is launch-time
+state and must be rechecked immediately before the real launch. NTFS path
+validation rejects forbidden characters and trailing dots/spaces.
 
-Configuration (validation profile, same mechanism as the real one): 4 arms ×
-2 seeds × Walker-v0 + UpStepper-v0, population 15, eval_budget 30
-(2 generations), ppo_timesteps 2000, K = 1 / 2, 20 workers, mirror
-`/mnt/evodevo-backup/validation` (disk `sdb`), notifier = shell command
-appending to a file, `--stamp "VALIDATION - NOT A RESULT"`.
+## 11. Test results
 
-| campaign | HEAD | purpose | outcome |
-|---|---|---|---|
-| mini-1 | `d89f624` | uninterrupted reference | complete in **276 s** (Walker 74 s, UpStepper 111 s; 90-min limit) |
-| mini-2 | `179ae00` | kill/resume | complete after SIGKILL + resume; identical to mini-1 |
-| mini-3 | `179ae00` | stop script | stopped (123 s, SIGTERM — defect 3, fixed) |
-| stop-4, stop-5 | `26faf94` | stop script re-run | stopped in 5.2 s and 4.2 s, exit 0 |
-| mini-6 | `26faf94` | serial ≡ interleaved at final code | complete (Walker 73 s, UpStepper 110 s); identical to mini-1 |
-| diag | `179ae00` | stack dump of the stop hang | stopped |
+The clean committed full-suite run recorded by `f44061d` is **1,093 passed,
+33 warnings in 1,141.20 s (19:01), zero failures**. It included simulator,
+campaign-launcher, real-PPO, worker/affinity, preflight, and visualization
+coverage. Three launcher tests temporarily blocked by an untracked audit input
+then passed 3/3 after a clean baseline was restored. The warnings were existing
+dependency warnings or deliberately exercised missing-run/render warnings.
 
-**7b checks on mini-1 (all PASS):**
-- D7 phase order: plan `[Walker-v0, UpStepper-v0]`; Walker phase ended before
-  UpStepper started; last Walker PPO completion < first UpStepper PPO completion.
-- Walker milestone package generated automatically at the phase boundary
-  (`milestone_status.Walker-v0.ok = true`, generated between Walker end and
-  UpStepper start), status COMPLETE (240/240 evaluations), no required artifact
-  missing, stamped. Inventory (36 files): `MILESTONE_REPORT.md`, `STAMP.txt`,
-  `best_bodies/{direct,nca,rule_based,rule_based_monotone}.{npz,png}` and
-  `*_rollout.{gif,mp4}` (trained-controller videos), `figures/{fitness_curves,
-  budget_curves,validity_diversity}.{png,pdf}`, `stats/{current_rates,
-  current_run_rates,evaluations_to_90pct_arm_median,final_best_morphology,
-  final_fitness_summary,omnibus,pairwise,rule_based_vs_monotone,summary,
-  validity_diversity_by_generation}.csv`, `stats/tables.{md,tex}`. The
-  UpStepper package additionally has the four `mean_of_2_*` sensitivity files.
-- Every evaluation record has a body and a genome: 480/480 (planned 480).
-- Every valid PPO training has a policy that reloads: 305/305 policies loaded
-  with `stable_baselines3.PPO.load`; 0 incomplete trainings.
-- Journal count equals expected PPO tasks: 305 = Σ over valid, non-cached
-  evaluations of K.
-- Mirror: checksum manifest of the 760-file snapshot verifies on
-  `/dev/sdb1` (disk `sdb`; results on `sda`); after the final sync only
-  `manifest.json`, `alerts.jsonl`, `transcript.log` changed, as expected.
-- Stamp: manifest `artifact_stamp`, `STAMP.txt`, every milestone figure title,
-  report header, `tables.md` and `final_fitness_summary.csv`.
+For this reconciliation, the current tree collected exactly 1,093 tests. A
+fresh focused run passed 82 tests; three launch-path tests correctly refused the
+then-dirty report-editing tree. Immediately after committing the report, those
+three tests passed **3/3 in 61.22 s** from the clean state. Together the run
+covered dispatch policy/model, failures, resume, operations, entry point,
+worker pool, notification/dashboard, dry run, and mirror checks.
 
-**7c live checks at 26 s (all PASS):** 20 workers with single-CPU affinities
-`0,2,4,6,8,10,12,14` (P-core primaries, slots 0–7) then `16–27` (E-cores,
-slots 8–19), each 1 thread; scheduler (and resource tracker) pinned to the
-unused hyperthread siblings `1,3,5,7,9,11,13,15`; all journal records so far
-show torch threads 1 and thread env 1/FALSE; `systemd-inhibit --list` showed
-`sleep:idle:handle-lid-switch … EvoDevo campaign VALIDATION-NOT-A-RESULT-mini-1 block`
-(manifest `launch_checks.sleep_inhibitor = systemd-inhibit`).
+## 12. Exact operator commands
 
-**7f serial ≡ interleaved (PASS):** mini-6 (CLI, 20 workers) vs 16 serial
-`run_ea` runs rebuilt from mini-6's recorded plan (encoder construction
-copied from `CampaignScheduler._make_run`, threads pinned to 1): all 16 runs
-IDENTICAL on `eval_index, generation, genome_id, parent_id, fitness, valid,
-reason, body_hash, per_seed_fitness, per_seed_completed, genome, body,
-best_fitness_so_far, cache_hit` (480 records).
-
-Per-run outcome of the validation grid (identical in mini-1, -2, -6 and serial;
-VALIDATION - NOT A RESULT — 2 generations at 2000 timesteps mean nothing
-scientifically):
-
-| arm | Walker s0 / s1 best (valid of 30) | UpStepper s0 / s1 best (valid of 30) |
-|---|---|---|
-| direct | -0.074 (1) / 0.569 (2) | -0.093 (1) / -2.775 (2) |
-| nca | 0.100 (21) / 0.038 (16) | 0.095 (20) / 0.037 (15) |
-| rule_based | 0.012 (11) / 0.219 (20) | 0.016 (11) / 0.025 (20) |
-| rule_based_monotone | 0.012 (12) / 0.034 (20) | 0.007 (12) / 0.032 (20) |
-
-**Step 5b — worker RSS vs task sequence.** The PPO pool has **no worker
-recycling**: `map_ppo_tasks` never recycles (`max_tasks_per_child` applies to
-`map_tasks` only) and one pool serves the whole campaign. RSS (psutil RSS at the
-end of each task; the journal field is named `peak_rss_mb` but is not a peak)
-per worker in mini-1: 13–17 tasks each, starting 415–416 MB, plateauing at
-422–425 MB; **largest growth 2.3%** (< 25%). No recycling implemented; nothing
-changed.
-
-## 6. Kill/resume and stop-script evidence
-
-- **Kill/resume (mini-2).** SIGKILL to the scheduler's process group during
-  UpStepper generation 0 (12 PPO tasks running, 36 queued, 48 UpStepper tasks
-  journaled, no UpStepper checkpoint yet); 0 survivors in the group.
-  `run_campaign.sh --resume latest` removed the stale tmux session ("Removing
-  stale tmux session of VALIDATION-NOT-A-RESULT-mini-2: its scheduler is not
-  running."), re-proposed generation 0 (genome hashes checked against the
-  journal), reused the 48 journaled results and completed: journal 305 rows,
-  305 unique task keys (nothing re-trained or duplicated). Final fitness,
-  validity, body hashes (and genomes, bodies, per-seed fitness) **identical to
-  the uninterrupted mini-1 on all 480 records**; the journal's per-task
-  genome hash / fitness / completed also identical.
-- **Stop script.** On `26faf94`, against running real campaigns (23 processes
-  in the scheduler group: inhibitor, scheduler, tracker, 20 workers):
-  `stop_campaign.sh` (defaults) → "no evodevo campaign processes remain", exit
-  0, **4.2 s / 5.2 s**; afterwards `pgrep -f 'python.*-m evodevo\.'` = 0, spawn
-  workers = 0, scheduler group empty, inhibitor locks = 0, tmux server gone,
-  manifest `stopped`, transcript shows `Resume: …` and exit 0. (Before
-  `26faf94`: 123 s, SIGTERM — defect 3.)
-
-## 7. Monitoring, alerts and mirror evidence
-
-- `python -m evodevo.campaign.alerts --test`: with nothing configured prints
-  `NO NOTIFIER CONFIGURED - alerts go to alerts.jsonl only`, exit 2; with the
-  file notifier: `Test notification delivered via shell_command`, exit 0, line
-  written.
-- Live campaigns delivered through the file notifier: 5 daily heartbeats (one
-  per monitor start), `phase_complete:Walker-v0` ×3 and
-  `phase_complete:UpStepper-v0` ×3.
-- Heartbeat with a test override (interval 60 s, repeat window 30 s — the
-  production ordering 24 h > 6 h preserved): checks at t = 0, 30, 59, 61, 100,
-  125 s → 3 delivered (t = 0, 61, 125). (With only the interval overridden the
-  6 h repeat window suppresses the second heartbeat — by design, not a bug.)
-- De-duplication with an injected persistent `stall`: 43 journaled checks over
-  7 h → exactly 3 notifications: `[alert]` at 0 h, `[alert]` at 6 h,
-  `[cleared]` on recovery.
-- Mock mirror disk full (12.5 GB < 50 GB): `[alert] disk_mirror: {"free_gb": 12.5}` delivered.
-- Mirror: see Section 5; the scheduler and monitor re-check the mirror's mount
-  and physical disk before every sync.
-
-**Prompt-6 addenda audit (Step 6):**
-
-| item | file | test | status |
-|---|---|---|---|
-| alert de-dup: first trigger, 6-hourly repeat, "cleared" notice | `evodevo/campaign/alerts.py` (`evaluate`, `REN_NOTIFY_S`) | `test_operations.py::test_alert_rate_limit_and_clear_are_durable`, `::test_two_alert_writers_share_one_rate_limit` | present; live-checked (7g) |
-| 24-hourly heartbeat | `alerts.py` (`HEARTBEAT_S`, `heartbeat`) | `::test_heartbeat_and_phase_notice_deduplication`, `::test_all_alert_conditions_and_daily_heartbeat`, `::test_failed_heartbeat_is_journaled_and_retried` | present; live-checked (7g) |
-| milestone-failure alert | `alerts.py::milestone_failure`, `milestone.py::run_subprocess` | `::test_milestone_package_and_subprocess_failure_isolated`, `test_scheduler_resume.py::test_milestone_failure_cannot_abort_completed_phase` | present |
-| ETA "prior" (final_estimate.json) until 50 tasks per (arm, task), then "measured" | `dashboard.py` (`PRIOR_PATH`, `>= 50`) | `::test_dashboard_prior_then_per_arm_core_class_measured_eta`, `::test_initial_campaign_prior_uses_joint_p2_total_band` | present |
-| stall threshold = 2 × E-core p95 of slowest (arm, task); completion rate < 25% of trailing median for 1 h | `monitor.py::slowest_ecore_p95_s`, `alerts.py::inspect` | `::test_stall_timer_starts_before_first_completed_task_and_ecore_threshold`, `::test_partial_stall_one_hour_window_survives_monitor_restart` | present |
-| mirror mandatory by default | `run_campaign.sh`, `scheduler.cli_main` | `::test_run_script_help_and_existing_session_attach`; now also physical-disk/mountpoint (`test_mirror_disk.py`) | present, strengthened |
-| dashboard: Walker-milestone ETA date/time; P2 estimate vs live projection with >432 h flag | `dashboard.py::collect/render` | `::test_dashboard_plain_and_tty_render_eta_range`, `::test_dashboard_prior_then_per_arm_core_class_measured_eta` (`projection_exceeds_432h`), new `::test_dashboard_shows_walker_milestone_time_after_the_phase_ends` | present; post-phase gap fixed (`39d1426`) |
-
-No item is missing.
-
-## 8. Final estimate
-
-From the committed, pre-registered `results/campaign_prep/final_estimate/final_estimate.json`
-(500 trials), as printed by `run_campaign.sh --dry-run` (Step 7h, launch = now,
-2026-09-28 15:49 local):
-
-| | mean | p5 | p95 |
-|---|---|---|---|
-| total | 403.2 h | 400.6 h | 406.0 h |
-| Walker-v0 phase | 123.0 h | 121.9 h | 124.1 h |
-| UpStepper-v0 phase | 280.2 h | 277.8 h | 282.9 h |
-
-Walker milestone at 30.5% of runtime. Calendar from a launch at 00:00 on
-2026-10-01 (`--launch-at 2026-10-01T00:00`): Walker milestone / Walker end
-2026-10-06 01:55 (p5) · 02:58 (mean) · 04:06 (p95); campaign end
-2026-10-17 16:33 (p5) · 19:09 (mean) · 21:57 (p95).
-
-**This estimate does not model the scheduler that would run the campaign.**
-`scripts/capacity_planning/final_estimate.py` → `simulate_campaign.run_interleaved`
-simulates continuous greedy dispatch (any idle worker takes the next ready
-task; each run advances to its next generation on its own). The real
-scheduler has (1) a **global** generation barrier across all 20 runs of a
-phase (`_phase_round` dispatches only the lowest generation), (2) PPO tasks
-submitted in **waves of 20, each drained completely** before the next
-(`map_ppo_tasks`), and (3) every run's propose/decode/sentinel work serial in
-the one scheduler process. With 8 P-cores and 12 E-cores at a 2.3× speed
-ratio, every wave waits for its slowest E-core task while P-cores idle.
-Re-simulating with the same inputs, draws and trial count
-(`final_estimate.py` functions unchanged; 200 trials):
-
-| policy | total mean | p5 | p95 | Walker | UpStepper |
-|---|---|---|---|---|---|
-| modelled (reproduces the committed estimate) | 403.0 h | 400.2 h | 405.7 h | 123.0 h | 280.0 h |
-| **real scheduler** | **662.1 h** | 656.4 h | **667.1 h** | 203.2 h | 458.9 h |
-
-Ratio 1.64. The real mini-campaign corroborates it: measured E/P task-time
-ratio 2.1–2.2, worker utilisation 43% (Walker) and 55% (UpStepper), P-cores
-busy only 30–36% (at 2000 timesteps fixed per-generation costs also weigh
-in, so this is indicative, not a calibration). **Projected completion on the
-real policy:** from a 2026-10-01 00:00 launch, Walker milestone ≈ 2026-10-09
-11:00, campaign end ≈ 2026-10-28 14:00 (mean) — see Section 12.
-
-## 9. Disk projection vs free space
-
-`results/campaign_prep/disk/disk_estimate.json`: projected 32.9 GB; D10 3×
-margin requires 98.6 GB.
-
-| disk | device → physical disk | free | 3× margin |
-|---|---|---|---|
-| main (`/home/ubuntu/projects/EvoDevo/results`) | `/dev/sda7` → `sda` | 300.0 GB | OK |
-| mirror (`/mnt/evodevo-backup`, mountpoint) | `/dev/sdb1` (ntfs via fuseblk) → `sdb`, 5.5 TB | 5,936.9 GB | OK |
-
-Same physical disk: **no**. `/media/ubuntu/A27C…` (`/dev/sda3`, the ab8f73d
-candidate) is refused as the same disk as the results. rsync to the NTFS
-backup works (ownership/permissions are flattened by ntfs-3g; content
-checksums verify). Measured validation footprint: 95 MB per 480-evaluation
-mini-campaign. The disk projection assumes the modelled wall-clock only for
-telemetry volume; the longer real-policy duration adds telemetry/transcript
-volume roughly in proportion (still far inside both disks).
-
-## 10. Operator commands
-
-```
-# prerequisites: backup disk mounted at /mnt/evodevo-backup (separate disk),
-# notifier configured in campaign.local.yaml and proven with:
+```bash
+# Configure and prove a real notifier first (does not launch the campaign).
 .venv/bin/python -m evodevo.campaign.alerts --test
 
-# dry run (writes nothing): plan, calendar, disk, mirror disk check, notifier, CPU placement
-bash scripts/campaign/run_campaign.sh --dry-run --mirror-dir /mnt/evodevo-backup --launch-at 2026-10-01T00:00
+# Read-only launch rehearsal; choose the intended midnight explicitly.
+bash scripts/campaign/run_campaign.sh --dry-run \
+  --mirror-dir /mnt/evodevo-backup \
+  --launch-at 2026-09-30T00:00
 
-# launch (in tmux; refuses a dirty tree, missing notifier, same-disk or unmounted mirror)
-bash scripts/campaign/run_campaign.sh --mirror-dir /mnt/evodevo-backup
+# Real launch only after every item in Section 13 is closed.
+bash scripts/campaign/run_campaign.sh \
+  --mirror-dir /mnt/evodevo-backup
 
-# attach
-tmux attach -t evodevo-campaign
-
-# status (one-shot)
+# Observe, attach, stop, or resume.
 bash scripts/campaign/status_campaign.sh --campaign latest
-
-# graceful stop (drains in-flight PPO tasks, releases the inhibitor, removes the session)
+tmux attach -t evodevo-campaign
 bash scripts/campaign/stop_campaign.sh --campaign latest
+bash scripts/campaign/run_campaign.sh --resume latest \
+  --mirror-dir /mnt/evodevo-backup
 
-# resume (also after a crash: a stale session of this campaign is removed automatically)
-bash scripts/campaign/run_campaign.sh --resume latest --mirror-dir /mnt/evodevo-backup
-
-# manual milestone regeneration for a phase (same isolated subprocess the scheduler uses)
-.venv/bin/python -m evodevo.campaign.milestone --campaign <CAMPAIGN_ID> --output-root results/campaign --task Walker-v0
+# Regenerate a completed phase package if required.
+.venv/bin/python -m evodevo.campaign.milestone \
+  --campaign <CAMPAIGN_ID> --output-root results/campaign --task Walker-v0
 ```
 
-## 11. Known gaps and accepted risks
+The launcher refuses a dirty tree, missing required notifier, unmounted or
+same-physical-disk mirror, and incompatible campaign/config hash. Do not use
+`--no-notify` or a same-disk override for the scientific campaign.
 
-1. **BLOCKING — dispatch policy vs pre-registered estimate** (Section 8, 12).
-2. Validation scale: real PPO at 2,000 timesteps, 2 generations, 2 seeds;
-   the real campaign runs 1–1.2 M timesteps, 20 generations, 5 seeds. The RSS
-   plateau (≤ 2.3% over ≤ 17 tasks/worker) cannot exclude slow growth over the
-   ~300+ tasks each worker will run; the dashboard shows RAM/swap and the swap
-   alert fires above 1 GB.
-3. The operator's `campaign.local.yaml` has no notifier yet; the real launch
-   is refused until one is configured (or `--no-notify` is passed, which this
-   report does not recommend).
-4. The backup disk is NTFS through FUSE; a sync failure there raises
-   `mirror_failed` but a very slow FUSE write path was not load-tested beyond
-   760-file snapshots.
-5. One uncaptured intermittent `tests/campaign` failure (1 in 18 runs) —
-   probable cause fixed (Section 4), not proven.
-6. The graceful-stop deadlock is timing-dependent; its regression test is the
-   deterministic pool-level check, while the CLI-level stop test passes on
-   both old and new code.
-7. `stats/tables.md` is written as CSV text because the optional `tabulate`
-   package is not installed (pre-existing).
-8. An unrelated tmux session `evodevo-preflight` (created 2026-09-22) remains;
-   not created or touched by this work.
+## 13. Known gaps and operator gates
 
-## 12. Verdict: **NOT READY**
+- Configure the operator-owned notifier in the ignored local configuration and
+  confirm actual delivery. It was intentionally not touched here.
+- On launch day, re-run the dry run and confirm the backup mount, distinct
+  physical disks, free space, CPU placement, ssh/session policy, and a clean
+  tree.
+- Reserve the machine for the estimated duration, verify cooling and reboot/
+  unattended-upgrade policy, stop avoidable operator applications (including
+  AnyDesk), and close the pre-existing `evodevo-preflight` tmux session.
+- The 500-trial interval conditions on measured input means; the +10% PPO-time
+  sensitivity exceeds 432 h. Runtime utilization/ETA monitoring is therefore
+  operationally important even though the registered base-case guard passes.
+- Real-PPO validation used 2,000-step mini runs rather than 1.0M/1.2M scientific
+  runs. Worker RSS plateaued in validation, but slow growth over hundreds of
+  tasks per worker cannot be excluded.
+- The earlier intermittent campaign-test failure was not reproduced in 20 idle
+  plus 20 loaded runs; its cause remains unproven.
+- The mirror is NTFS/FUSE. Checksums pass, but long-duration behavior was not
+  load-tested beyond the validation snapshots.
 
-**Blocking item — the budget guard was evaluated on a dispatch policy the
-scheduler does not implement.** The pre-registered guard (p95 ≤ 432 h, else
-descope) recorded "none applied" from an estimate that models continuous
-dispatch; the actual scheduler drains waves of 20 behind a global generation
-barrier. Modelled with identical inputs, that policy gives p95 ≈ 667 h
-(mean ≈ 662 h), which would trigger the pre-registered descoping sequence,
-and the real mini-campaign's 43–55% worker utilisation points the same way.
-Resolving it needs a human decision, not a validation-time change (this task
-forbids scheduling changes): either (a) change the scheduler to continuous
-dispatch across generations/runs — a scheduling change that must then pass
-serial ≡ interleaved and resume ≡ uninterrupted again and be re-estimated — or
-(b) re-run `final_estimate.py` with the real dispatch policy and apply the
-pre-registered guard mechanically to its p95.
+## 14. Verdict: **NOT READY**
 
-Everything else required for launch is in place and validated through the
-real launcher: the spawn/import fix, real-PPO mini-campaign, automatic Walker
-milestone, kill/resume and stop, serial ≡ interleaved, notifier truthfulness,
-physical-disk mirror, `--dry-run`, sleep inhibitor, pinning and single-thread
-evidence, and the addenda audit.
-
-## Pre-launch operator checklist
-
-| # | item | status |
-|---|---|---|
-| 1 | Backup disk mounted at `/mnt/evodevo-backup` and on a different physical disk from `results/` (`run_campaign.sh --dry-run` → `same physical disk: False`) | verified 2026-09-28 (`sdb1`/`sdb` vs `sda7`/`sda`); re-check on launch day |
-| 2 | Notifier configured in `campaign.local.yaml` and delivery proven (`python -m evodevo.campaign.alerts --test` exits 0 and the message arrives) | **not done** — operator |
-| 3 | Blocking item in Section 12 resolved and the budget guard re-applied | **not done** — decision owner |
-| 4 | `run_campaign.sh --dry-run` shows `LAUNCH CHECKS: PASS` and a calendar consistent with item 3 | pending items 2–3 |
-| 5 | Cooling adequate for ~2–4 weeks at 20 busy cores (temperature alert fires at ≥ 95 °C sustained 10 min) | operator to confirm |
-| 6 | Machine reserved for the campaign's duration (no other heavy jobs; unattended upgrades/reboots considered) | operator to confirm |
-| 7 | Working tree clean at launch (the launcher refuses otherwise) | enforced |
-
-## 13. Notification & Dashboard Verification Checklist
-
-Already everything is run — this checklist verifies the notification/dashboard layer only. Do not re-run the full campaign test suite; check notification delivery per this list if you want to test.
-
-- [x] `campaign_started` fires once with the locked plan, guard outcome, estimate calendar, and first anchored heartbeat time.
-- [x] `phase_started:{task}` fires once per phase and remains durable across restart.
-- [x] `daily_heartbeat` fires at local 18:00, is resume-safe, and does not replay missed days.
-- [x] `campaign_complete` retries delivery three times and writes `CAMPAIGN_COMPLETE.txt` even if every delivery fails.
-- [x] Every old and new notification carries the common status footer with phase progress, overall progress, and ETA.
-- [x] Dashboard shows the banner, both progress percentages, ETA range, elapsed time, utilization target, and freshness counter.
-- [x] Dashboard repaints a final static screen on both normal and abnormal scheduler exit.
-- [x] ASCII fallback renders without box-drawing or emoji.
-- [x] Existing alert deduplication, rate limiting, trigger thresholds, and raw journal schema are unchanged; only `display_message` is added.
-- [x] No existing test was broken silently; no exact raw alert-literal assertion existed, and heartbeat timing assertions were deliberately updated for the new 18:00 requirement.
-
-## 14. Final Comprehensive Verification (2026-09-29)
-
-### Full-suite result
-
-` .venv/bin/pytest -q ` completed from a clean committed repository state:
-**1093 passed, 33 warnings in 1141.20s (0:19:01)**. The simulator-backed slow,
-integration, campaign launcher, real-PPO, parallel worker/affinity, preflight,
-and visualization tests were included. The 33 warnings are existing dependency
-or deliberately exercised missing-run/render warnings; no test failed.
-
-The three launcher tests initially blocked by an untracked audit attachment
-were rerun after establishing a clean baseline: **3 passed in 60.99s**.
-
-### Notification and dashboard result
-
-The Section 13 checklist is fully satisfied. Full-suite coverage confirms the
-new shared status context, status footer, 18:00 resume-safe heartbeat,
-phase/start/complete notifications, completion retry-and-marker behavior,
-alert recovery and durable de-duplication, dashboard banner/progress/ETA/
-freshness, final screen, ASCII mode, and unchanged raw alert-journal behavior.
-
-### Verification fixes and cleanup
-
-No scheduling, evaluation, selection, dispatch, journal, checkpoint, or
-scientific semantics were changed. Two test-hygiene fixes were made: the
-required repository-root `CAMPAIGN_COMPLETE.txt` marker is ignored by Git, and
-the test session preserves any pre-existing marker while removing only markers
-created by synthetic integration tests. The tracked order-independence audit's
-wall-clock measurement was restored after its documented test side effect.
-
-No real campaign was started; `campaign.local.yaml` was not read or modified;
-no verification-owned campaign process, tmux session, root completion marker,
-or drill artifact remains. The pre-existing operator-owned
-`evodevo-preflight` tmux session remains attached and was not touched.
-
-### Final readiness verdict: **NOT READY**
-
-The code and complete test suite are finalized and green, but the genuine
-Section 12 dispatch-policy/432-hour guard discrepancy remains unresolved, and
-the operator-owned notifier, launch-day mirror re-check, cooling, and machine
-reservation gates remain outstanding. Do not mark the campaign READY or start
-it until those gates are closed.
+The dispatch-policy contradiction is resolved in favor of the current code:
+continuous per-run dispatch exists, is committed, shares its policy core with
+the estimator, passes conformance and re-proofs, and yields a base p95 of
+405.9 h, so the 432 h guard applies no fallback. The remaining blockers are
+operator-owned launch gates in Section 13—especially notifier delivery,
+launch-day mirror/idle checks, machine reservation, cooling, and reboot policy.
+Close those gates and rerun the dry run before starting the scientific campaign.
