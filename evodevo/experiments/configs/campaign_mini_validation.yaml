@@ -1,0 +1,25 @@
+# Validation-only real-PPO mini-campaign used by the pre-launch proof.  It
+# keeps the accepted arms, task order, population geometry, K, aggregation,
+# factors, and scheduler path while reducing only evaluation count and PPO
+# timesteps to the explicitly required validation scale.
+profile: campaign
+encoders: [direct, nca, rule_based, {encoder: rule_based, variant: monotone}]
+tasks: [Walker-v0, UpStepper-v0]
+seeds: [0, 1]
+configs_root: evodevo/experiments/configs
+output_dir: results/runs
+surrogate: false
+factors:
+  dev_steps: 100
+  init_condition: center_seed
+profile_overrides:
+  population_size: 15
+  offspring_size: 15
+  eval_budget: 30
+  ppo_timesteps:
+    Walker-v0: 2000
+    UpStepper-v0: 2000
+  ppo_seeds:
+    Walker-v0: 1
+    UpStepper-v0: 2
+  ppo_seed_aggregation: max
