@@ -112,13 +112,12 @@ def main(argv=None):
                 serial = run_ea(encoder, evaluator, config, logger=logger)
             finally:
                 logger.close()
-            if interleaved is None:
+            parallel = None if interleaved is None else interleaved.get(run_plan.run_key)
+            if parallel is None:
                 state = latest_checkpoint(str(campaign_dir / relative / "checkpoint"))
                 if state is None or not state.get("done"):
                     raise AssertionError(f"completed checkpoint unavailable for {run_plan.run_key}")
                 parallel = EvolutionRun.from_state(encoder, config, state).result()
-            else:
-                parallel = interleaved[run_plan.run_key]
             if normalized(serial.records) != normalized(parallel.records):
                 raise AssertionError(f"evaluation records differ for {run_plan.run_key}")
             if normalized(serial.population) != normalized(parallel.population):
