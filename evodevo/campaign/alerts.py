@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import fcntl
 import json
 import os
@@ -26,6 +27,16 @@ WORKER_RSS_LIMIT_BYTES = 40 * 1024 ** 3
 # Step 5 steady-state measurements, minus the fixed 15 percentage-point
 # production guard margin.  These are operational thresholds, not estimates.
 UTILIZATION_FLOOR = {"Walker-v0": 0.996922 - 0.15, "UpStepper-v0": 0.984949 - 0.15}
+
+
+def format_display_message(name, details, status, *, label="alert"):
+    """The only operator-facing alert formatter; journal machine text remains raw."""
+    from .status import CampaignStatus, status_footer
+    if status is None:
+        status = CampaignStatus.from_snapshot({"phase": (details or {}).get("phase", "unknown")})
+    heading = f"{label}: {name}"
+    body = json.dumps(details or {}, sort_keys=True, indent=2, default=str)
+    return f"{heading}\n{body}\n{status_footer(status)}"
 
 
 DEFAULT_NOTIFY_CONFIG = "campaign.local.yaml"
@@ -84,17 +95,20 @@ class Notifier:
 
 
 class AlertManager:
-    def __init__(self, path, notifier=None, now=None):
+    def __init__(self, path, notifier=None, now=None, sleep=None):
         self.path = str(path)
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self.notifier = notifier or Notifier()
         self.now = now or time.time
+        self.sleep = sleep or time.sleep
+        self.status = None
         self._active = {}
         self._last_notice = {}
         self._temp_since = None
         self._low_rate_since = None
         self._low_utilization_since = None
         self._last_heartbeat = None
+        self._next_heartbeat_at = self._next_1800(self.now())
         self._last_throttle_count = None
         self._temp_24h = deque()
         self._journal_offset = 0
@@ -122,6 +136,7 @@ class AlertManager:
             self._last_notice[name] = stamp
         if name == "daily_heartbeat" and emitted:
             self._last_heartbeat = stamp
+            self._next_heartbeat_at = self._next_1800(stamp)
         if not restore_timers:
             return
         if name == "temperature" and stamp >= cutoff:
@@ -165,28 +180,30 @@ class AlertManager:
             self._consume(json.loads(line), restore_timers=restore_timers)
         self._journal_offset = handle.tell()
 
-    def evaluate(self, name: str, triggered: bool, details=None, *, informational=False):
+    def evaluate(self, name: str, triggered: bool, details=None, *, informational=False,
+                 status=None, force=False):
         """Journal every check; notify first, every 6 h, and once on clear."""
         with open(self.path, "a+", encoding="utf-8") as handle:
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
             self._refresh_locked(handle)
             stamp = self.now()
             previous = self._active.get(name, False)
-            status = "active" if triggered else "clear"
-            event = {"timestamp": stamp, "condition": name, "status": status,
+            state = "active" if triggered else "clear"
+            event = {"timestamp": stamp, "condition": name, "status": state,
                      "details": details or {}, "notified": False}
             should_notify = (
-                triggered and (not previous or stamp - self._last_notice.get(name, float("-inf")) >= REN_NOTIFY_S)
+                force or (triggered and (not previous or stamp - self._last_notice.get(name, float("-inf")) >= REN_NOTIFY_S))
             ) or (not triggered and previous)
             if should_notify:
                 label = "cleared" if not triggered else ("information" if informational else "alert")
                 message = f"[{label}] {name}: {json.dumps(details or {}, sort_keys=True)}"
                 event["message"] = message
+                event["display_message"] = format_display_message(name, details, status or self.status, label=label)
                 if not getattr(self.notifier, "configured", True):
                     event["delivery"] = "journal_only"
                 else:
                     try:
-                        self.notifier.send(message)
+                        self.notifier.send(event["display_message"])
                         event["notified"] = True
                     except Exception as exc:  # notifier failure must be visible in journal
                         event["notification_error"] = f"{type(exc).__name__}: {exc}"
@@ -199,7 +216,8 @@ class AlertManager:
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
             return event
 
-    def inspect(self, snapshot: dict, *, p95_ecore_s: float, mirror_ok=True):
+    def inspect(self, snapshot: dict, *, p95_ecore_s: float, mirror_ok=True, status=None):
+        self.status = status or snapshot.get("campaign_status_object")
         stamp = self.now()
         last = snapshot.get("seconds_since_last_task")
         self.evaluate("stall", last is not None and last > 2 * p95_ecore_s,
@@ -254,8 +272,20 @@ class AlertManager:
         rss = snapshot.get("worker_rss_bytes")
         self.evaluate("worker_rss", isinstance(rss, (int, float)) and rss > WORKER_RSS_LIMIT_BYTES,
                       {"rss_bytes": rss, "limit_bytes": WORKER_RSS_LIMIT_BYTES})
-        if self._last_heartbeat is None or stamp - self._last_heartbeat >= HEARTBEAT_S:
+        if self._heartbeat_due(stamp):
             self.heartbeat(snapshot)
+
+    @staticmethod
+    def _next_1800(stamp):
+        local = dt.datetime.fromtimestamp(stamp).astimezone()
+        today = local.replace(hour=18, minute=0, second=0, microsecond=0)
+        return today.timestamp() if local <= today else (today + dt.timedelta(days=1)).timestamp()
+
+    def _heartbeat_due(self, stamp):
+        # No catch-up loop: one inspection after downtime emits at most once.
+        if self._last_heartbeat is None:
+            return stamp >= self._next_heartbeat_at
+        return stamp >= self._next_1800(self._last_heartbeat)
 
     def heartbeat(self, snapshot):
         stamp = self.now()
@@ -278,6 +308,25 @@ class AlertManager:
         # One durable condition per phase: restarting after a phase boundary
         # cannot emit another notice, while the next phase still gets its own.
         return self.evaluate(f"phase_complete:{task}", True, {"task": task}, informational=True)
+
+    def campaign_started(self, details):
+        return self.evaluate("campaign_started", True, details, informational=True)
+
+    def phase_started(self, task):
+        return self.evaluate(f"phase_started:{task}", True, {"task": task}, informational=True)
+
+    def campaign_complete(self, details, marker_path):
+        """Three durable attempts, then a marker that survives channel failure."""
+        event = None
+        for attempt in range(1, 4):
+            event = self.evaluate("campaign_complete", True, {**details, "attempt": attempt},
+                                  informational=True, force=True)
+            if event.get("notified") or event.get("delivery") == "journal_only":
+                break
+            if attempt < 3:
+                self.sleep(10 * (2 ** (attempt - 1)))
+        Path(marker_path).write_text(details["marker_text"], encoding="utf-8")
+        return event
 
     def milestone_failure(self, task, missing, error=None):
         return self.evaluate(f"milestone_failure:{task}", True,

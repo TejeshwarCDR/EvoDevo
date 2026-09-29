@@ -146,7 +146,7 @@ printf -v TRANSCRIPT_QUOTED '%q' "$RUN_DIR/transcript.log"
 tmux "${TMUX_ARGS[@]}" new-session -d -s evodevo-campaign -n dashboard
 tmux "${TMUX_ARGS[@]}" set-environment -t evodevo-campaign EVODEVO_CAMPAIGN_ID "$CAMPAIGN_ID"
 tmux "${TMUX_ARGS[@]}" send-keys -t evodevo-campaign:dashboard \
-  ".venv/bin/python -m evodevo.campaign status --campaign '$CAMPAIGN_ID' --output-root '$OUTPUT_ROOT' --watch" C-m
+  "scripts/campaign/dashboard_watch.sh '$CAMPAIGN_ID' '$OUTPUT_ROOT'" C-m
 tmux "${TMUX_ARGS[@]}" split-window -h -l 50 -t evodevo-campaign:dashboard \
   "tail -F '$RUN_DIR/transcript.log'"
 tmux "${TMUX_ARGS[@]}" split-window -v -l 15 -t evodevo-campaign:dashboard.1 "top"

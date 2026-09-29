@@ -13,6 +13,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 import numpy as np
+from .status import CampaignStatus
 
 PRIOR_PATH = Path(__file__).resolve().parents[2] / "results/campaign_prep/final_estimate/final_estimate.json"
 P2_MEAN_H = 403.2
@@ -269,6 +270,10 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
                          r.get("completed_at", r.get("timestamp", 0)) < now - hour * 3600)
                     for hour in range(min(24, max(1, math.ceil(elapsed / 3600))))]
     alerts = _rows(os.path.join(root, "alerts.jsonl"))
+    alert_states = {}
+    for alert in alerts:
+        if alert.get("condition"):
+            alert_states[alert["condition"]] = alert.get("status")
     dispatch = _json(os.path.join(root, "dispatch_status.json"), {})
     if dispatch.get("task") == task:
         for run_key, proposed_generation in dispatch.get("run_generations", {}).items():
@@ -286,7 +291,7 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
     mirror = manifest.get("mirror_dir")
     mirror_status = _json(os.path.join(root, "mirror_status.json"), {})
     info = telemetry if telemetry is not None else _telemetry(root, mirror)
-    return {
+    snapshot = {
         "campaign_id": manifest.get("campaign_id", os.path.basename(root)), "phase": task,
         "elapsed_s": elapsed, "phase_completed": completed_phase, "phase_total": phase_total,
         "generation": generation, "tasks_running": dispatch.get("tasks_running", 0),
@@ -313,16 +318,36 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
                                                            if r.get("result", {}).get("error")), None),
         "seconds_since_last_task": now - last_task if last_task else None,
         "last_alert": alerts[-1] if alerts else None,
+        "alert_states": alert_states,
         "mirror_disabled": manifest.get("no_mirror", False),
         "notify_disabled": manifest.get("no_notify", False),
         "same_disk_mirror": manifest.get("allow_same_disk_mirror", False),
         "last_mirror_success": mirror_status.get("last_success", manifest.get("last_mirror_success")),
+        "as_of_epoch": now,
+        "campaign_status": manifest.get("status"),
+        "campaign_complete": manifest.get("status") == "complete",
+        "phase_transitioning": bool(status.get(task, {}).get("status") == "complete" and
+                                    manifest.get("status") != "complete"),
         **info,
     }
+    snapshot["campaign_status_object"] = CampaignStatus.from_snapshot(snapshot, now=now)
+    return snapshot
 
 
-def render(snapshot: dict, tty: bool = False) -> str:
-    lines = [f"Campaign {snapshot['campaign_id']} | phase {snapshot['phase']} | elapsed {_duration(snapshot['elapsed_s'])}",
+def render(snapshot: dict, tty: bool = False, *, ascii_only: bool | None = None, now: float | None = None) -> str:
+    status = snapshot.get("campaign_status_object") or CampaignStatus.from_snapshot(snapshot, now=now)
+    ascii_only = (os.environ.get("EVODEVO_DASHBOARD_ASCII") == "1") if ascii_only is None else ascii_only
+    banner = {"RUNNING": "RUNNING", "PHASE_TRANSITIONING": "PHASE TRANSITIONING",
+              "STALLED": "STALLED - CHECK ALERTS", "CAMPAIGN_COMPLETE": "CAMPAIGN COMPLETE"}[status.banner_state]
+    eta = "COMPLETE" if status.banner_state == "CAMPAIGN_COMPLETE" else (
+        f"{_when(status.most_likely_finish.timestamp())} (range {_when(status.eta_range[0].timestamp()) if status.eta_range[0] else 'n/a'}–{_when(status.eta_range[2].timestamp()) if status.eta_range[2] else 'n/a'})")
+    age = max(0, int((time.time() if now is None else now) - status.as_of.timestamp()))
+    rule = "=" if ascii_only else "═"
+    lines = [rule * 72, f"{banner}",
+             f"Phase {status.phase_progress_pct}% | Overall {status.overall_progress_pct}% | ETA: {eta}",
+             f"Elapsed: {status.elapsed} | utilization now: {100 * (status.worker_utilization_now or 0):.1f}% | target: {100 * (status.worker_utilization_steady_state_target or 0):.1f}%",
+             f"As of {status.as_of.strftime('%Y-%m-%d %H:%M:%S %Z')} ({age}s ago)", rule * 72,
+             f"Campaign {snapshot['campaign_id']} | phase {snapshot['phase']} | elapsed {_duration(snapshot['elapsed_s'])}",
              f"Phase {snapshot['phase_completed']}/{snapshot['phase_total']} evaluations; total {snapshot['completed_evaluations']}/{snapshot['total_evaluations']}; PPO {snapshot['completed_ppo']}"]
     grid = snapshot.get("generation", {})
     for arm in sorted({a for a, _ in grid}):
@@ -347,15 +372,24 @@ def render(snapshot: dict, tty: bool = False) -> str:
     return "\n".join(lines) + "\n"
 
 
+def final_screen(root: str, campaign: str, *, abnormal=False, resume_command=None) -> str:
+    if abnormal:
+        return ("CAMPAIGN STOPPED UNEXPECTEDLY — check alerts.jsonl and the log — resume with: "
+                f"{resume_command or f'scripts/campaign/run_campaign.sh --resume {campaign}'}\n")
+    return (f"CAMPAIGN COMPLETE — see {root}/CAMPAIGN_SUMMARY.md and CAMPAIGN_COMPLETE.txt — "
+            "safe to close this tmux session\n")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--campaign", required=True)
     parser.add_argument("--output-root", default="results/campaign")
     parser.add_argument("--watch", action="store_true")
+    parser.add_argument("--ascii", action="store_true", help="use plain ASCII separators")
     args = parser.parse_args(argv)
     root = os.path.join(args.output_root, args.campaign)
     while True:
-        frame = render(collect(root), sys.stdout.isatty())
+        frame = render(collect(root), sys.stdout.isatty(), ascii_only=args.ascii)
         if sys.stdout.isatty():
             print("\x1b[H\x1b[J" + frame, end="", flush=True)
         else:

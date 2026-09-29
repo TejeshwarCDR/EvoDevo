@@ -98,7 +98,7 @@ def test_heartbeat_and_phase_notice_deduplication(tmp_path):
     assert len(spy.messages) == 3
     clock[0] += 23 * 3600
     alerts.inspect(snapshot, p95_ecore_s=100)
-    assert len(spy.messages) == 3
+    assert len(spy.messages) == 4  # next anchored 18:00 passed
     clock[0] += 3600
     alerts.inspect(snapshot, p95_ecore_s=100)
     assert len(spy.messages) == 4
@@ -134,6 +134,7 @@ def test_all_alert_conditions_and_daily_heartbeat(tmp_path):
             "generation": {("direct", 0): 3}, "completed_evaluations": 50,
             "campaign_eta_s": (100, 200), "last_mirror_success": 9000}
     alerts.inspect(data, p95_ecore_s=100, mirror_ok=False)
+    alerts.heartbeat(data)  # anchored wall-clock behavior is covered separately
     clock[0] += 3601
     data["thermal_throttle_count"] = 101
     alerts.inspect(data, p95_ecore_s=100, mirror_ok=False)

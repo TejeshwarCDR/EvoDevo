@@ -7,6 +7,7 @@ That is the determinism boundary: completion order affects throughput only.
 from __future__ import annotations
 
 import dataclasses
+import datetime as dt
 import copy
 import argparse
 import hashlib
@@ -17,6 +18,7 @@ import signal
 import subprocess
 import sys
 import time
+from pathlib import Path
 from bisect import bisect_right
 from collections import deque
 
@@ -42,6 +44,7 @@ from .journal import ResultJournal
 from .milestone import run_subprocess
 from .mirror import sync
 from .plan import CampaignPlan
+from .status import CampaignStatus, status_footer
 
 
 def genome_hash(encoder, genome) -> str:
@@ -424,6 +427,8 @@ class CampaignScheduler:
         prior = self._read_manifest() if os.path.isfile(os.path.join(self.root, "manifest.json")) else {}
         self._manifest(status="running", started_at=prior.get("started_at", time.time()),
                        phase_status=prior.get("phase_status", {}))
+        if not prior:
+            self.alerts.campaign_started(self._started_details())
         outputs = {}
         phase_status = dict(prior.get("phase_status", {}))
         old_int, old_term = signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)
@@ -438,6 +443,8 @@ class CampaignScheduler:
                 phase_start = phase_status.get(phase.task, {}).get("started_at", time.time())
                 phase_status[phase.task] = {"status": "running", "started_at": phase_start}
                 self._manifest(phase=phase.task, phase_status=phase_status)
+                self._notification_status()
+                self.alerts.phase_started(phase.task)
                 active = [(rp, *self._make_run(rp)) for rp in phase.runs]
                 phase_complete = self._run_phase(active, pool, phase, outputs,
                                                  phase_started_at=phase_start)
@@ -452,6 +459,7 @@ class CampaignScheduler:
                 self._manifest(status="running", phase=phase.task, phase_status=phase_status)
             # Package generation is isolated in a subprocess.  A report bug
             # cannot roll back completed EvolutionRun checkpoints or logs.
+                self._notification_status()
                 self.alerts.phase_complete(phase.task)
                 milestone = run_subprocess(self.root, phase.task, self.alerts)
                 self._manifest(milestone_status={**self._read_manifest().get("milestone_status", {}),
@@ -463,6 +471,28 @@ class CampaignScheduler:
                         self._manifest(last_mirror_success=result["timestamp"])
             if not self.stop_requested:
                 self._manifest(status="complete", ended_at=time.time())
+                snapshot, status = self._notification_status()
+                manifest = self._read_manifest()
+                phase_status_final = manifest.get("phase_status", {})
+                phase_durations = {task: (state.get("ended_at", time.time()) - state.get("started_at", time.time()))
+                                   for task, state in phase_status_final.items()}
+                packages = [state.get("output") for state in manifest.get("milestone_status", {}).values()
+                            if state.get("output")]
+                failures = snapshot.get("infra_failure_count", 0)
+                total = snapshot.get("completed_ppo", 0)
+                marker = (f"Campaign {self.campaign_id} complete\n"
+                          f"Total wall-clock: {status.elapsed}\n"
+                          f"Per-phase actual duration seconds: {phase_durations}\n"
+                          f"Total evaluations: {snapshot.get('completed_evaluations', 0)}\n"
+                          f"Infrastructure failures: {failures} ({(failures / total if total else 0):.2%})\n"
+                          f"Guard outcome: {self.plan.guard_outcome or 'none'}\n"
+                          f"Milestone packages: {packages}\n")
+                details = {"total_wall_clock": str(status.elapsed), "phase_durations_s": phase_durations,
+                           "total_evaluations": snapshot.get("completed_evaluations", 0),
+                           "infra_failures": failures, "infra_failure_rate": failures / total if total else 0,
+                           "guard_outcome": self.plan.guard_outcome or "none", "milestone_packages": packages,
+                           "marker_text": marker + status_footer(status)}
+                self.alerts.campaign_complete(details, Path.cwd() / "CAMPAIGN_COMPLETE.txt")
         finally:
             if pool is not None:
                 pool.shutdown(wait=not self.stop_requested)
@@ -473,6 +503,41 @@ class CampaignScheduler:
     def _read_manifest(self):
         with open(os.path.join(self.root, "manifest.json"), encoding="utf-8") as handle:
             return json.load(handle)
+
+    def _notification_status(self):
+        """Use the dashboard's already-defined snapshot arithmetic once per event."""
+        from .dashboard import collect
+        snapshot = collect(self.root)
+        status = snapshot["campaign_status_object"]
+        self.alerts.status = status
+        return snapshot, status
+
+    def _started_details(self):
+        snapshot, status = self._notification_status()
+        phases = self.plan.phases
+        arms = sorted({run.arm for phase in phases for run in phase.runs})
+        seeds = sorted({run.seed for phase in phases for run in phase.runs})
+        plan = [{"task": phase.task, "K_per_task": phase.runs[0].config.get("eval_budget") if phase.runs else 0,
+                 "ppo_timesteps": phase.ppo_timesteps} for phase in phases]
+        low, mean, high = status.eta_range
+        def calendar(value): return value.isoformat() if value else None
+        if snapshot.get("phase") == "Walker-v0":
+            phase_low, phase_high = snapshot.get("phase_eta_s", (None, None))
+            walker_low = status.as_of + dt.timedelta(seconds=phase_low) if phase_low is not None else None
+            walker_high = status.as_of + dt.timedelta(seconds=phase_high) if phase_high is not None else None
+            walker_mean = (walker_low + (walker_high - walker_low) / 2
+                           if walker_low and walker_high else None)
+        else:
+            reached = snapshot.get("walker_milestone_epoch")
+            walker_low = walker_mean = walker_high = (dt.datetime.fromtimestamp(reached).astimezone()
+                                                      if reached else None)
+        first_heartbeat = self.alerts._next_heartbeat_at
+        return {"arms": arms, "seeds": seeds, "tasks": plan,
+                "guard_outcome": self.plan.guard_outcome or "none",
+                "walker_milestone": {"mean": calendar(walker_mean),
+                                     "range": [calendar(walker_low), calendar(walker_high)]},
+                "campaign_end": {"mean": calendar(mean), "range": [calendar(low), calendar(high)]},
+                "first_daily_heartbeat_local": dt.datetime.fromtimestamp(first_heartbeat).astimezone().isoformat()}
 
 
 def resume_command(args, campaign_id):
