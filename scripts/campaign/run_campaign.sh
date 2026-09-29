@@ -58,7 +58,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   DRY=(env PYTHONDONTWRITEBYTECODE=1 "EVODEVO_NOTIFY_CONFIG=${EVODEVO_NOTIFY_CONFIG:-$REPO_ROOT/campaign.local.yaml}"
        .venv/bin/python -m evodevo.campaign --dry-run --config "$CONFIG" --output-root "$OUTPUT_ROOT"
        --workers "$WORKERS" --cpu-profile "$CPU_PROFILE" --mode "$MODE" --prefetch "$PREFETCH")
-  if [[ "$MODE" == real ]]; then DRY+=(--production-power); fi
+  if [[ "$MODE" == real && "$CPU_PROFILE" == thermal-validated ]]; then DRY+=(--production-power); fi
   if [[ -n "$LOCAL_CONFIG" ]]; then DRY+=(--local-config "$LOCAL_CONFIG"); fi
   if [[ -n "$RESUME" ]]; then DRY+=(--resume "$RESUME"); elif [[ -n "$CAMPAIGN_ID" ]]; then DRY+=(--campaign-id "$CAMPAIGN_ID"); fi
   if [[ "$NO_MIRROR" -eq 1 ]]; then DRY+=(--no-mirror); elif [[ -n "$MIRROR_DIR" ]]; then DRY+=(--mirror-dir "$MIRROR_DIR"); fi
@@ -121,7 +121,7 @@ ulimit -n 65535
 RUN_DIR="$OUTPUT_ROOT/$CAMPAIGN_ID"
 NOTIFY_CONFIG="${LOCAL_CONFIG:-${EVODEVO_NOTIFY_CONFIG:-$REPO_ROOT/campaign.local.yaml}}"
 CMD=(env "EVODEVO_NOTIFY_CONFIG=$NOTIFY_CONFIG" .venv/bin/python -m evodevo.campaign --config "$CONFIG" --output-root "$OUTPUT_ROOT" --workers "$WORKERS" --cpu-profile "$CPU_PROFILE" --mode "$MODE" --grace-s "$GRACE_S" --prefetch "$PREFETCH")
-if [[ "$MODE" == real ]]; then CMD+=(--production-power); fi
+if [[ "$MODE" == real && "$CPU_PROFILE" == thermal-validated ]]; then CMD+=(--production-power); fi
 if [[ -n "$LOCAL_CONFIG" ]]; then CMD+=(--local-config "$LOCAL_CONFIG"); fi
 if [[ -n "$RESUME" ]]; then CMD+=(--resume "$RESUME"); else CMD+=(--campaign-id "$CAMPAIGN_ID"); fi
 if [[ "$NO_MIRROR" -eq 1 ]]; then CMD+=(--no-mirror); else CMD+=(--mirror-dir "$MIRROR_DIR"); fi
