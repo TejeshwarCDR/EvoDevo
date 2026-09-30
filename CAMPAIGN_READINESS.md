@@ -8,17 +8,14 @@ attempted, but the scientific campaign **never started evaluation**.
 
 ## Final verdict
 
-**NOT READY TO LAUNCH.** Commit
-`a69f4b5e3802940499ba9412447cc2f5afbc99b0` and its fresh root-held production
-dry run pass, but the final bounded real-host lifecycle validation failed. The
-user-owned waiter cannot use `kill -0` to probe the live root-owned guardian,
-so it falsely reports that guardian dead, invokes the supported stop path, and
-never writes `control_guardian.pid`. The stop completes and restores the host,
-but leaves `scheduler.pgid`. Corrections for both defects and their focused
-regression tests now pass locally, but host validation has not yet been
-repeated. No scientific evaluation started. Do not remove `--dry-run` until
-the corrections are committed and the complete bounded real-host validation
-is repeated and recorded as passing.
+**READY FOR MANUAL LAUNCH.** The cross-UID guardian and stale scheduler-PID
+defects are fixed in commit `f68e2b4922389945ecd2d3602f935871e7280e6a`.
+Focused and campaign regression suites pass, the authoritative root-held dry
+run reports `LAUNCH CHECKS: PASS`, and the repeated bounded real-host lifecycle
+validation passes every live-control, acknowledgement, user-tmux, cleanup, and
+restoration gate. No scientific evaluation started. This verdict authorizes
+only a deliberate future manual launch after the final clean-HEAD dry run; it
+does not itself start or resume the campaign.
 
 ## Exact production contract
 
@@ -135,9 +132,9 @@ campaign is active.
 | Disk requirement | 98.6 GB (3× the 32.9 GB projection) — pass |
 | Notifier | `campaign.local.yaml` configured; supported delivery test passed via `ntfy_topic_url` |
 | Process/session audit | no campaign, benchmark, or campaign tmux session running |
-| Root-held dry run | pass on clean commit `a69f4b5e3802940499ba9412447cc2f5afbc99b0`; `LAUNCH CHECKS: PASS`; no campaign started; controls restored |
+| Root-held dry run | pass on clean fix commit `f68e2b4922389945ecd2d3602f935871e7280e6a`; `LAUNCH CHECKS: PASS`; no campaign started; controls restored |
 | Failed real launch | `20260930T034016Z`; controls restored; no scientific evaluation started |
-| Post-fix host lifecycle validation | **FAIL** on 2026-09-30; power gate and restoration passed, but root-guardian acknowledgement failed and `scheduler.pgid` remained |
+| Post-fix host lifecycle validation | initial attempt **FAIL**; corrected repeat **PASS** on 2026-09-30 with full cleanup and restoration |
 
 The current CLI checks idle/stale process state, a dedicated physically distinct
 mirror, disk capacity, notifier configuration, git cleanliness, topology,
@@ -164,12 +161,13 @@ signalling it and refuses to kill an unrelated process group.
 
 The production implementation and raw thermal evidence baseline remains commit
 `69b785671c46b64106d199d82127fd4ee84a3d4f`. The first lifecycle fix is committed
-as `a69f4b5e3802940499ba9412447cc2f5afbc99b0`, and the final root-held dry run
-attested to that exact clean `HEAD`. The failed real-host validation below now
-requires a further reviewed fix. The launcher refuses a dirty working tree
-before creating a run. Thermal selection reports and raw JSON telemetry are
-committed; large derived selection views are reproducible and intentionally
-ignored.
+as `a69f4b5e3802940499ba9412447cc2f5afbc99b0`. The real-host corrections and
+their regression coverage are committed as
+`f68e2b4922389945ecd2d3602f935871e7280e6a`; the authoritative dry run and
+bounded host validation both passed against that clean commit. The launcher
+refuses a dirty working tree before creating a run. Thermal selection reports
+and raw JSON telemetry are committed; large derived selection views are
+reproducible and intentionally ignored.
 
 Before launch, `git status --short` must be empty and the dry-run `git commit:`
 line must match the intended reviewed commit. Never add local notifier settings
@@ -184,12 +182,13 @@ or credentials to Git.
 | Final focused post-fix lifecycle suite | **8 passed in 10.05 s** |
 | Cross-UID guardian/PID-cleanup focused suite | **18 passed in 10.66 s** |
 | Campaign regression suite after second fix | **118 passed, 4 clean-tree integration cases deselected in 51.60 s** |
+| Deferred clean-tree integration cases | **4 passed in 53.28 s** after commit |
 | Relevant post-fix launcher/production suite | **80 passed, 3 deselected in 43.38 s**; deselected real-launch integration cases require a clean committed tree |
 | Inclusive post-fix suite attempt | **80 passed, 3 refused by the expected dirty-tree gate**; those three started no campaign |
 | Lifecycle assertions | delayed startup retains controls; child sees 4.2 GHz / 125 W / 160 W; guardian and user tmux remain live; completion/startup failure/controlled stop/SIGINT/SIGTERM restore once; HUP does not restore; no guardian/session remains; dry run starts no campaign |
 | Supported notifier test | delivered successfully via configured notifier |
-| Post-fix production power-control validation | real host applied and child accepted exact production values, then lifecycle gate failed on root guardian acknowledgement |
-| Post-fix production dry run | pass on clean `a69f4b5e3802940499ba9412447cc2f5afbc99b0`; controls restored to PL1/PL2 253 W; no campaign started |
+| Post-fix production power-control validation | **pass** on corrected real-host repeat; child accepted exact values and controls remained held through guardian age 84 s |
+| Post-fix production dry run | pass on clean `f68e2b4922389945ecd2d3602f935871e7280e6a`; controls restored to PL1/PL2 253 W; no campaign started |
 | Scientific campaign | failed launch attempt created no evaluation; not started |
 
 The warnings in the full suite are existing deprecation, intentional safety-
@@ -350,13 +349,119 @@ four are intentionally deferred until after commit because the launcher
 correctly refuses a dirty tree. These test results do not satisfy the
 real-host gate by themselves.
 
+## Corrected bounded real-host lifecycle validation — PASS
+
+After commit `f68e2b4922389945ecd2d3602f935871e7280e6a`, the four integration cases
+previously blocked by the dirty-tree gate passed (**4 passed in 53.28 s**). The
+authoritative command then ran against that clean commit:
+
+```bash
+sudo scripts/campaign/run_production_campaign.sh --dry-run \
+  --mirror-dir /mnt/evodevo-backup --local-config campaign.local.yaml
+```
+
+It printed the exact P8+E10 placement, scheduler CPUs 26–27, distinct `sda` and
+`sdb` storage, configured notifier, production power values, clean Git commit,
+and `LAUNCH CHECKS: PASS`. It started no scheduler or campaign and restored the
+host controls.
+
+The bounded repeat used the same existing `campaign_validation` mechanism and
+temporary power-attestation adapter documented in the failed attempt, with a
+new campaign ID and a 10-second controlled-stop grace period. The exact command
+was:
+
+```bash
+sudo env EVODEVO_CAMPAIGN_PYTHON=/tmp/evodevo-production-power-python \
+  scripts/campaign/with_cpu_power_cap.sh \
+  --turbo --p-max-mhz 4200 --p-cpus 0-15 --pl1-w 125 --pl2-w 160 \
+  --run-as-user ubuntu -- \
+  env EVODEVO_CAMPAIGN_PYTHON=/tmp/evodevo-production-power-python \
+  scripts/campaign/run_campaign.sh \
+  --campaign-id bounded-postfix-lifecycle-repeat \
+  --config evodevo/experiments/configs/campaign_validation.yaml \
+  --output-root results/campaign --workers 18 \
+  --cpu-profile thermal-validated --mode validation \
+  --no-mirror --no-notify --wait-for-campaign --grace-s 10 \
+  --stamp 'VALIDATION - NOT A RESULT'
+```
+
+Start was `2026-09-30T04:30:28Z`; the final cleanup snapshot was
+`2026-09-30T04:32:28Z`, a bounded duration of 120 seconds. While alive:
+
+```text
+control_guardian.pid=781352
+scheduler.pgid=781463
+guardian process:
+  root uid=0 pid=781352 ... bash scripts/campaign/with_cpu_power_cap.sh ...
+identity verifier:
+  guardian PID 781352 verified (exists-but-signal-inaccessible)
+validation child PID=781470, scheduler PGID=781463
+ordinary ubuntu tmux ls:
+  evodevo-campaign: 3 windows
+worker CPUs:
+  0,2,4,6,8,10,12,14,16,17,18,19,20,21,22,23,24,25
+scheduler CPUs:
+  26,27
+no_turbo=0
+policy0..15=4200000
+PL1=125000000
+PL2=160000000
+child production_power.required=true
+child production_power.turbo_enabled=true
+child production_power.p_core_max_khz[0..15]=4200000
+child production_power.pl1_uw=125000000
+child production_power.pl2_uw=160000000
+```
+
+The second sample at guardian age 84 seconds still had 21 live scheduler-group
+members, both PID files, the ordinary user tmux session, and every required
+control value. This is well beyond the original startup acknowledgement race.
+Termination used only:
+
+```bash
+scripts/campaign/stop_campaign.sh \
+  --campaign bounded-postfix-lifecycle-repeat \
+  --output-root results/campaign --grace-s 10
+```
+
+It returned after 13 seconds with:
+
+```text
+Stopped campaign bounded-postfix-lifecycle-repeat; no evodevo campaign processes remain.
+```
+
+Final evidence:
+
+```text
+guardian PID 781352: absent
+scheduler PGID leader 781463: absent
+validation child PID 781470: absent
+ordinary ubuntu tmux ls: no server running on /tmp/tmux-1000/default
+control_guardian.pid: absent
+scheduler.pgid: absent
+no_turbo=0
+policy0..7=5500000
+policy8..11=5600000
+policy12..15=5500000
+PL1=253000000
+PL2=253000000
+manifest status=stopped
+manifest artifact_stamp='VALIDATION - NOT A RESULT'
+manifest validation_profile stamp='VALIDATION - NOT A RESULT'
+manifest completed_runs=0
+policy/training artifacts=0
+```
+
+**Result: PASS.** The live guardian, acknowledgement, tmux, sustained control,
+child attestation, supported stop, process cleanup, PID-file cleanup, and exact
+restoration gates all passed. The real scientific campaign was not started or
+resumed.
+
 ## Launch procedure
 
-1. Fix the cross-UID live-root-guardian acknowledgement without weakening its
-   root ownership/liveness guarantee, and make the supported lifecycle remove
-   `scheduler.pgid` after termination. Add focused regression coverage, review,
-   and commit. Confirm `git status --short` prints nothing and no campaign/tmux
-   session is active.
+1. Confirm the intended launch commit includes the reviewed lifecycle fixes and
+   this passing host evidence. Confirm `git status --short` prints nothing and
+   no campaign/tmux session is active.
 2. Run the exact root-held preflight below. It applies, verifies, and restores
    the production controls, but writes no campaign artifacts and starts no
    scheduler:
@@ -369,10 +474,9 @@ real-host gate by themselves.
 3. Read the output. It must show the exact CPU list above, turbo/control values,
    separate `sda`/`sdb` storage, sufficient disk, configured notifier, clean
    tree, the expected calendar, and `LAUNCH CHECKS: PASS`.
-4. Repeat and record the bounded non-scientific lifecycle validation showing the corrected
-   launcher keeps 4.2 GHz / 125 W / 160 W in force while its child is alive,
-   exposes the tmux session to `ubuntu` via ordinary `tmux ls`, keeps the root
-   guardian alive, and restores the exact original values after child exit.
+4. Confirm the corrected bounded validation recorded above remains applicable
+   to the exact launcher code. If launcher/control code changes, repeat it
+   before launch.
 5. Update this document with both post-fix host results. Only then may the
    readiness verdict be reconsidered. When deliberately ready to begin the
    scientific campaign, rerun the same command **without** `--dry-run`:
