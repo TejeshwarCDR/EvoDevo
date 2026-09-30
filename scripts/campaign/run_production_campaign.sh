@@ -14,9 +14,10 @@ Fixed production contract (cannot be overridden):
   --mode real --workers 18 --cpu-profile thermal-validated
   turbo enabled, P policies 0-15 capped at 4200 MHz, RAPL PL1=125 W, PL2=160 W
 
-Run this from a durable user tmux session.  The root parent remains alive
-until the scheduler stops, then restores every altered CPU control.  Pass
---dry-run to verify the exact production launch without starting a campaign.
+The root control guardian ignores SSH hangup and remains alive until the
+scheduler stops, then restores every altered CPU control.  The campaign tmux
+server is owned by the sudo-invoking user on that user's ordinary tmux socket.
+Pass --dry-run to verify the exact production launch without starting one.
 EOF
 }
 
@@ -27,6 +28,7 @@ for arg in "$@"; do
 done
 (( EUID == 0 )) || { echo "error: root is required; use sudo" >&2; exit 2; }
 [[ -n "${SUDO_USER:-}" ]] || { echo "error: invoke through sudo so the campaign runs as its owner" >&2; exit 2; }
+[[ "$SUDO_USER" == ubuntu ]] || { echo "error: production campaign must run as ubuntu (sudo invoker is $SUDO_USER)" >&2; exit 2; }
 
 for arg in "$@"; do
   case "$arg" in
@@ -37,8 +39,16 @@ for arg in "$@"; do
   esac
 done
 
+# Never permit test-only power paths, Python substitutions, custom tmux
+# sockets, or an enclosing tmux client to leak through sudo into production.
+# run_campaign.sh is executed after runuser drops to SUDO_USER, so its default
+# tmux server/socket is both owned by and visible to that user via `tmux ls`.
+unset EVODEVO_POWER_CONTROL_TEST_ROOT EVODEVO_ALLOW_UNPRIVILEGED_POWER_TEST
+unset EVODEVO_POWER_CONTROL_TRACE EVODEVO_CAMPAIGN_PYTHON
+unset EVODEVO_SCHEDULER_START_TIMEOUT_S EVODEVO_TMUX_SOCKET TMUX TMUX_TMPDIR
+
 exec scripts/campaign/with_cpu_power_cap.sh \
   --turbo --p-max-mhz 4200 --p-cpus 0-15 --pl1-w 125 --pl2-w 160 \
   --run-as-user "$SUDO_USER" -- \
-  scripts/campaign/run_campaign.sh --mode real --workers 18 \
+  env -u TMUX -u TMUX_TMPDIR -u EVODEVO_TMUX_SOCKET scripts/campaign/run_campaign.sh --mode real --workers 18 \
   --cpu-profile thermal-validated --wait-for-campaign "$@"

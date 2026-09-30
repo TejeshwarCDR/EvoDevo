@@ -13,8 +13,9 @@
 
 set -euo pipefail
 
-PSTATE=/sys/devices/system/cpu/intel_pstate
-RAPL=/sys/class/powercap/intel-rapl:0
+CONTROL_ROOT="${EVODEVO_POWER_CONTROL_TEST_ROOT:-}"
+PSTATE="${CONTROL_ROOT}/sys/devices/system/cpu/intel_pstate"
+RAPL="${CONTROL_ROOT}/sys/class/powercap/intel-rapl:0"
 MAX_PERF_PCT=""
 NO_TURBO=""
 TURBO=""
@@ -102,7 +103,7 @@ plan=()
 [[ -n "$PL2_W" ]] && plan+=("$RAPL/constraint_1_power_limit_uw=$((PL2_W * 1000000))")
 if [[ -n "$P_MAX_MHZ" ]]; then
     while IFS= read -r cpu; do
-        path="/sys/devices/system/cpu/cpufreq/policy${cpu}/scaling_max_freq"
+        path="${CONTROL_ROOT}/sys/devices/system/cpu/cpufreq/policy${cpu}/scaling_max_freq"
         [[ -e "$path" ]] || die "CPU $cpu has no cpufreq policy at $path"
         plan+=("$path=$((P_MAX_MHZ * 1000))")
     done < <(expand_cpu_list "$P_CPUS" | sort -nu)
@@ -121,15 +122,22 @@ if ((DRY_RUN)); then
     exit 0
 fi
 
-((EUID == 0)) || die "root is required; invoke this controlled benchmark with sudo"
+if ((EUID != 0)); then
+    [[ -n "$CONTROL_ROOT" && "${EVODEVO_ALLOW_UNPRIVILEGED_POWER_TEST:-}" == 1 ]] || \
+        die "root is required; invoke this controlled benchmark with sudo"
+fi
 [[ -z "$RUN_AS_USER" ]] || id "$RUN_AS_USER" >/dev/null 2>&1 || die "unknown benchmark user: $RUN_AS_USER"
 for assignment in "${plan[@]}"; do
     path=${assignment%%=*}
     [[ -w "$path" ]] || die "control is not writable: $path"
 done
 
+RESTORED=0
 restore() {
     local i
+    ((RESTORED == 0)) || return 0
+    RESTORED=1
+    [[ -z "${EVODEVO_POWER_CONTROL_TRACE:-}" ]] || printf 'restore\n' >> "$EVODEVO_POWER_CONTROL_TRACE"
     for ((i=${#ORIGINAL_PATHS[@]} - 1; i >= 0; --i)); do
         printf '%s' "${ORIGINAL_VALUES[i]}" > "${ORIGINAL_PATHS[i]}" || \
             echo "WARNING: could not restore ${ORIGINAL_PATHS[i]}" >&2
@@ -160,19 +168,29 @@ done
 printf 'applied reversible controls:'; printf ' %s' "${plan[@]}"; printf '\n'
 CHILD_PID=""
 on_signal() {
-    trap - INT TERM HUP
+    trap - INT TERM
     if [[ -n "$CHILD_PID" ]] && kill -0 "$CHILD_PID" 2>/dev/null; then
-        kill -INT "$CHILD_PID" 2>/dev/null || true
+        # Bash starts an asynchronous child with SIGINT ignored before exec;
+        # TERM is therefore the reliable way to enter the launcher's cleanup
+        # trap for either an INT or TERM received by this guardian.
+        kill -TERM "$CHILD_PID" 2>/dev/null || true
         wait "$CHILD_PID" || true
     fi
-    trap - EXIT
-    restore
     exit 128
 }
-trap on_signal INT TERM HUP
+trap on_signal INT TERM
+# An SSH terminal disappearing sends SIGHUP.  The production control guardian
+# must outlive that terminal and continue holding controls while the detached
+# scheduler is alive.  Deliberate stops go through stop_campaign.sh (or
+# SIGINT/SIGTERM), both of which still unwind the child and restore controls.
+trap '' HUP
+export EVODEVO_CONTROL_GUARDIAN_PID="${BASHPID}"
 if [[ -n "$RUN_AS_USER" ]]; then
     printf 'running child as %s\n' "$RUN_AS_USER"
-    runuser -u "$RUN_AS_USER" -- "${COMMAND[@]}" &
+    RUN_AS_HOME="$(getent passwd "$RUN_AS_USER" | cut -d: -f6)"
+    [[ -n "$RUN_AS_HOME" ]] || die "could not determine home directory for $RUN_AS_USER"
+    runuser -u "$RUN_AS_USER" -- env HOME="$RUN_AS_HOME" USER="$RUN_AS_USER" LOGNAME="$RUN_AS_USER" \
+        "${COMMAND[@]}" &
 else
     "${COMMAND[@]}" &
 fi

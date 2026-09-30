@@ -28,6 +28,7 @@ LAUNCH_AT=""
 STAMP=""
 LOCAL_CONFIG=""
 WAIT_FOR_CAMPAIGN=0
+CAMPAIGN_PYTHON="${EVODEVO_CAMPAIGN_PYTHON:-.venv/bin/python}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --help|-h) usage; exit 0 ;;
@@ -56,7 +57,7 @@ done
 if [[ "$DRY_RUN" -eq 1 ]]; then
   # Writes nothing: no run directory, tmux session, mirror copy or bytecode.
   DRY=(env PYTHONDONTWRITEBYTECODE=1 "EVODEVO_NOTIFY_CONFIG=${EVODEVO_NOTIFY_CONFIG:-$REPO_ROOT/campaign.local.yaml}"
-       .venv/bin/python -m evodevo.campaign --dry-run --config "$CONFIG" --output-root "$OUTPUT_ROOT"
+       "$CAMPAIGN_PYTHON" -m evodevo.campaign --dry-run --config "$CONFIG" --output-root "$OUTPUT_ROOT"
        --workers "$WORKERS" --cpu-profile "$CPU_PROFILE" --mode "$MODE" --prefetch "$PREFETCH")
   if [[ "$MODE" == real && "$CPU_PROFILE" == thermal-validated ]]; then DRY+=(--production-power); fi
   if [[ -n "$LOCAL_CONFIG" ]]; then DRY+=(--local-config "$LOCAL_CONFIG"); fi
@@ -81,6 +82,10 @@ scheduler_alive() {  # $1 = campaign id: is its recorded scheduler process group
   pgid="$(<"$pgid_file")"
   [[ "$pgid" =~ ^[0-9]+$ ]] || return 1
   ps -eo pgid=,stat= | awk -v group="$pgid" '$1 == group && $2 !~ /^Z/ { found=1 } END { exit !found }'
+}
+scheduler_window_alive() {
+  tmux "${TMUX_ARGS[@]}" list-panes -t evodevo-campaign:scheduler \
+    -F '#{pane_dead}' 2>/dev/null | grep -qx 0
 }
 if tmux "${TMUX_ARGS[@]}" has-session -t evodevo-campaign 2>/dev/null; then
   OWNER="$(tmux "${TMUX_ARGS[@]}" show-environment -t evodevo-campaign EVODEVO_CAMPAIGN_ID 2>/dev/null || true)"
@@ -120,7 +125,7 @@ fi
 ulimit -n 65535
 RUN_DIR="$OUTPUT_ROOT/$CAMPAIGN_ID"
 NOTIFY_CONFIG="${LOCAL_CONFIG:-${EVODEVO_NOTIFY_CONFIG:-$REPO_ROOT/campaign.local.yaml}}"
-CMD=(env "EVODEVO_NOTIFY_CONFIG=$NOTIFY_CONFIG" .venv/bin/python -m evodevo.campaign --config "$CONFIG" --output-root "$OUTPUT_ROOT" --workers "$WORKERS" --cpu-profile "$CPU_PROFILE" --mode "$MODE" --grace-s "$GRACE_S" --prefetch "$PREFETCH")
+CMD=(env "EVODEVO_NOTIFY_CONFIG=$NOTIFY_CONFIG" "$CAMPAIGN_PYTHON" -m evodevo.campaign --config "$CONFIG" --output-root "$OUTPUT_ROOT" --workers "$WORKERS" --cpu-profile "$CPU_PROFILE" --mode "$MODE" --grace-s "$GRACE_S" --prefetch "$PREFETCH")
 if [[ "$MODE" == real && "$CPU_PROFILE" == thermal-validated ]]; then CMD+=(--production-power); fi
 if [[ -n "$LOCAL_CONFIG" ]]; then CMD+=(--local-config "$LOCAL_CONFIG"); fi
 if [[ -n "$RESUME" ]]; then CMD+=(--resume "$RESUME"); else CMD+=(--campaign-id "$CAMPAIGN_ID"); fi
@@ -136,6 +141,7 @@ if ! "${CMD[@]}" --check-only; then
   exit 1
 fi
 mkdir -p "$RUN_DIR"
+rm -f "$RUN_DIR/scheduler.pgid" "$RUN_DIR/control_guardian.pid"
 printf -v NOTIFY_QUOTED '%q' "$NOTIFY_CONFIG"
 # Keep the machine awake for a multi-day run: hold a logind inhibitor lock
 # (no sudo needed for an active local session) around the scheduler. The
@@ -167,8 +173,7 @@ tmux "${TMUX_ARGS[@]}" split-window -v -l 15 -t evodevo-campaign:dashboard.1 "to
 tmux "${TMUX_ARGS[@]}" new-window -d -t evodevo-campaign -n scheduler \
   "script -q -f $TRANSCRIPT_QUOTED -c 'setsid --wait $CMD_QUOTED'"
 tmux "${TMUX_ARGS[@]}" new-window -d -t evodevo-campaign -n monitor \
-  "env EVODEVO_NOTIFY_CONFIG=$NOTIFY_QUOTED .venv/bin/python -m evodevo.campaign.monitor --campaign '$CAMPAIGN_ID' --output-root '$OUTPUT_ROOT'"
-echo "Started campaign $CAMPAIGN_ID in tmux session evodevo-campaign."
+  "env EVODEVO_NOTIFY_CONFIG=$NOTIFY_QUOTED $(printf '%q' "$CAMPAIGN_PYTHON") -m evodevo.campaign.monitor --campaign '$CAMPAIGN_ID' --output-root '$OUTPUT_ROOT'"
 if [[ "$WAIT_FOR_CAMPAIGN" -eq 1 ]]; then
   # This mode is used only by the root power-control supervisor.  Keeping this
   # user-owned process alive lets its parent retain the selected RAPL/frequency
@@ -180,16 +185,55 @@ if [[ "$WAIT_FOR_CAMPAIGN" -eq 1 ]]; then
     trap - INT TERM HUP
     scripts/campaign/stop_campaign.sh --campaign "$CAMPAIGN_ID" --output-root "$OUTPUT_ROOT" --grace-s "$GRACE_S" || true
   }
-  trap stop_and_return INT TERM HUP
-  while scheduler_alive "$CAMPAIGN_ID"; do sleep 5; done
-  trap - INT TERM HUP
+  trap stop_and_return INT TERM
+  trap '' HUP
+
+  # scheduler.pgid is the scheduler's positive startup acknowledgement.  Do
+  # not interpret its initial absence as termination: tmux creation and Python
+  # initialization are asynchronous.  While waiting, a vanished scheduler
+  # window is a definitive startup failure.
+  start_timeout="${EVODEVO_SCHEDULER_START_TIMEOUT_S:-120}"
+  [[ "$start_timeout" =~ ^[1-9][0-9]*$ ]] || { echo "invalid scheduler startup timeout" >&2; exit 2; }
+  deadline=$((SECONDS + start_timeout))
+  while ! scheduler_alive "$CAMPAIGN_ID"; do
+    if ! scheduler_window_alive; then
+      echo "Scheduler failed before its lifecycle acknowledgement; controls will be restored." >&2
+      interrupted=1
+      break
+    fi
+    if ((SECONDS >= deadline)); then
+      echo "Scheduler did not acknowledge startup within ${start_timeout}s; stopping it before restoring controls." >&2
+      stop_and_return
+      break
+    fi
+    sleep 0.1
+  done
+  if [[ "$interrupted" -eq 0 ]]; then
+    guardian_pid="${EVODEVO_CONTROL_GUARDIAN_PID:-}"
+    guardian_uid=""
+    if [[ "$guardian_pid" =~ ^[1-9][0-9]*$ ]]; then
+      guardian_uid="$(ps -o uid= -p "$guardian_pid" 2>/dev/null | tr -d ' ')"
+    fi
+    if [[ ! "$guardian_pid" =~ ^[1-9][0-9]*$ ]] || ! kill -0 "$guardian_pid" 2>/dev/null || \
+       [[ "$guardian_uid" != 0 && "${EVODEVO_ALLOW_UNPRIVILEGED_POWER_TEST:-}" != 1 ]]; then
+      echo "Root control guardian is not alive; stopping scheduler before controls can escape supervision." >&2
+      stop_and_return
+    else
+      printf '%s\n' "$guardian_pid" > "$RUN_DIR/control_guardian.pid"
+      echo "Started campaign $CAMPAIGN_ID in tmux session evodevo-campaign; controls held by guardian $guardian_pid."
+      while scheduler_alive "$CAMPAIGN_ID"; do sleep 1; done
+    fi
+  fi
+  trap - INT TERM
   if tmux "${TMUX_ARGS[@]}" has-session -t evodevo-campaign 2>/dev/null; then
     OWNER="$(tmux "${TMUX_ARGS[@]}" show-environment -t evodevo-campaign EVODEVO_CAMPAIGN_ID 2>/dev/null || true)"
     if [[ "$OWNER" == "EVODEVO_CAMPAIGN_ID=$CAMPAIGN_ID" ]]; then
       tmux "${TMUX_ARGS[@]}" kill-session -t evodevo-campaign
     fi
   fi
+  rm -f "$RUN_DIR/control_guardian.pid"
   if [[ "$interrupted" -eq 1 ]]; then exit 128; fi
   exit 0
 fi
+echo "Started campaign $CAMPAIGN_ID in tmux session evodevo-campaign."
 if [[ -t 0 && -t 1 ]]; then tmux "${TMUX_ARGS[@]}" attach-session -t evodevo-campaign; fi

@@ -3,24 +3,18 @@
 **Authoritative launch document.** This file supersedes the retained
 20-worker/403-hour narratives in historical reports. It describes the only
 accepted production configuration, the safeguards that must remain in force,
-and the checks required immediately before manual launch. The scientific
-campaign has **not** been launched.
+and the checks required immediately before manual launch. A real launch was
+attempted, but the scientific campaign **never started evaluation**.
 
 ## Final verdict
 
-**READY TO START MANUALLY, subject to one immediate pre-launch dry run.**
-
-The selected configuration has passed its real-PPO thermal study, the complete
-repository test suite, notifier delivery test, and a root-held production dry
-run. The launcher fails closed if the exact topology or temporary CPU controls
-cannot be established. It never silently falls back to the historic 20-worker,
-8-P-core, or 10-E-core arrangements.
-
-Before starting a multi-week run, execute the dry run in [Launch procedure](#launch-procedure)
-again from a clean tree. It verifies time-sensitive machine facts (mirror
-mount, free space, idle state, notifier configuration, and CPU control state)
-at the moment of launch. If it does not print `LAUNCH CHECKS: PASS`, do not
-remove `--dry-run`.
+**NOT READY TO LAUNCH.** The real launch attempt `20260930T034016Z` exposed a
+production-wrapper lifecycle race. No scientific evaluation started. The code
+fix and focused simulated lifecycle tests pass, but launch readiness remains
+blocked until the fix is committed and the corrected wrapper passes both a
+fresh root-held production dry run and a bounded, non-scientific lifecycle
+validation on the production host. Do not remove `--dry-run` before those two
+checks are recorded here.
 
 ## Exact production contract
 
@@ -42,9 +36,38 @@ The contract is defined in `evodevo/campaign/production.py`, persisted in a
 production manifest, and validated on resume. `cpu_placement()` rejects a
 different worker count or incompatible CPU topology; launch checks reject any
 control mismatch. The production wrapper applies the controls as root, verifies
-the actual sysfs values, starts the scheduler as the sudo-invoking user, holds
-the controls for the scheduler lifetime, and restores original values on normal
-exit, error, SIGINT, or SIGTERM.
+the actual sysfs values, starts the scheduler as `ubuntu`, holds the controls
+for the scheduler lifetime, and restores original values on normal exit, error,
+SIGINT, or SIGTERM. It removes inherited tmux/socket overrides, records and
+verifies the live root guardian PID, and ignores SSH hangup while the scheduler
+remains alive.
+
+## Failed launch attempt and lifecycle fix
+
+At `20260930T034016Z`, the privileged wrapper correctly applied and verified
+turbo on, P policies 0–15 at 4,200,000 kHz, PL1 125,000,000 µW and PL2
+160,000,000 µW. It then printed a successful start, immediately restored the
+host controls, and exited. The tmux session disappeared; the run directory
+contained only `transcript.log`; no scheduler or worker survived. No scientific
+evaluation began.
+
+The root cause was a startup race in `run_campaign.sh --wait-for-campaign`.
+Immediately after asynchronous tmux window creation it called
+`scheduler_alive()`. Absence of `scheduler.pgid`—normal while Python was still
+starting—was incorrectly treated as scheduler termination. That returned the
+user launcher to `with_cpu_power_cap.sh`, whose exit trap correctly restored
+the controls. The delayed child then ran its independent production-power gate
+against the restored 5.5–5.6 GHz / 253 W state and correctly refused launch.
+
+The corrected launcher treats `scheduler.pgid` as a positive startup
+acknowledgement. It waits while the scheduler tmux window is alive, fails and
+restores if that window exits or startup times out, and only reports “Started”
+after both the scheduler process group and root guardian are verified alive.
+It then holds the user waiter and root guardian until the scheduler group
+actually terminates. Restoration is idempotent and runs exactly once. HUP is
+ignored after controls are applied; SIGINT/SIGTERM drive the controlled-stop
+path. Stale scheduler/guardian PID files are removed before launch and the
+guardian PID file is removed at exit.
 
 ## Thermal evidence and capacity
 
@@ -91,7 +114,7 @@ new confidence interval. For a launch time `T`:
 calendar from the proposed launch time. It also keeps the historical Monte
 Carlo estimate separate from this thermal capacity projection.
 
-## Latest verified machine state
+## Latest verified machine state (pre-fix; revalidation required)
 
 The latest root-held production dry run applied and read back turbo on, all
 sixteen 4.2 GHz P-policy limits, PL1=125 W and PL2=160 W before launch checks.
@@ -108,7 +131,9 @@ campaign is active.
 | Disk requirement | 98.6 GB (3× the 32.9 GB projection) — pass |
 | Notifier | `campaign.local.yaml` configured; supported delivery test passed via `ntfy_topic_url` |
 | Process/session audit | no campaign, benchmark, or campaign tmux session running |
-| Root-held dry run | pass: `LAUNCH CHECKS: PASS`; no run directory, tmux session, mirror copy, or campaign process created |
+| Root-held dry run | historic pre-fix pass only; a fresh post-fix run is required |
+| Failed real launch | `20260930T034016Z`; controls restored; no scientific evaluation started |
+| Post-fix host lifecycle validation | pending; required before readiness can be restored |
 
 The current CLI checks idle/stale process state, a dedicated physically distinct
 mirror, disk capacity, notifier configuration, git cleanliness, topology,
@@ -118,7 +143,7 @@ affinity, and production power state before it can create a scheduler.
 
 | Need | Command / behavior |
 |---|---|
-| Check a running campaign | `scripts/campaign/status_campaign.sh --campaign CAMPAIGN_ID` |
+| Check a running campaign | `scripts/campaign/status_campaign.sh --campaign CAMPAIGN_ID` (executable mode enforced by test) |
 | Dashboard/heartbeat | the launcher starts dashboard and monitor panes; durable start, phase, failure, thermal/throttle, utilization and daily heartbeat alerts use `campaign.local.yaml` |
 | Controlled stop | `scripts/campaign/stop_campaign.sh --campaign CAMPAIGN_ID --grace-s 120` |
 | Resume after a controlled stop/crash | `sudo scripts/campaign/run_production_campaign.sh --resume CAMPAIGN_ID --mirror-dir /mnt/evodevo-backup --local-config campaign.local.yaml` |
@@ -133,10 +158,11 @@ signalling it and refuses to kill an unrelated process group.
 
 ## Git and artifact integrity
 
-The production implementation and raw thermal evidence baseline is commit
-`69b785671c46b64106d199d82127fd4ee84a3d4f`; this document is a final
-documentation revision on top of it. The final root-held dry run reports the
-exact `HEAD` it verified, and the launcher refuses a dirty working tree before
+The production implementation and raw thermal evidence baseline remains commit
+`69b785671c46b64106d199d82127fd4ee84a3d4f`. The lifecycle fix described above
+is currently an uncommitted working-tree change and must be reviewed and
+committed before host validation. The final root-held dry run reports the exact
+`HEAD` it verified, and the launcher refuses a dirty working tree before
 creating a run. Thermal selection reports and raw JSON telemetry are committed;
 large derived selection views are reproducible and intentionally ignored.
 
@@ -149,12 +175,15 @@ or credentials to Git.
 | Verification | Result |
 |---|---|
 | Python compile/import and shell syntax | pass |
-| Full repository test suite | **1,101 passed, 33 warnings, 907.39 s** |
-| Campaign, scheduler, worker, affinity, launcher, resume/recovery, notifier, mirror, disk, thermal-alert/watchdog coverage | included in the full suite; pass |
+| Historical full repository suite (pre-fix) | **1,101 passed, 33 warnings, 907.39 s** |
+| Focused post-fix lifecycle suite | **9 passed in 10.12 s** |
+| Relevant post-fix launcher/production suite | **80 passed, 3 deselected in 43.38 s**; deselected real-launch integration cases require a clean committed tree |
+| Inclusive post-fix suite attempt | **80 passed, 3 refused by the expected dirty-tree gate**; those three started no campaign |
+| Lifecycle assertions | delayed startup retains controls; child sees 4.2 GHz / 125 W / 160 W; guardian and user tmux remain live; completion/startup failure/controlled stop/SIGINT/SIGTERM restore once; HUP does not restore; no guardian/session remains; dry run starts no campaign |
 | Supported notifier test | delivered successfully via configured notifier |
-| Production power-control validation | root-held wrapper applied, verified and restored selected controls; pass |
-| Production dry run | pass with exact 18-worker placement and `LAUNCH CHECKS: PASS` |
-| Scientific campaign | not launched |
+| Post-fix production power-control validation | simulated sysfs lifecycle pass; fresh real root-held validation pending |
+| Post-fix production dry run | pending |
+| Scientific campaign | failed launch attempt created no evaluation; not started |
 
 The warnings in the full suite are existing deprecation, intentional safety-
 clip, environment-rendering, and deliberate missing-artifact warnings; none
@@ -164,9 +193,11 @@ launched.
 
 ## Launch procedure
 
-1. Open a durable terminal session. Confirm the repository is at the intended
-   clean commit: `git status --short` must print nothing.
-2. Run the exact preflight below. It writes nothing and starts nothing:
+1. Review and commit the lifecycle fix. Confirm `git status --short` prints
+   nothing and no campaign/tmux session is active.
+2. Run the exact root-held preflight below. It applies, verifies, and restores
+   the production controls, but writes no campaign artifacts and starts no
+   scheduler:
 
    ```bash
    sudo scripts/campaign/run_production_campaign.sh --dry-run \
@@ -176,8 +207,13 @@ launched.
 3. Read the output. It must show the exact CPU list above, turbo/control values,
    separate `sda`/`sdb` storage, sufficient disk, configured notifier, clean
    tree, the expected calendar, and `LAUNCH CHECKS: PASS`.
-4. Only when deliberately ready to begin the scientific campaign, rerun the
-   same command **without** `--dry-run`:
+4. Record a bounded non-scientific lifecycle validation showing the corrected
+   launcher keeps 4.2 GHz / 125 W / 160 W in force while its child is alive,
+   exposes the tmux session to `ubuntu` via ordinary `tmux ls`, keeps the root
+   guardian alive, and restores the exact original values after child exit.
+5. Update this document with both post-fix host results. Only then may the
+   readiness verdict be reconsidered. When deliberately ready to begin the
+   scientific campaign, rerun the same command **without** `--dry-run`:
 
    ```bash
    sudo scripts/campaign/run_production_campaign.sh \

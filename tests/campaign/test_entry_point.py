@@ -115,6 +115,8 @@ def test_launch_scripts_use_the_package_entry_point():
     assert "-m evodevo.campaign status" in (Path(REPO_ROOT) / "scripts/campaign/status_campaign.sh").read_text()
     # plain `setsid` under `script` forks and exits, racing the pane's SIGHUP
     assert "-c 'setsid --wait " in (Path(REPO_ROOT) / "scripts/campaign/run_campaign.sh").read_text()
+    for name in ("dashboard_watch.sh", "stop_campaign.sh", "status_campaign.sh"):
+        assert os.access(Path(REPO_ROOT) / "scripts/campaign" / name, os.X_OK), name
 
 
 def smoke_config(path: Path, *, arm="nca", population=15, eval_budget=15, timesteps=500) -> Path:
