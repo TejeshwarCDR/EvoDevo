@@ -183,6 +183,7 @@ def test_controls_wait_for_delayed_scheduler_and_normal_completion(lifecycle):
     _assert_restored(lifecycle["power"])
     assert lifecycle["trace"].read_text().splitlines() == ["restore"]
     assert not (run / "control_guardian.pid").exists()
+    assert not (run / "scheduler.pgid").exists()
     assert subprocess.run(["tmux", "has-session", "-t", "evodevo-campaign"],
                           env=lifecycle["env"], capture_output=True).returncode != 0
     scheduler = next(row for row in _records(lifecycle["events"]) if row["kind"] == "scheduler")
@@ -214,6 +215,7 @@ def test_scheduler_startup_failure_restores_once_without_orphan(lifecycle):
     _assert_restored(lifecycle["power"])
     assert lifecycle["trace"].read_text().splitlines() == ["restore"]
     assert not (lifecycle["output"] / "startup-fail/control_guardian.pid").exists()
+    assert not (lifecycle["output"] / "startup-fail/scheduler.pgid").exists()
     assert subprocess.run(["tmux", "has-session", "-t", "evodevo-campaign"],
                           env=lifecycle["env"], capture_output=True).returncode != 0
 
@@ -231,6 +233,7 @@ def test_controlled_stop_restores_and_reaps_guardian(lifecycle):
     _assert_restored(lifecycle["power"])
     assert lifecycle["trace"].read_text().splitlines() == ["restore"]
     assert not (run / "control_guardian.pid").exists()
+    assert not (run / "scheduler.pgid").exists()
 
 
 @pytest.mark.parametrize("sig", [signal.SIGINT, signal.SIGTERM])
@@ -244,6 +247,7 @@ def test_guardian_signal_restores_exactly_once(lifecycle, sig):
     _assert_restored(lifecycle["power"])
     assert lifecycle["trace"].read_text().splitlines() == ["restore"]
     assert not (run / "control_guardian.pid").exists()
+    assert not (run / "scheduler.pgid").exists()
 
 
 def test_production_dry_run_applies_verifies_restores_without_campaign(lifecycle):

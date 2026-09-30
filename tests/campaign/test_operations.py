@@ -641,6 +641,7 @@ def test_stop_script_kills_process_group_and_tmux_session(tmp_path):
         assert stopped.returncode == 0, stopped.stderr + stopped.stdout
         process.wait(timeout=5)
         assert process.returncode != 0
+        assert not (folder / "scheduler.pgid").exists()
         assert subprocess.run(["pgrep", "-af", f"evodevo.campaign.monitor.*{campaign}"],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0
         assert subprocess.run(["tmux", "-L", socket, "has-session", "-t", "evodevo-campaign"],
@@ -670,6 +671,22 @@ def test_stop_does_not_remove_another_campaigns_tmux_session(tmp_path):
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
     finally:
         subprocess.run(["tmux", "-L", socket, "kill-server"], capture_output=True)
+
+
+def test_stop_idempotently_removes_dead_scheduler_pid(tmp_path):
+    campaign = "dead-scheduler"
+    folder = tmp_path / campaign
+    folder.mkdir()
+    dead = subprocess.Popen(["true"])
+    dead.wait()
+    pid_file = folder / "scheduler.pgid"
+    pid_file.write_text(f"{dead.pid}\n")
+    command = ["bash", "scripts/campaign/stop_campaign.sh", "--campaign", campaign,
+               "--output-root", str(tmp_path), "--grace-s", "0"]
+    first = subprocess.run(command, capture_output=True, text=True, timeout=10)
+    second = subprocess.run(command, capture_output=True, text=True, timeout=10)
+    assert first.returncode == second.returncode == 0
+    assert not pid_file.exists()
 
 
 def test_launcher_starts_and_cleans_tiny_surrogate_campaign():

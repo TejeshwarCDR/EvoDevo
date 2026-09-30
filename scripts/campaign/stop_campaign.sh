@@ -84,4 +84,5 @@ if pgrep -af "evodevo\.campaign(\.monitor|\.dashboard)? .*${CAMPAIGN_ID}" >/dev/
   pgrep -af "evodevo\.campaign(\.monitor|\.dashboard)? .*${CAMPAIGN_ID}" >&2 || true
   exit 1
 fi
+rm -f "$PID_FILE"
 echo "Stopped campaign $CAMPAIGN_ID; no evodevo campaign processes remain."

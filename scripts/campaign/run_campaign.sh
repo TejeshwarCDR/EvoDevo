@@ -83,6 +83,20 @@ scheduler_alive() {  # $1 = campaign id: is its recorded scheduler process group
   [[ "$pgid" =~ ^[0-9]+$ ]] || return 1
   ps -eo pgid=,stat= | awk -v group="$pgid" '$1 == group && $2 !~ /^Z/ { found=1 } END { exit !found }'
 }
+cleanup_scheduler_pid_if_dead() {
+  local pgid_file="$RUN_DIR/scheduler.pgid" pgid
+  [[ -f "$pgid_file" ]] || return 0
+  pgid="$(<"$pgid_file")"
+  if [[ ! "$pgid" =~ ^[1-9][0-9]*$ ]]; then
+    echo "Refusing to remove invalid scheduler lifecycle state: $pgid_file" >&2
+    return 1
+  fi
+  if ps -eo pgid=,stat= | awk -v group="$pgid" '$1 == group && $2 !~ /^Z/ { found=1 } END { exit !found }'; then
+    echo "Refusing to remove $pgid_file while process group $pgid is alive." >&2
+    return 1
+  fi
+  rm -f "$pgid_file"
+}
 scheduler_window_alive() {
   tmux "${TMUX_ARGS[@]}" list-panes -t evodevo-campaign:scheduler \
     -F '#{pane_dead}' 2>/dev/null | grep -qx 0
@@ -210,13 +224,13 @@ if [[ "$WAIT_FOR_CAMPAIGN" -eq 1 ]]; then
   done
   if [[ "$interrupted" -eq 0 ]]; then
     guardian_pid="${EVODEVO_CONTROL_GUARDIAN_PID:-}"
-    guardian_uid=""
-    if [[ "$guardian_pid" =~ ^[1-9][0-9]*$ ]]; then
-      guardian_uid="$(ps -o uid= -p "$guardian_pid" 2>/dev/null | tr -d ' ')"
-    fi
-    if [[ ! "$guardian_pid" =~ ^[1-9][0-9]*$ ]] || ! kill -0 "$guardian_pid" 2>/dev/null || \
-       [[ "$guardian_uid" != 0 && "${EVODEVO_ALLOW_UNPRIVILEGED_POWER_TEST:-}" != 1 ]]; then
-      echo "Root control guardian is not alive; stopping scheduler before controls can escape supervision." >&2
+    guardian_uid=0
+    if [[ "${EVODEVO_ALLOW_UNPRIVILEGED_POWER_TEST:-}" == 1 ]]; then guardian_uid="$(id -u)"; fi
+    if [[ ! "$guardian_pid" =~ ^[1-9][0-9]*$ ]] || \
+       ! scripts/campaign/verify_control_guardian.py --pid "$guardian_pid" \
+         --expected-uid "$guardian_uid" --descendant-pid "$$" \
+         --expected-script "$REPO_ROOT/scripts/campaign/with_cpu_power_cap.sh"; then
+      echo "Root control guardian failed liveness/identity verification; stopping scheduler before controls can escape supervision." >&2
       stop_and_return
     else
       printf '%s\n' "$guardian_pid" > "$RUN_DIR/control_guardian.pid"
@@ -232,6 +246,7 @@ if [[ "$WAIT_FOR_CAMPAIGN" -eq 1 ]]; then
     fi
   fi
   rm -f "$RUN_DIR/control_guardian.pid"
+  cleanup_scheduler_pid_if_dead
   if [[ "$interrupted" -eq 1 ]]; then exit 128; fi
   exit 0
 fi
