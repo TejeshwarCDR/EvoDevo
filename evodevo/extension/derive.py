@@ -85,7 +85,7 @@ def reference_facts(campaign: Path) -> dict:
 
 # --- measurements -------------------------------------------------------------
 
-def cost_ratios(noise_rows: list, budgets: dict) -> dict:
+def cost_ratios(noise_rows: list, budgets: dict, reference_timesteps: dict | None = None) -> dict:
     """Per extension task: (sum over bodies of mean P-equivalent training time
     at the task's budget) / (same bodies' Walker-v0 1M reference), plus the
     UpStepper-v0 1.2M ratio used for the backtest."""
@@ -104,8 +104,8 @@ def cost_ratios(noise_rows: list, budgets: dict) -> dict:
             raise ValueError(f"cost ratio for {task}: only {len(common)} bodies have both measurements")
         ratios[task] = {"ratio": sum(means[b] for b in common) / sum(walker[b] for b in common),
                         "bodies": common,
-                        "measured_timesteps": (spec.REFERENCE_TASKS["UpStepper-v0"] if task == "UpStepper-v0"
-                                               else budgets[task])}
+                        "measured_timesteps": ((reference_timesteps or spec.REFERENCE_TASKS)["UpStepper-v0"]
+                                               if task == "UpStepper-v0" else budgets[task])}
     return ratios
 
 
@@ -158,7 +158,7 @@ def derive(run_dir: Path, reference: Path, allow_test: bool = False) -> dict:
         seeds_decisions[task] = dataclasses.asdict(decide_seeds(task, dict(repeats)))
 
     facts = reference_facts(reference)
-    ratios = cost_ratios(noise_rows, budgets)
+    ratios = cost_ratios(noise_rows, budgets, manifest.get("params", {}).get("reference_timesteps"))
     walker = facts["phases"]["Walker-v0"]
     upstepper = facts["phases"]["UpStepper-v0"]
     walker_h = walker["makespan_s"] / 3600.0
