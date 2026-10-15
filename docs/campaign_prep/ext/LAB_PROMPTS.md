@@ -87,6 +87,10 @@ c. `git branch --show-current` is `main` and `git status --short` is empty.
 d. Verify the original campaign's mirror: run the repository's mirror verification for ORIG against its
    recorded mirror_dir (evodevo.campaign.mirror verify_mirror / verify_checksum_manifest) and report the
    result. If it is not verified, run one final sync with the same function and verify again.
+e. Fast-forward pre-check (only now, with the campaign complete): run
+   `git fetch origin && git status -sb && git log --oneline origin/main..HEAD`. The log must print nothing.
+   If it prints lab-only commits, STOP: push them from the lab first (plain push, no force) or report. A
+   `git merge --ff-only` cannot succeed with lab-only commits on main.
 
 STEP 2 — FAST-FORWARD `main`
 Record `git rev-parse HEAD` (the pre-merge commit). Then `git fetch origin && git merge --ff-only origin/main`
