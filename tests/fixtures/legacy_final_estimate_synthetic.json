@@ -1,0 +1,121 @@
+{
+ "SANDBOX_FIXTURE": "synthetic stand-in for the lab-only file; never committed",
+ "inputs": {
+  "t_ppo_mean_sd_at_b3_footing": {
+   "direct|Walker-v0": [
+    1409.8,
+    20.4
+   ],
+   "direct|UpStepper-v0": [
+    1623.9,
+    28.1
+   ],
+   "nca|Walker-v0": [
+    1409.8,
+    20.4
+   ],
+   "nca|UpStepper-v0": [
+    1623.9,
+    28.1
+   ],
+   "rule_based|Walker-v0": [
+    1409.8,
+    20.4
+   ],
+   "rule_based|UpStepper-v0": [
+    1623.9,
+    28.1
+   ],
+   "rule_based_monotone|Walker-v0": [
+    1409.8,
+    20.4
+   ],
+   "rule_based_monotone|UpStepper-v0": [
+    1623.9,
+    28.1
+   ]
+  },
+  "workers": {
+   "n": 20
+  }
+ },
+ "n_trials": 500,
+ "guard_outcome": "none",
+ "guard_sequence": [
+  {
+   "step": "none",
+   "design": {
+    "arms": {
+     "Walker-v0": [
+      "direct",
+      "nca",
+      "rule_based",
+      "rule_based_monotone"
+     ],
+     "UpStepper-v0": [
+      "direct",
+      "nca",
+      "rule_based",
+      "rule_based_monotone"
+     ]
+    },
+    "K": {
+     "Walker-v0": 1,
+     "UpStepper-v0": 2
+    }
+   },
+   "result": {
+    "walker_phase_h": {
+     "mean": 123.0,
+     "p5": 121.9,
+     "p95": 124.1,
+     "median": 123.0,
+     "sd": 1.0,
+     "n_trials": 500
+    },
+    "upstepper_phase_h": {
+     "mean": 280.2,
+     "p5": 277.8,
+     "p95": 282.9,
+     "median": 280.2,
+     "sd": 1.0,
+     "n_trials": 500
+    },
+    "total_h": {
+     "mean": 403.2,
+     "p5": 400.6,
+     "p95": 405.96,
+     "median": 403.2,
+     "sd": 1.0,
+     "n_trials": 500
+    },
+    "walker_milestone_pct_of_total": {
+     "of_means": 30.5
+    }
+   }
+  }
+ ],
+ "final_configuration": {
+  "step": "none",
+  "design": {
+   "arms": {
+    "Walker-v0": [
+     "direct",
+     "nca",
+     "rule_based",
+     "rule_based_monotone"
+    ],
+    "UpStepper-v0": [
+     "direct",
+     "nca",
+     "rule_based",
+     "rule_based_monotone"
+    ]
+   },
+   "K": {
+    "Walker-v0": 1,
+    "UpStepper-v0": 2
+   }
+  }
+ }
+}

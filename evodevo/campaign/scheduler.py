@@ -62,6 +62,25 @@ def genome_hash(encoder, genome) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
+def encoder_and_config_for(run_plan):
+    """The exact (encoder, ExperimentConfig) a campaign run uses.
+
+    Shared by the scheduler and by anything that must reproduce a campaign
+    arm's genotype-to-body mapping outside a run (the extension preflight's
+    random representative bodies), so the two can never drift apart.
+    """
+    cfg_dict = dict(run_plan.config)
+    factor_kwargs = cfg_dict.pop("campaign_encoder_kwargs", cfg_dict.pop("campaign_factors", {}))
+    cfg_dict["grid_shape"] = tuple(cfg_dict["grid_shape"])
+    config = ExperimentConfig(**cfg_dict)
+    factors, kwargs = extract_factors(factor_kwargs, seed=config.seed)
+    encoder_name = "rule_based" if run_plan.arm.startswith("rule_based") else run_plan.arm
+    if run_plan.arm == "rule_based_monotone":
+        kwargs["action_monotonicity"] = "monotone"
+    encoder = get_encoder(encoder_name, factors=factors, grid_shape=config.grid_shape, **kwargs)
+    return encoder, config
+
+
 def cpu_placement(topology, workers, cpu_profile=DEFAULT_CPU_PROFILE):
     """Return ``(worker AffinityPlan, scheduler CPUs)`` without pinning.
 
@@ -172,15 +191,7 @@ class CampaignScheduler:
         os.replace(temporary, path)
 
     def _make_run(self, run_plan):
-        cfg_dict = dict(run_plan.config)
-        factor_kwargs = cfg_dict.pop("campaign_encoder_kwargs", cfg_dict.pop("campaign_factors", {}))
-        cfg_dict["grid_shape"] = tuple(cfg_dict["grid_shape"])
-        config = ExperimentConfig(**cfg_dict)
-        factors, kwargs = extract_factors(factor_kwargs, seed=config.seed)
-        encoder_name = "rule_based" if run_plan.arm.startswith("rule_based") else run_plan.arm
-        if run_plan.arm == "rule_based_monotone":
-            kwargs["action_monotonicity"] = "monotone"
-        encoder = get_encoder(encoder_name, factors=factors, grid_shape=config.grid_shape, **kwargs)
+        encoder, config = encoder_and_config_for(run_plan)
         directory = os.path.join(self.root, "runs", run_plan.arm, run_plan.task, f"seed_{run_plan.seed}")
         state = latest_checkpoint(os.path.join(directory, "checkpoint"))
         if os.path.isdir(directory):
@@ -727,9 +738,21 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
         args.mode, args.grace_s, args.mirror_dir, args.no_mirror,
         allow_same_disk_mirror=args.allow_same_disk_mirror, prefetch=args.prefetch,
         local_config=args.local_config, cpu_profile=args.cpu_profile)
-    scheduler._manifest(git_commit=subprocess.check_output(["git", "rev-parse", "HEAD"],
-        cwd=repo_root, text=True).strip(), launch_checks=launch_record,
-        no_notify=bool(args.no_notify))
+    from evodevo.experiments.benchmark import BenchmarkConfig
+    from .plan import resolve_estimate_path
+    # The dashboard and monitor read their priors from the estimate this
+    # campaign's plan was built from. A resumed campaign keeps the path it
+    # was launched with.
+    estimate_path = manifest.get("estimate_path") or str(
+        resolve_estimate_path(BenchmarkConfig.from_yaml(args.config)))
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo_root, text=True).strip()
+    # Resume used to overwrite git_commit, losing which commit ran earlier
+    # segments. Keep an append-only history alongside the latest value.
+    commit_history = list(scheduler._read_manifest().get("git_commit_history", [])) if args.resume else []
+    commit_history.append({"git_commit": head, "at": time.time(), "resume": bool(args.resume)})
+    scheduler._manifest(git_commit=head, git_commit_history=commit_history, launch_checks=launch_record,
+        no_notify=bool(args.no_notify), estimate_path=estimate_path,
+        config_path=args.config)
     stamp = args.stamp or scheduler._read_manifest().get("artifact_stamp")
     if stamp:
         scheduler._manifest(artifact_stamp=stamp)

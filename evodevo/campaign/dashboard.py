@@ -65,27 +65,10 @@ def _rows(path):
         return []
 
 
-def _prior():
-    data = _json(PRIOR_PATH, {})
-    # The versioned P2 simulator output has one final-campaign row with
-    # result.walker_phase_h/upstepper_phase_h/total_h. Search by shape so a
-    # harmless top-level metadata addition cannot change this calculation.
-    def locate(obj):
-        if isinstance(obj, dict):
-            value = obj.get("result")
-            if isinstance(value, dict) and "walker_phase_h" in value and "total_h" in value:
-                return value
-            for child in obj.values():
-                found = locate(child)
-                if found:
-                    return found
-        if isinstance(obj, list):
-            for child in obj:
-                found = locate(child)
-                if found:
-                    return found
-        return None
-    return locate(data) or {}
+def _prior(path=None):
+    """The legacy final-campaign row (kept for callers of the original API)."""
+    from .estimate import _legacy_result, load
+    return _legacy_result(load(PRIOR_PATH if path is None else path))
 
 
 def _duration(seconds):
@@ -223,7 +206,10 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
                 durations[(parts[0], parts[1], core_class)].append(duration)
     arms = {r["arm"] for r in runs}
     measured = bool(runs) and all(completed_by_pair[(arm, task)] >= 50 for arm in arms)
-    prior = _prior()
+    from . import estimate as estimates
+    estimate = estimates.load(estimates.estimate_path_for_manifest(manifest))
+    v2 = estimates.is_v2(estimate)
+    guard_h = estimates.guard_threshold_h(estimate)
     elapsed = max(0.0, now - float(manifest.get("started_at", now)))
     completed_phase = sum(len(_rows(os.path.join(root, "runs", r["arm"], task,
                                             f"seed_{r['seed']}", "run_log.jsonl"))) for r in runs)
@@ -233,8 +219,7 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
     phase_utilization = worker_utilization(journal, worker_count, phase_started, now)
     last_hour_utilization = worker_utilization(journal, worker_count, max(phase_started, now - 3600), now)
     remaining_fraction = max(0.0, 1 - completed_phase / phase_total) if phase_total else 0.0
-    prior_key = "walker_phase_h" if task == "Walker-v0" else "upstepper_phase_h"
-    prior_band = prior.get(prior_key, {})
+    prior_band = estimates.phase_band(estimate, task)
     prior_phase_low = float(prior_band.get("p5", 121.9 if task == "Walker-v0" else 277.8)) * 3600
     prior_phase_high = float(prior_band.get("p95", 124.1 if task == "Walker-v0" else 282.9)) * 3600
     if measured:
@@ -251,14 +236,15 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
     future_low = future_high = 0.0
     if current and phases.index(current) + 1 < len(phases):
         for phase in phases[phases.index(current) + 1:]:
-            key = "walker_phase_h" if phase["task"] == "Walker-v0" else "upstepper_phase_h"
-            band = prior.get(key, {})
-            future_low += float(band.get("p5", band.get("mean", 123 if key == "walker_phase_h" else 280.2))) * 3600
-            future_high += float(band.get("p95", band.get("mean", 123 if key == "walker_phase_h" else 280.2))) * 3600
+            walker = phase["task"] == "Walker-v0"
+            band = estimates.phase_band(estimate, phase["task"])
+            future_low += float(band.get("p5", band.get("mean", 123 if walker else 280.2))) * 3600
+            future_high += float(band.get("p95", band.get("mean", 123 if walker else 280.2))) * 3600
         # Preserve the P2 simulator's *joint* total distribution at campaign
         # start. Summing marginal phase quantiles would discard its observed
         # phase correlation and misstate the registered 400.6–406.0 h band.
-        if eta_source == "prior" and task == "Walker-v0":
+        # (Original campaign only; a v2 estimate's phases are summed.)
+        if not v2 and eta_source == "prior" and task == "Walker-v0":
             future_low = P2_TOTAL_P5_H * 3600 - prior_phase_low
             future_high = P2_TOTAL_P95_H * 3600 - prior_phase_high
     campaign_eta = (phase_eta[0] + future_low, phase_eta[1] + future_high)
@@ -310,10 +296,13 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
         "walker_milestone_epoch": (now + phase_eta[1] if task == "Walker-v0"
                                    else status.get("Walker-v0", {}).get("ended_at")),
         "walker_milestone_reached": status.get("Walker-v0", {}).get("status") == "complete",
-        "p2_mean_h": P2_MEAN_H, "p2_p95_h": P2_P95_H,
+        "p2_mean_h": (round(float(estimates.total_band(estimate).get("mean", 0.0)), 1) if v2 else P2_MEAN_H),
+        "p2_p95_h": (round(float(estimates.total_band(estimate).get("p95", 0.0)), 1) if v2 else P2_P95_H),
+        "guard_h": guard_h,
         "projection_total_h": ((elapsed + campaign_eta[0]) / 3600,
                                (elapsed + campaign_eta[1]) / 3600),
-        "projection_exceeds_432h": (elapsed + campaign_eta[1]) / 3600 > GUARD_H,
+        # Key name kept for compatibility; the threshold is the campaign's own guard.
+        "projection_exceeds_432h": (elapsed + campaign_eta[1]) / 3600 > guard_h,
         "infra_failure_count": failures, "last_error": next((r.get("result", {}).get("error") for r in reversed(journal)
                                                            if r.get("result", {}).get("error")), None),
         "seconds_since_last_task": now - last_task if last_task else None,
@@ -357,7 +346,7 @@ def render(snapshot: dict, tty: bool = False, *, ascii_only: bool | None = None,
         f"Running {snapshot['tasks_running']} queued {snapshot['tasks_queued']} | PPO/h now {snapshot['throughput_now_per_h']:.1f}, average {snapshot['throughput_average_per_h']:.1f}",
         f"Worker utilization: {100 * snapshot.get('worker_utilization_last_hour', 0):.1f}% last 1 h; {100 * snapshot.get('worker_utilization_since_phase_start', 0):.1f}% since phase start",
         f"ETA ({snapshot['eta_source']}): phase {_duration(snapshot['phase_eta_s'][0])}–{_duration(snapshot['phase_eta_s'][1])}; campaign {_duration(snapshot['campaign_eta_s'][0])}–{_duration(snapshot['campaign_eta_s'][1])}" + (" (future phase: prior)" if snapshot.get("future_eta_source") else ""),
-        f"Walker milestone ({'reached' if snapshot.get('walker_milestone_reached') else 'latest'}): {_when(snapshot['walker_milestone_epoch'])}; P2 {snapshot['p2_mean_h']} h mean / {snapshot['p2_p95_h']} h p95; projected total {_hours_range(snapshot.get('projection_total_h'))}; >432 h: {snapshot['projection_exceeds_432h']}",
+        f"Walker milestone ({'reached' if snapshot.get('walker_milestone_reached') else 'latest'}): {_when(snapshot['walker_milestone_epoch'])}; P2 {snapshot['p2_mean_h']} h mean / {snapshot['p2_p95_h']} h p95; projected total {_hours_range(snapshot.get('projection_total_h'))}; >{snapshot.get('guard_h', GUARD_H):.0f} h: {snapshot['projection_exceeds_432h']}",
         f"CPU {snapshot.get('cpu_percent', 'n/a')}% per-core {snapshot.get('per_core_percent', [])}; temp {snapshot.get('temperature_c', 'n/a')} °C; RAM {snapshot.get('ram_used_gb', 'n/a')} GB; swap {snapshot.get('swap_used_gb', 'n/a')} GB",
         f"Disk main {snapshot.get('main_disk_free_gb', 'n/a')} GB mirror {snapshot.get('mirror_disk_free_gb', 'n/a')} GB; last mirror {_when(snapshot.get('last_mirror_success'))}",
         f"Infra failures {snapshot['infra_failure_count']}; last error {snapshot['last_error'] or 'none'}; since task {_duration(snapshot['seconds_since_last_task'])}",

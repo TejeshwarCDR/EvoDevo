@@ -63,6 +63,10 @@ class PPOTask:
     # the real attribution path without importing PPO.
     debug_meta: Optional[dict] = None
     validation_meta: Optional[dict] = None
+    # Preflight-only: when set, train once to `timesteps` and record the
+    # fitness every `curve_eval_interval` steps (evaluate_body_with_curve).
+    # Campaign tasks always leave this None.
+    curve_eval_interval: Optional[int] = None
 
 
 @dataclass
@@ -88,6 +92,8 @@ class PPOTaskResult:
     finished_at: Optional[float] = None
     validation_base_duration_s: Optional[float] = None
     validation_planned_duration_s: Optional[float] = None
+    # [(timesteps, fitness), ...] for a curve_eval_interval task; else None.
+    curve: Optional[list] = None
 
 
 def validation_task_metadata(profile: dict, *, run_key: str, arm: str, task: str,
@@ -153,6 +159,8 @@ def _rss_mb():
 
 def evaluate_ppo_task(task: PPOTask) -> PPOTaskResult:
     """Picklable single-PPO-training worker; scheduling is deliberately external."""
+    if getattr(task, "curve_eval_interval", None):
+        return _evaluate_curve_task(task)
     start = time.time()
     vec_env = eval_env = None
     policy_path = training_log_path = None
@@ -189,6 +197,21 @@ def evaluate_ppo_task(task: PPOTask) -> PPOTaskResult:
             vec_env.close()
         if eval_env is not None:
             eval_env.close()
+
+
+def _evaluate_curve_task(task: PPOTask) -> PPOTaskResult:
+    """Preflight learning curve for one (body, task, seed) as a PPO pool task."""
+    start = time.time()
+    try:
+        result = evaluate_body_with_curve(task.body, task.task, task.timesteps, task.curve_eval_interval,
+                                          task.eval_episodes, task.seed)
+    except Exception as exc:  # noqa: BLE001 -- recorded, never raised into the pool
+        return PPOTaskResult(None, False, f"simulation_instability: {type(exc).__name__}: {exc}",
+                             time.time() - start, _rss_mb(), None, [], None, None, str(exc),
+                             traceback_module.format_exc(), curve=[])
+    return PPOTaskResult(float(result.fitness) if result.valid else None, bool(result.valid), result.reason,
+                         time.time() - start, _rss_mb(), None, [], None, None, None, None,
+                         curve=[[int(t), float(f)] for t, f in result.curve])
 
 
 @dataclass

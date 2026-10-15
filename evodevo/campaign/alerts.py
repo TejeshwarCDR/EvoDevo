@@ -27,6 +27,13 @@ WORKER_RSS_LIMIT_BYTES = 40 * 1024 ** 3
 # Step 5 steady-state measurements, minus the fixed 15 percentage-point
 # production guard margin.  These are operational thresholds, not estimates.
 UTILIZATION_FLOOR = {"Walker-v0": 0.996922 - 0.15, "UpStepper-v0": 0.984949 - 0.15}
+# Tasks without their own Step-5 measurement use the lower of the two
+# measured floors, so the low-utilization alert is never silently disabled.
+DEFAULT_UTILIZATION_FLOOR = min(UTILIZATION_FLOOR.values())
+
+
+def utilization_floor(task):
+    return UTILIZATION_FLOOR.get(task, DEFAULT_UTILIZATION_FLOOR) if task else None
 
 
 def format_display_message(name, details, status, *, label="alert"):
@@ -259,7 +266,7 @@ class AlertManager:
         self.evaluate("partial_stall", self._low_rate_since is not None and stamp - self._low_rate_since >= PARTIAL_STALL_S,
                       {"current_per_h": rate, "median_24h_per_h": median})
         task = snapshot.get("phase")
-        floor = UTILIZATION_FLOOR.get(task)
+        floor = utilization_floor(task) if task not in (None, "unknown", "COMPLETE") else None
         utilisation = snapshot.get("worker_utilization_last_hour")
         final_tail = snapshot.get("phase_completion_fraction", 0.0) >= 0.95
         below = (isinstance(utilisation, (int, float)) and floor is not None and

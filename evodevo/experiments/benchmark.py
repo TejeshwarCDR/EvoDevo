@@ -355,6 +355,22 @@ class BenchmarkConfig:
     # under `fast_dev` -- see FastDevRealRunGuardError. False by default, so
     # the guard is loud unless deliberately silenced.
     allow_fast_dev_real_run: bool = False
+    # Campaign-extension fields (docs/campaign_prep/ext/). All default to
+    # None, which reproduces the original campaign's behaviour exactly: the
+    # original benchmark.yaml sets none of them, so its CampaignPlan (and
+    # therefore its resume config hash) is byte-identical to before these
+    # fields existed (pinned by tests/campaign/test_plan_hash_invariance.py).
+    #   estimate_path:  the capacity estimate whose per-(arm|task) t_PPO priors
+    #                   set each phase's PPO-task timeout and feed the
+    #                   dashboard/monitor priors. None = the original
+    #                   results/campaign_prep/final_estimate/final_estimate.json.
+    #   decisions_path: a FINAL decision record (JSON) whose per-task
+    #                   ppo_timesteps/ppo_seeds must equal this YAML's
+    #                   profile_overrides exactly, or the plan refuses to build.
+    #   guard_outcome:  the budget-guard outcome text recorded in the plan.
+    estimate_path: Optional[str] = None
+    decisions_path: Optional[str] = None
+    guard_outcome: Optional[str] = None
 
     @classmethod
     def from_yaml(cls, path: str) -> "BenchmarkConfig":
@@ -515,6 +531,15 @@ def resolve_configs(bconfig: BenchmarkConfig) -> dict:
         for task in bconfig.tasks:
             path = bconfig.config_path(arm.encoder, task)
             config = ExperimentConfig.from_method_yaml(path)
+            # The per-method file is located by a version-stripped stem
+            # (ObstacleTraverser-v0 and -v1 share obstacletraverser.yaml), and
+            # that file's own `task:` is what PPO actually trains on. A
+            # mismatch would silently run the wrong environment, so refuse.
+            if config.task != task:
+                raise ValueError(
+                    f"{path} declares task {config.task!r} but the benchmark requests {task!r}; "
+                    "the per-method config would train PPO on the wrong environment"
+                )
             resolved[(arm.arm_id, task)] = dataclasses.replace(
                 config, seed=representative_seed, **_profile_kwargs_for_task(profile_kwargs, task)
             )

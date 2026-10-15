@@ -17,14 +17,15 @@ from .mirror import INTERVAL_S, sync
 SNAPSHOT_S = 12 * 3600
 
 
-def slowest_ecore_p95_s(task):
-    """B3/P1 P-core mean+1.645 SD, scaled by the measured 2.3172 E-core factor."""
-    data = json.loads(PRIOR_PATH.read_text())
-    pairs = data["inputs"]["t_ppo_mean_sd_at_b3_footing"]
-    values = [mean + 1.645 * sd for key, (mean, sd) in pairs.items() if key.endswith("|" + task)]
-    if not values:
-        raise ValueError(f"no measured t_PPO prior for {task}")
-    return max(values) * 2.3172
+def slowest_ecore_p95_s(task, estimate_path=None):
+    """B3/P1 P-core mean+1.645 SD, scaled by the measured 2.3172 E-core factor.
+
+    ``estimate_path`` is the campaign's own estimate (recorded in its
+    manifest); the default is the original campaign's estimate.
+    """
+    from .estimate import slowest_ecore_p95_s as from_estimate
+    data = json.loads(Path(estimate_path or PRIOR_PATH).read_text())
+    return from_estimate(data, task)
 
 
 def monitor_once(root, alerts, *, now=None, p95_ecore_s=None, last_mirror=0,
@@ -39,7 +40,8 @@ def monitor_once(root, alerts, *, now=None, p95_ecore_s=None, last_mirror=0,
     phase_started = phase_state.get("started_at", now)
     last_snapshot = max(last_snapshot, phase_started)
     if p95_ecore_s is None:
-        p95_ecore_s = slowest_ecore_p95_s(snapshot["phase"])
+        from .estimate import estimate_path_for_manifest
+        p95_ecore_s = slowest_ecore_p95_s(snapshot["phase"], estimate_path_for_manifest(manifest))
     mirror_dir = manifest.get("mirror_dir")
     mirror_ok = manifest.get("no_mirror", False) or bool(mirror_dir and Path(mirror_dir).is_dir())
     if mirror_dir and now - last_mirror >= INTERVAL_S:

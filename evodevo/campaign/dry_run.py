@@ -123,6 +123,13 @@ def render(args, plan, campaign_id) -> str:
     out.append(f"  total runs: {total_runs}")
     out.append("")
 
+    from evodevo.experiments.benchmark import BenchmarkConfig
+    from .estimate import is_v2, load
+    from .plan import resolve_estimate_path
+    estimate_file = resolve_estimate_path(BenchmarkConfig.from_yaml(args.config))
+    v2_estimate = load(estimate_file)
+    if is_v2(v2_estimate):
+        return _render_v2(out, args, plan, v2_estimate, estimate_file)
     estimate = json.loads(FINAL_ESTIMATE.read_text())
     applies, why = estimate_applies(plan, args.workers)
     production_applies = production_projection_applies(plan, args)
@@ -169,12 +176,85 @@ def render(args, plan, campaign_id) -> str:
             out.append(f"    {label:<22} {cells[0]:<22}{cells[1]:<22}{cells[2]}")
     out.append("")
 
-    refusals, record = launch_refusals(args)
     disk = json.loads(DISK_ESTIMATE.read_text())
-    disk_applies = applies or production_applies
+    return _render_tail(out, args, disk, applies or production_applies, DISK_ESTIMATE.relative_to(REPO_ROOT))
+
+
+def _design_matches_v2(plan, estimate) -> tuple[bool, str]:
+    """A v2 estimate states the exact design it modelled; refuse to show a
+    calendar for any other plan."""
+    design = estimate.get("design", {})
+    for phase in plan.phases:
+        modelled = design.get("tasks", {}).get(phase.task)
+        if modelled is None:
+            return False, f"{phase.task} is not in the estimate"
+        arms = sorted({run.arm for run in phase.runs})
+        seeds = sorted({run.seed for run in phase.runs})
+        cfg = phase.runs[0].config
+        actual = dict(arms=arms, seeds=seeds, ppo_timesteps=phase.ppo_timesteps, ppo_seeds=phase.ppo_seeds,
+                      population_size=cfg["population_size"], eval_budget=cfg["eval_budget"])
+        expected = {key: modelled.get(key) for key in actual}
+        if actual != expected:
+            return False, f"{phase.task}: plan {actual} != estimated design {expected}"
+    if [phase.task for phase in plan.phases] != list(estimate.get("result", {}).get("task_order", [])):
+        return False, "phase order differs from the estimate"
+    return True, "plan matches the estimated design exactly"
+
+
+def _render_v2(out, args, plan, estimate, estimate_file):
+    applies, why = _design_matches_v2(plan, estimate)
+    production = production_projection_applies_v2(args)
+    launch = dt.datetime.fromisoformat(args.launch_at) if args.launch_at else dt.datetime.now().replace(
+        second=0, microsecond=0)
+    result, guard = estimate.get("result", {}), estimate.get("guard", {})
+    try:
+        label = estimate_file.relative_to(REPO_ROOT)
+    except ValueError:
+        label = estimate_file
+    out.append(f"ESTIMATE ({label}; {estimate.get('method', 'v2 estimate')}; pre-registered guard: "
+               f"p95 <= {guard.get('threshold_h', float('nan')):.0f} h -> outcome: {guard.get('outcome', 'n/a')})")
+    if not applies:
+        out.append(f"  NOT APPLICABLE to this plan ({why}); no calendar is shown.")
+    elif not production and estimate.get("workers") is not None and args.workers != estimate.get("workers"):
+        out.append(f"  NOT APPLICABLE: worker count {args.workers} != estimate's {estimate.get('workers')}; "
+                   "no calendar is shown.")
+    else:
+        total = result["total_h"]
+        out.append(f"  total: mean {total['mean']:.1f} h, p5 {total['p5']:.1f} h, p95 {total['p95']:.1f} h "
+                   f"({'within' if total['p95'] <= guard.get('threshold_h', float('inf')) else 'OVER'} the guard)")
+        elapsed = {"p5": 0.0, "mean": 0.0, "p95": 0.0}
+        out.append(f"  CALENDAR from launch {_stamp(launch)} (local time)")
+        out.append(f"    {'':<30} {'p5':<22}{'mean':<22}p95")
+        for task in result["task_order"]:
+            band = result["phase_h"][task]
+            for q in elapsed:
+                elapsed[q] += band[q]
+            out.append(f"    {task + ' (' + format(band['mean'], '.1f') + ' h)':<30} "
+                       + "".join(f"{_stamp(launch + dt.timedelta(hours=elapsed[q])):<22}" for q in ("p5", "mean"))
+                       + _stamp(launch + dt.timedelta(hours=elapsed['p95'])))
+    out.append("")
+    disk = estimate.get("disk") or {}
+    return _render_tail(out, args, disk, applies, label)
+
+
+def production_projection_applies_v2(args) -> bool:
+    from .production import PROFILE, WORKER_CPUS
+    return args.workers == len(WORKER_CPUS) and args.cpu_profile == PROFILE
+
+
+def _render_tail(out, args, disk, disk_applies, disk_label):
+    from evodevo.campaign.launch_checks import launch_refusals
+    from evodevo.campaign.scheduler import cpu_placement
+    from evodevo.parallel.topology import detect_topology
+    from evodevo.preflight.dirty_check import dirty_paths_outside_results
+    dirty = dirty_paths_outside_results(str(REPO_ROOT))
+    refusals, record = launch_refusals(args)
+    if not disk:
+        disk = {"total_bytes": float("nan"), "three_x_total_bytes": float("nan")}
+    DISK_LABEL = disk_label
     need = disk["three_x_total_bytes"] / 1e9
     main_free = _free_gb(args.output_root)
-    out.append(f"DISK ({DISK_ESTIMATE.relative_to(REPO_ROOT)}): projected {disk['total_bytes'] / 1e9:.1f} GB; "
+    out.append(f"DISK ({DISK_LABEL}): projected {disk['total_bytes'] / 1e9:.1f} GB; "
                f"D10 3x margin requires {need:.1f} GB free"
                + ("" if disk_applies else " (projection is for the estimated design, not this plan)"))
     out.append(f"  main ({_existing(args.output_root)}): {main_free:.1f} GB free -> "

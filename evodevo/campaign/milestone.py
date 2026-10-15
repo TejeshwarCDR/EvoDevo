@@ -30,6 +30,35 @@ REQUIRED = ("figures/fitness_curves.png", "figures/fitness_curves.pdf",
             "stats/rule_based_vs_monotone.csv", "MILESTONE_REPORT.md")
 
 
+def phase_ppo_seeds(manifest: dict, task: str) -> int:
+    """K for ``task`` from the campaign plan. Without a plan (an old or
+    hand-built manifest), the original campaign's UpStepper-v0 K=2."""
+    for phase in (manifest or {}).get("plan", {}).get("phases", []):
+        if phase.get("task") == task and "ppo_seeds" in phase:
+            return int(phase["ppo_seeds"])
+    return 2 if task == "UpStepper-v0" else 1
+
+
+def sensitivity_files(k: int) -> tuple:
+    """Pre-registered mean-of-K sensitivity outputs (K=2 keeps the original names)."""
+    return (f"stats/mean_of_{k}_sensitivity.csv", f"stats/mean_of_{k}_omnibus.csv",
+            f"stats/mean_of_{k}_pairwise.csv", f"stats/mean_of_{k}_final_fitness_summary.csv")
+
+
+def floor_effect_rows(data, finals, task):
+    """Pre-registered floor-effect check (docs/campaign_prep/ext/PREREGISTRATION_EXT.md
+    section 7.4): Q75 of valid generation-0 fitness pooled over arms and seeds,
+    against each arm's median final best-so-far fitness. Descriptive for the
+    original tasks; decisive for the extension tasks."""
+    gen0 = data[(data["generation"] == 0) & (data["valid"].astype(bool))]["fitness"].astype(float)
+    q75 = float(np.quantile(gen0, 0.75)) if len(gen0) else float("nan")
+    medians = {arm: float(np.median(values)) for arm, values in finals.items() if values}
+    limited = bool(medians) and len(gen0) > 0 and all(value <= q75 for value in medians.values())
+    return [{"task": task, "arm": arm, "median_final_best": value, "q75_generation0_valid": q75,
+             "n_generation0_valid": int(len(gen0)), "above_q75": value > q75,
+             "task_floor_limited": limited} for arm, value in sorted(medians.items())]
+
+
 def _atomic_text(path, text):
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -318,6 +347,9 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
     _atomic_text(output / "stats/tables.md", (f"**{stamp}**\n\n" if stamp else "") + markdown + "\n")
     _atomic_text(output / "stats/tables.tex", primary.to_latex(index=False))
     generation_rows = _secondary_tables(data, output, finals, status, fraction)
+    floor_rows = floor_effect_rows(data, finals, task)
+    if floor_rows:
+        _csv(output / "stats/floor_effect_check.csv", floor_rows, list(floor_rows[0]))
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -405,7 +437,9 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
             else:
                 video_notes.append(f"{arm}: video omitted because the visualisation self-test failed.")
     sensitivity = None
-    if task == "UpStepper-v0" and "per_seed_fitness" in data:
+    k_seeds = phase_ppo_seeds(manifest, task)
+    sensitivity_paths = sensitivity_files(k_seeds)
+    if k_seeds > 1 and "per_seed_fitness" in data:
         changed = data.copy()
         changed["fitness"] = changed.apply(
             lambda r: float(np.mean([v for v in (r["per_seed_fitness"] or []) if v is not None]))
@@ -417,7 +451,7 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
             sensitivity["completion_fraction"] = fraction
             sensitivity["n_seeds"] = sensitivity["encoder"].map(
                 {arm: len(values) for arm, values in per_seed_finals(changed).items()})
-        sensitivity.to_csv(output / "stats/mean_of_2_sensitivity.csv", index=False)
+        sensitivity.to_csv(output / sensitivity_paths[0], index=False)
         mean_omnibus, mean_pairwise = _stats(per_seed_finals(changed))
         if status == "PARTIAL":
             mean_finals = per_seed_finals(changed)
@@ -427,10 +461,10 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
             for row in mean_pairwise:
                 row.update(status=status, completion_fraction=fraction,
                            n_a=len(mean_finals[row["arm_a"]]), n_b=len(mean_finals[row["arm_b"]]))
-        _csv(output / "stats/mean_of_2_omnibus.csv", [mean_omnibus], list(mean_omnibus))
-        _csv(output / "stats/mean_of_2_pairwise.csv", mean_pairwise, fields)
+        _csv(output / sensitivity_paths[1], [mean_omnibus], list(mean_omnibus))
+        _csv(output / sensitivity_paths[2], mean_pairwise, fields)
         pd.DataFrame(_primary_summary(per_seed_finals(changed), status, fraction)).to_csv(
-            output / "stats/mean_of_2_final_fitness_summary.csv", index=False)
+            output / sensitivity_paths[3], index=False)
     report = (f"# {task} milestone report\n\n"
               f"Status: {status}. Completion: {len(data)}/{planned or '?'} evaluations"
               f" ({fraction:.1%} of plan).\n\n" if fraction is not None else
@@ -447,8 +481,10 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
                "median with an IQR band. The two-panel budget plot separates evaluations spent "
                "from valid search attempts.\n\n" + markdown + "\n\n"
                f"Omnibus H={omnibus['statistic']:.4g}, p={omnibus['p']:.4g}.\n\n"
-               "The rule_based versus rule_based_monotone contrast is in "
-               "stats/rule_based_vs_monotone.csv.\n\n")
+               + ("The rule_based versus rule_based_monotone contrast is in "
+                  "stats/rule_based_vs_monotone.csv.\n\n" if contrast else
+                  "rule_based_monotone is not part of this campaign, so "
+                  "stats/rule_based_vs_monotone.csv contains only its header.\n\n"))
     report += ("Secondary endpoints: stats/validity_diversity_by_generation.csv gives realised "
                "validity and unique-valid-body diversity by generation; stats/current_rates.csv "
                "gives per-run rates. stats/final_best_morphology.csv gives occupied voxels, "
@@ -456,9 +492,17 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
                "materials for each run's best body. stats/evaluations_to_90pct_arm_median.csv "
                "uses 90% of each arm's current final median; unreached runs are explicit.\n\n")
     if sensitivity is not None:
-        report += ("UpStepper mean-of-2 sensitivity: stats/mean_of_2_sensitivity.csv, "
-                   "stats/mean_of_2_final_fitness_summary.csv, stats/mean_of_2_omnibus.csv "
-                   "and stats/mean_of_2_pairwise.csv.\n\n")
+        report += ((f"UpStepper mean-of-2 sensitivity: " if task == "UpStepper-v0" and k_seeds == 2
+                    else f"{task} mean-of-{k_seeds} sensitivity: ")
+                   + f"{sensitivity_paths[0]}, {sensitivity_paths[3]}, {sensitivity_paths[1]} "
+                   f"and {sensitivity_paths[2]}.\n\n")
+    if floor_rows:
+        report += ("Floor-effect check (stats/floor_effect_check.csv): "
+                   + ("every arm's median final best fitness is at or below the 75th percentile of "
+                      "valid generation-0 fitness, so this task is FLOOR-LIMITED at this budget.\n\n"
+                      if floor_rows[0]["task_floor_limited"] else
+                      "at least one arm's median final best fitness exceeds the 75th percentile of "
+                      "valid generation-0 fitness.\n\n"))
     report += ("Pre-registered limitations: NCA development does not settle; the validity "
                "proxy assumes random fitness; planned n=5 seeds per arm per task.\n\n")
     report += "Figures and best-body files are listed in package_manifest.json. Videos require a green visualisation check.\n"
@@ -475,10 +519,8 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
                   "files": files}, indent=2, sort_keys=True) + "\n")
     missing = [name for name in REQUIRED if not (output / name).is_file()]
     missing += [name for name in best_files if not (output / name).is_file()]
-    if task == "UpStepper-v0":
-        missing += [name for name in ("stats/mean_of_2_sensitivity.csv", "stats/mean_of_2_omnibus.csv",
-                                      "stats/mean_of_2_pairwise.csv", "stats/mean_of_2_final_fitness_summary.csv")
-                    if not (output / name).is_file()]
+    if k_seeds > 1:
+        missing += [name for name in sensitivity_paths if not (output / name).is_file()]
     if missing:
         raise RuntimeError(f"incomplete milestone package: {missing}")
     return {"output": str(output), "files": files, "completion_fraction": fraction}
@@ -518,10 +560,13 @@ def run_subprocess(campaign_root, task, alert_manager=None, *, snapshot=False):
     for arm in {directory.parents[1].name for directory in _run_dirs(Path(campaign_root), task)}:
         missing += [name for name in (f"best_bodies/{arm}.npz", f"best_bodies/{arm}.png")
                     if not (output / name).is_file()]
-    if task == "UpStepper-v0":
-        missing += [name for name in ("stats/mean_of_2_sensitivity.csv", "stats/mean_of_2_omnibus.csv",
-                                      "stats/mean_of_2_pairwise.csv", "stats/mean_of_2_final_fitness_summary.csv")
-                    if not (output / name).is_file()]
+    try:
+        manifest = json.loads((Path(campaign_root) / "manifest.json").read_text())
+    except (OSError, ValueError):
+        manifest = {}
+    k_seeds = phase_ppo_seeds(manifest, task)
+    if k_seeds > 1:
+        missing += [name for name in sensitivity_files(k_seeds) if not (output / name).is_file()]
     if completed.returncode or missing:
         if alert_manager:
             alert_manager.milestone_failure(task, missing, completed.stderr[-2000:])

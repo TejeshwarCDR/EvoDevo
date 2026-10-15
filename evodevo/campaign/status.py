@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import datetime as dt
 from typing import Any
 
-from .alerts import UTILIZATION_FLOOR
+from .alerts import UTILIZATION_FLOOR, utilization_floor
 
 
 def _pct(done: Any, total: Any) -> int:
@@ -57,7 +57,9 @@ class CampaignStatus:
             eta_range=(when(low), when(mean), when(high)),
             most_likely_finish=when(mean),
             worker_utilization_now=snapshot.get("worker_utilization_last_hour"),
-            worker_utilization_steady_state_target=UTILIZATION_FLOOR.get(snapshot.get("phase")),
+            worker_utilization_steady_state_target=(utilization_floor(snapshot.get("phase"))
+                                                   if snapshot.get("phase") not in (None, "unknown", "COMPLETE")
+                                                   else None),
             banner_state=banner,
             as_of=as_of,
         )
