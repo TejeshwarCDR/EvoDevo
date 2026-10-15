@@ -7,7 +7,7 @@ back before running the next one. The sequence and commands are also in [RUNBOOK
 |---|---|---|
 | 0 | now, while the original campaign runs | no (writes one report under `results/`) |
 | 1 | after the original campaign is `complete` | checks out `campaign-ext`; runs a stamped rehearsal campaign |
-| 2 | after prompt 1 passes | starts the extension preflight (~8–10 h, unattended) |
+| 2 | after prompt 1 passes | starts the extension preflight (~9–11 h, unattended) |
 | 3 | after the preflight finishes | derives decisions, commits and pushes them |
 | 4 | after prompt 3 | writes the audit report; launch only after an explicit GO |
 
@@ -128,7 +128,7 @@ d. Close the rehearsal's tmux session once it shows CAMPAIGN COMPLETE.
 ## Prompt 2 — start the extension preflight
 
 ```
-Start the extension preflight. It runs unattended for about 8–10 hours. Do not modify code or configuration.
+Start the extension preflight. It runs unattended for about 9–11 hours. Do not modify code or configuration.
 
 1. Preconditions: on branch campaign-ext, `git status --short` empty, no evodevo process running, no
    evodevo tmux session. ORIG = the completed original campaign id (as in Prompt 1).
@@ -154,7 +154,7 @@ The extension preflight has finished. Apply the pre-registered rules and prepare
 generated file by hand and do not change any rule constant.
 
 1. `.venv/bin/python -m evodevo.extension preflight status --run-id ext-<date>`: every training recorded
-   (curves 18, noise 66); list any failed training with its reason. Failed trainings are excluded by the
+   (curves 18, noise 84); list any failed training with its reason. Failed trainings are excluded by the
    rules, never re-run by hand.
 2. `.venv/bin/python -m evodevo.extension derive --run-id ext-<date> --reference-campaign results/campaign/<ORIG>`
    and then the identical `check` command; check must print "extension check passed".

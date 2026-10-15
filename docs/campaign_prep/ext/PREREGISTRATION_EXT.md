@@ -101,3 +101,13 @@ Unit of analysis: one EA run (arm × task × seed). Tasks are analysed separatel
 - Three of the six B4x/B5x bodies evolved on Walker-v0, so they may favour walking morphologies. This affects only budget and K calibration, never the arm comparison.
 - The cost projection assumes the extension tasks' validity trajectories resemble Walker-v0's. Its error on the original campaign is measured by the backtest and propagated into the band.
 - Climber-v0 rewards upward displacement and CaveCrawler-v0 adds ceiling observations. Cross-task differences confound terrain with these interface differences, which is why there is no pooling.
+
+## Amendment 1 (2026-10-15, before any extension preflight data)
+
+No extension preflight measurement exists at the time of this amendment. Constants not named here are unchanged.
+
+1. **B5x uses 4 repeats instead of 3** per (body, task): seeds `ppo_seed(20261016, r)`, r = 0..3. Noise trainings become 6 bodies × 3 tasks × 4 repeats = 72 (plus the 12 cost references).
+2. **D16-ext max-of-2 within-body variance is the unbiased U-statistic.** For a body with repeats x₁..xₙ (n ≥ 4) it is E[max²] − E[max]², where E[max²] is the mean of max(a,b)² over all distinct pairs and E[max]² is the mean of max(a,b)·max(c,d) over all pairs of pairs with four distinct indices. The earlier overlapping-pairs sample variance is biased low (about 0.57× the true variance at 3 repeats under Gaussian noise), which would favour K = 2. The max-of-2 within variance is the mean over bodies of this quantity, clipped at 0; the single-training within variance is the mean over bodies of the ddof=1 sample variance; the SDs are their square roots. The 0.33 and 0.5 thresholds and all other D16-ext branches are unchanged.
+3. **"Bodies with ≥ 4 repeats" replaces "≥ 2"** for the max-of-2 term (the single-training term still uses bodies with ≥ 2 repeats). Fewer than 3 bodies with ≥ 4 repeats gives K = 1 (branch `insufficient_repeats`).
+4. **`derive` refuses unfinished, dirty or multi-commit preflight runs.** It requires a PRODUCTION label (production parameters, never TEST), no stage run on a dirty tree, a single git commit across all stages, and exactly the expected number of recorded trainings (failed trainings count as recorded and are listed in the decision report).
+5. **The floor-effect check applies to the extension tasks only.** The original campaign's milestone packages are unchanged.

@@ -10,7 +10,7 @@ subprocess and any rebuilt worker import whatever code is on disk at that moment
 |---|---|---|---|
 | 0 | now (original campaign running) | 10 min | Read-only record of the original campaign; nothing changes |
 | 1 | original campaign `complete` | ~1.5 h | close out the original, check out `campaign-ext`, tests, real-launcher mini rehearsal |
-| 2 | after step 1 passes | ~8–10 h, unattended | extension preflight (B4x, then B5x) under the production power controls |
+| 2 | after step 1 passes | ~9–11 h, unattended | extension preflight (B4x, then B5x) under the production power controls |
 | 3 | after step 2 | 15 min | derive decisions, check, dry run, commit, push |
 | 4 | after step 3 | 15 min | audit report, then launch only on an explicit GO |
 
