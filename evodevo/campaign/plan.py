@@ -40,8 +40,10 @@ def resolve_estimate_path(benchmark) -> Path:
     return path if path.is_absolute() else REPO_ROOT / path
 
 
-def verify_decision_record(benchmark) -> dict | None:
-    """Refuse a plan whose YAML disagrees with its FINAL decision record."""
+def verify_decision_record(benchmark, allow_test_record: bool = False) -> dict | None:
+    """Refuse a plan whose YAML disagrees with its FINAL decision record, and
+    any record derived from a non-PRODUCTION (TEST) preflight run unless the
+    caller is a rehearsal that passes ``allow_test_record``."""
     raw = getattr(benchmark, "decisions_path", None)
     if not raw:
         return None
@@ -52,6 +54,9 @@ def verify_decision_record(benchmark) -> dict | None:
     record = json.loads(path.read_text())
     if record.get("status") != "FINAL":
         raise DecisionRecordError(f"decision record {path} has status {record.get('status')!r}, not 'FINAL'")
+    if not allow_test_record and "label" in record and record["label"] != "PRODUCTION":
+        raise DecisionRecordError(f"decision record {path} is labelled {record['label']!r}, not 'PRODUCTION'; "
+                                  "a record derived from a TEST preflight run can never launch a campaign")
     profile = benchmark.resolved_profile_kwargs()
     tasks = record.get("tasks", {})
     if list(benchmark.tasks) != list(record.get("task_order", [])):
@@ -112,10 +117,10 @@ class CampaignPlan:
                    payload.get("validation_profile"))
 
     @classmethod
-    def from_benchmark(cls, benchmark: BenchmarkConfig, estimate_path=None):
+    def from_benchmark(cls, benchmark: BenchmarkConfig, estimate_path=None, allow_test_record: bool = False):
         if benchmark.profile not in {CAMPAIGN, CAMPAIGN_VALIDATION}:
             raise ValueError("CampaignPlan requires the campaign profile")
-        verify_decision_record(benchmark)
+        verify_decision_record(benchmark, allow_test_record=allow_test_record)
         resolved = resolve_configs(benchmark)
         estimate_path = Path(estimate_path) if estimate_path is not None else resolve_estimate_path(benchmark)
         estimate = json.loads(estimate_path.read_text())

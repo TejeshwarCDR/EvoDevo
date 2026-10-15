@@ -423,13 +423,17 @@ def check(run_dir: Path | None, reference: Path | None, allow_test: bool = False
             problems.append(f"{path.name} is not the canonical dump of its content (hand edit?)")
     record = json.loads(texts[spec.DECISIONS_JSON])
     estimate = json.loads(texts[spec.ESTIMATE_JSON])
+    if not allow_test and record.get("label") != "PRODUCTION":
+        problems.append(f"decision record is labelled {record.get('label')!r}, not 'PRODUCTION' "
+                        "(derived from a TEST preflight run)")
     if spec.CAMPAIGN_YAML.read_text(encoding="utf-8") != render_yaml(record):
         problems.append("campaign_ext.yaml is not the rendering of EXT_DECISIONS.json")
     if spec.DECISIONS_MD.read_text(encoding="utf-8") != render_report(record, estimate):
         problems.append("EXT_DECISIONS.md is not the rendering of EXT_DECISIONS.json and final_estimate_ext.json")
     plan = None
     try:
-        plan = CampaignPlan.from_benchmark(BenchmarkConfig.from_yaml(str(spec.CAMPAIGN_YAML)))
+        plan = CampaignPlan.from_benchmark(BenchmarkConfig.from_yaml(str(spec.CAMPAIGN_YAML)),
+                                           allow_test_record=allow_test)
     except Exception as exc:  # noqa: BLE001 -- reported, not raised
         problems.append(f"plan does not build: {type(exc).__name__}: {exc}")
     if plan is not None:

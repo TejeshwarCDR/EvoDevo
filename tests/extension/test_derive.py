@@ -214,3 +214,34 @@ def test_check_is_byte_for_byte(tmp_path, isolated_outputs):
     (tmp_path / "x").mkdir()
     other = make_preflight(tmp_path / "x", noisy_task="Climber-v0")
     assert any("differs from a fresh derivation" in p for p in derive_module.check(other, reference))
+
+
+def test_check_refuses_a_test_labelled_record_unless_allowed(tmp_path, isolated_outputs):
+    run, reference = make_preflight(tmp_path, label="TEST"), make_reference(tmp_path)
+    derive_module.write(derive_module.derive(run, reference, allow_test=True))
+    problems = derive_module.check(None, None)
+    assert any("labelled 'TEST', not 'PRODUCTION'" in p for p in problems)
+    assert not any("labelled" in p for p in derive_module.check(None, None, allow_test=True))
+
+
+def test_plan_refuses_a_test_labelled_decision_record(tmp_path):
+    from pathlib import Path
+    from evodevo.campaign.plan import CampaignPlan, DecisionRecordError
+    from evodevo.experiments.benchmark import BenchmarkConfig
+    configs = Path("evodevo/experiments/configs")
+    record = {"status": "FINAL", "label": "TEST",
+              "task_order": ["ObstacleTraverser-v1", "Climber-v0", "CaveCrawler-v0"],
+              "arms": ["direct", "nca", "rule_based"], "seeds": [0, 1],
+              "shared": {"population_size": 15, "offspring_size": 15, "eval_budget": 30,
+                         "ppo_seed_aggregation": "max"},
+              "tasks": {"ObstacleTraverser-v1": {"ppo_timesteps": 2048, "ppo_seeds": 1},
+                        "Climber-v0": {"ppo_timesteps": 2048, "ppo_seeds": 2},
+                        "CaveCrawler-v0": {"ppo_timesteps": 2048, "ppo_seeds": 1}}}
+    path = tmp_path / "record.json"
+    path.write_text(json.dumps(record))
+    bench = tmp_path / "bench.yaml"
+    bench.write_text((configs / "campaign_ext_mini_validation.yaml").read_text() + f"decisions_path: {path}\n")
+    with pytest.raises(DecisionRecordError, match="TEST"):
+        CampaignPlan.from_benchmark(BenchmarkConfig.from_yaml(str(bench)))
+    plan = CampaignPlan.from_benchmark(BenchmarkConfig.from_yaml(str(bench)), allow_test_record=True)
+    assert [p.task for p in plan.phases] == record["task_order"]

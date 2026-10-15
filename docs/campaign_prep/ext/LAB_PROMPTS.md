@@ -3,12 +3,16 @@
 Run these one at a time in Claude Code on the lab machine, in the repository root. Send each prompt's report
 back before running the next one. The sequence and commands are also in [RUNBOOK_EXT.md](RUNBOOK_EXT.md).
 
+**The extension is merged into `main`. Do NOT run `git pull` (or Prompt 1) on the lab machine until the
+original campaign (Walker-v0 and UpStepper-v0) is complete.** The running campaign's milestone subprocess and
+any rebuilt worker import whatever code is on disk at that moment. Only Prompt 0 may be run while it runs.
+
 | Prompt | When | Changes anything? |
 |---|---|---|
-| 0 | now, while the original campaign runs | no (writes one report under `results/`) |
-| 1 | after the original campaign is `complete` | checks out `campaign-ext`; runs a stamped rehearsal campaign |
+| 0 | now, while the original campaign runs | no (writes one report under `results/ext_prep/`) |
+| 1 | after the original campaign is `complete` | fast-forwards `main`; runs the tests and a stamped rehearsal campaign |
 | 2 | after prompt 1 passes | starts the extension preflight (~9–11 h, unattended) |
-| 3 | after the preflight finishes | derives decisions, commits and pushes them |
+| 3 | after the preflight finishes | derives decisions, commits them to `main` and pushes (no force) |
 | 4 | after prompt 3 | writes the audit report; launch only after an explicit GO |
 
 ---
@@ -19,17 +23,19 @@ back before running the next one. The sequence and commands are also in [RUNBOOK
 Produce a read-only record of the original EvoDevo campaign while it runs. This is READ-ONLY.
 
 HARD CONSTRAINTS
-- Do NOT pull, fetch-and-merge, check out, edit, stage, commit or stash anything. `git fetch` is allowed.
+- Do NOT pull, merge, check out, edit, stage, commit or stash anything, and run no `git fetch`.
 - Do NOT touch the running campaign: no writes, moves or deletes under results/campaign/, no signals, no
   edits to campaign.local.yaml or anything under results/campaign_prep/. Reading is fine.
+- Write nothing under results/campaign/ or results/campaign_prep/ and no signals to any campaign process.
 - The only code you may run is read-only status tooling and the probe in section E, which must run with
   `nice -n 19 taskset -c 27` and single-threaded env vars (OMP/MKL/OPENBLAS_NUM_THREADS=1).
 - Redact the ntfy topic and any token as <REDACTED>.
 - Write exactly one file: results/ext_prep/LAB_RECORD_<UTC date>.md (create the folder). Print its path.
 
 SECTIONS
-A. Git: branch, HEAD (hash, date, message), `git status --short`, `git log origin/main..HEAD --oneline`,
-   `git log HEAD..origin/main --oneline` after `git fetch`, and `git ls-remote --heads origin`.
+A. Git (read-only, no fetch): branch, HEAD (hash, date, message), `git status --short`,
+   `git log origin/main..HEAD --oneline` and `git log HEAD..origin/main --oneline` against the refs already
+   present locally, and `git ls-remote --heads origin` (network read, writes nothing).
 B. The running campaign (find it with `ls -t results/campaign/*/manifest.json | head`):
    - campaign_id, manifest status, phase, phase_status (with ISO timestamps), started_at, git_commit,
      launch_checks (summarised), mirror_dir (redacted to mount name), no_notify.
@@ -61,27 +67,34 @@ F. Anything inconsistent or surprising, one line each.
 
 ---
 
-## Prompt 1 — close out the original campaign, switch to `campaign-ext`, test and rehearse
+## Prompt 1 — close out the original campaign, fast-forward `main`, test and rehearse
 
 ```
 The original campaign must be finished before anything here runs. Work through the steps in order and STOP
 at the first failure, reporting it. Write results/ext_prep/STEP1_REPORT.md as you go and print its path.
+Never use force, stash, reset, or a branch switch.
 
-STEP 1 — PRECONDITIONS (stop if any fails)
+STEP 1 — PRECONDITIONS (stop if any fails; nothing is fetched or changed before all of them pass)
 a. ORIG = the campaign in results/campaign/ whose manifest has both Walker-v0 and UpStepper-v0. Its manifest
-   status must be "complete", both phase_status entries "complete", milestone_status ok for both tasks,
-   and CAMPAIGN_COMPLETE.txt must name it. Quote these fields.
-b. No campaign scheduler, monitor or preflight process is running (`pgrep -af evodevo`), and `tmux ls` shows
-   no live evodevo-campaign session. If an evodevo-campaign session exists and its dashboard shows CAMPAIGN
-   COMPLETE, close it with `tmux kill-session -t evodevo-campaign`; otherwise STOP.
-c. `git status --short` is empty.
+   status must be "complete", phase_status["Walker-v0"].status and phase_status["UpStepper-v0"].status both
+   "complete", milestone_status[<task>].ok true for both tasks, and CAMPAIGN_COMPLETE.txt must name it.
+   Quote these fields.
+b. No campaign worker, scheduler, monitor or preflight process is running (`pgrep -af 'evodevo'` is empty,
+   ignoring this shell), and `tmux ls` shows no live evodevo-campaign session. If an evodevo-campaign session
+   exists and its dashboard shows CAMPAIGN COMPLETE, close it with `tmux kill-session -t evodevo-campaign`;
+   otherwise STOP.
+c. `git branch --show-current` is `main` and `git status --short` is empty.
 d. Verify the original campaign's mirror: run the repository's mirror verification for ORIG against its
    recorded mirror_dir (evodevo.campaign.mirror verify_mirror / verify_checksum_manifest) and report the
    result. If it is not verified, run one final sync with the same function and verify again.
 
-STEP 2 — SWITCH BRANCH
-`git fetch origin && git checkout campaign-ext && git pull --ff-only`. Report HEAD and `git log --oneline
-7774f76..HEAD`.
+STEP 2 — FAST-FORWARD `main`
+Record `git rev-parse HEAD` (the pre-merge commit). Then `git fetch origin && git merge --ff-only origin/main`
+(on branch main; no checkout, no force, no stash). If the merge is not a fast-forward, STOP and report. Record
+the commit you end on (`git rev-parse HEAD`) and `git log --oneline <pre-merge>..HEAD`. Confirm these exist:
+evodevo/extension/{__main__,preflight,derive,rules,spec}.py,
+evodevo/experiments/configs/campaign_ext.yaml, campaign_ext_mini_validation.yaml, campaign_ext_validation.yaml,
+docs/campaign_prep/ext/{PREREGISTRATION_EXT,RUNBOOK_EXT,LAB_PROMPTS}.md, tests/extension/.
 
 STEP 3 — PROOF THAT THE ORIGINAL CAMPAIGN IS UNCHANGED BY THE NEW CODE
 With the REAL results/campaign_prep/final_estimate/final_estimate.json, compute
@@ -89,19 +102,28 @@ CampaignPlan.from_benchmark(BenchmarkConfig.from_yaml("evodevo/experiments/confi
 in a fresh `.venv/bin/python -c` and compare it with results/campaign/<ORIG>/manifest.json config_hash.
 They MUST be identical; if not, STOP and report both.
 
-STEP 4 — TESTS
-a. `.venv/bin/python -m pytest -q -m "not slow" -p no:cacheprovider` (whole suite). Report the summary
-   line and every failure with its first error line. Any failure is a STOP unless it is a known
-   environment-only failure that also fails identically on commit 7774f76 (prove that by running the same
-   test at 7774f76 in a temporary `git worktree`, then remove the worktree).
-b. `.venv/bin/python -m pytest -q -p no:cacheprovider tests/extension tests/campaign/test_extension_invariance.py
-   tests/campaign/test_extension_generic.py` — must be all green.
+STEP 4 — TESTS (use `-p no:cacheprovider`; the lab has final_estimate.json, psutil, Linux CPUs, tmux and setsid)
+a. Required, must be 100% green:
+   `.venv/bin/python -m pytest -q -p no:cacheprovider tests/extension tests/campaign/test_extension_invariance.py
+   tests/campaign/test_extension_generic.py`  (expected: 76 passed).
+b. Full suite: `.venv/bin/python -m pytest -q -m "not slow" -p no:cacheprovider`. Expected on the lab: 0 failed.
+   The 40 tests that fail on a Mac for environment reasons only (missing final_estimate.json, no psutil,
+   no Linux CPU layout/sched_setaffinity, no setsid/tmux; identical failures at 7774f76) MUST pass here:
+   tests/campaign/{test_dry_run,test_entry_point,test_equivalence_validator,test_mirror_disk,test_notifier,
+   test_operations,test_production_launcher_lifecycle,test_validation_profile}.py,
+   tests/parallel/test_worker_pool.py, tests/preflight/{test_b1_b2,test_cli,test_report,test_telemetry}.py.
+   Any failure is a STOP unless the same test ID fails identically at 7774f76 in a temporary `git worktree`
+   (run it with that worktree as cwd and PYTHONPATH, print `evodevo.__file__`, then remove the worktree).
+   Report the summary line and every failure with its first error line.
 
 STEP 5 — REAL-LAUNCHER REHEARSAL OF THE EXTENSION GRID
-a. `mkdir -p <BACKUP_MOUNT>/validation/ext-mini`, then a dry run: `sudo scripts/campaign/run_production_campaign.sh --dry-run --config
+This writes only a NEW campaign directory results/campaign/ext-mini-rehearsal and the mirror folder below.
+It must never write into results/campaign/<ORIG> or results/extension_preflight/ (the production preflight).
+a. `mkdir -p <BACKUP_MOUNT>/validation/ext-mini`, then a dry run:
+   `xvfb-run -a sudo scripts/campaign/run_production_campaign.sh --dry-run --config
    evodevo/experiments/configs/campaign_ext_mini_validation.yaml --mirror-dir <BACKUP_MOUNT>/validation/ext-mini
-   --local-config campaign.local.yaml`. Quote the PLAN and LAUNCH CHECKS sections.
-b. Launch: `sudo scripts/campaign/run_production_campaign.sh --campaign-id ext-mini-rehearsal --config
+   --local-config campaign.local.yaml`. Quote the PLAN and LAUNCH CHECKS sections (checks must PASS).
+b. Launch: `xvfb-run -a sudo scripts/campaign/run_production_campaign.sh --campaign-id ext-mini-rehearsal --config
    evodevo/experiments/configs/campaign_ext_mini_validation.yaml --mirror-dir
    <BACKUP_MOUNT>/validation/ext-mini --local-config campaign.local.yaml --stamp 'VALIDATION - NOT A RESULT'`.
    Wait for it to finish (poll `scripts/campaign/status_campaign.sh --campaign ext-mini-rehearsal` every
@@ -109,7 +131,7 @@ b. Launch: `sudo scripts/campaign/run_production_campaign.sh --campaign-id ext-m
    scripts/campaign/stop_campaign.sh and report.
 c. Verify and report, with numbers:
    - phases ran in the order ObstacleTraverser-v1, Climber-v0, CaveCrawler-v0, each "complete" before the next
-     started; arms exactly direct, nca, rule_based; seeds 0 and 1;
+     started; arms exactly direct, nca, rule_based (no rule_based_monotone); seeds 0 and 1;
    - every run has 30 evaluations; journal rows == valid evaluations x K per phase (K=2 on Climber-v0 only);
      every journal row has torch_num_threads 1 and cpu_ids inside the production worker CPUs;
    - each phase's milestone package is complete: list its stats/ files; Climber-v0 must contain the
@@ -120,7 +142,7 @@ c. Verify and report, with numbers:
    - the dashboard frame shows ">360 h" (the extension guard) and an ETA;
    - the mirror verified; the phase/complete notifications were delivered (quote alerts.jsonl kinds);
    - every artifact carries the VALIDATION stamp.
-d. Close the rehearsal's tmux session once it shows CAMPAIGN COMPLETE.
+d. Close the rehearsal's tmux session once it shows CAMPAIGN COMPLETE. Leave `git status --short` empty.
 ```
 
 ---
@@ -128,21 +150,30 @@ d. Close the rehearsal's tmux session once it shows CAMPAIGN COMPLETE.
 ## Prompt 2 — start the extension preflight
 
 ```
-Start the extension preflight. It runs unattended for about 9–11 hours. Do not modify code or configuration.
+Start the extension preflight. It runs unattended for about 9–11 hours (84 B5x-stage rows + 18 curves, 4 repeats).
+Do not modify code or configuration and never pass --allow-dirty or any --test-* flag.
 
-1. Preconditions: on branch campaign-ext, `git status --short` empty, no evodevo process running, no
-   evodevo tmux session. ORIG = the completed original campaign id (as in Prompt 1).
+1. Preconditions (refuse and stop otherwise): on branch main, `git status --short` empty (a dirty tree is
+   refused), HEAD == origin/main, no evodevo process running, no evodevo tmux session, no existing
+   results/extension_preflight/ext-<date> from a different commit. ORIG = the completed original campaign id
+   (as in Prompt 1).
 2. Start it in a detached tmux session named ext-preflight, logging to results/ext_prep/preflight.log:
    sudo scripts/campaign/with_cpu_power_cap.sh --turbo --p-max-mhz 4200 --p-cpus 0-15 --pl1-w 125 --pl2-w 160 \
      --run-as-user ubuntu -- .venv/bin/python -m evodevo.extension preflight all \
      --reference-campaign results/campaign/<ORIG> --run-id ext-<UTC yyyymmdd>
    (run the sudo inside the tmux window so the power controls live as long as the job).
-3. After 10 minutes report: the bodies.json summary (6 bodies: label, kind, body_hash, walker_fitness or
+3. After 10 minutes report: results/extension_preflight/ext-<date>/preflight_manifest.json fields `label`
+   (MUST be PRODUCTION; if TEST, stop and report), `production_params` (true), `git_commits` (one distinct
+   commit, every `dirty` false), the bodies.json summary (6 bodies: label, kind, body_hash, walker_fitness or
    attempt), `.venv/bin/python -m evodevo.extension preflight status --run-id ext-<date>`, that 18 trainings are
    running on CPUs 0,2,4,6,8,10,12,14,16-25 (ps -eo pid,psr,comm or the pool's pinning), and the package
    temperature (it must stay below 95 °C; if it exceeds 95 °C for 5 minutes, stop the job with Ctrl-C in the
    tmux window and report).
-4. Then stop. The run is resumable: if it is interrupted, re-run the identical command.
+4. Then stop. The run is resumable: if it is interrupted, re-run the identical command from the SAME commit
+   (a different commit makes the run multi-commit, which `derive` refuses). Expected final counts:
+   curves.jsonl 18 rows; noise.jsonl 84 rows = 72 B5x trainings (6 bodies x 3 tasks x 4 repeats) + 12 cost
+   references. Budget rule: D6-ext knee clipped to [500,000, 1,500,000]; K = 2 only if r1 > 0.33 and
+   r_max2 <= 0.5 r1; GUARD-ext threshold 360 h.
 ```
 
 ---
@@ -154,10 +185,12 @@ The extension preflight has finished. Apply the pre-registered rules and prepare
 generated file by hand and do not change any rule constant.
 
 1. `.venv/bin/python -m evodevo.extension preflight status --run-id ext-<date>`: every training recorded
-   (curves 18, noise 84); list any failed training with its reason. Failed trainings are excluded by the
-   rules, never re-run by hand.
+   (curves.jsonl 18; noise.jsonl 84 = 72 noise trainings + 12 cost references); list any failed training with
+   its reason. Failed trainings are excluded by the rules, never re-run by hand. Read preflight_manifest.json:
+   `label` must be PRODUCTION, all `git_commits` entries one commit with dirty false. If not, STOP: derive
+   will refuse it and you must not use --allow-test.
 2. `.venv/bin/python -m evodevo.extension derive --run-id ext-<date> --reference-campaign results/campaign/<ORIG>`
-   and then the identical `check` command; check must print "extension check passed".
+   and then the identical `check` command (never pass --allow-test); check must print "extension check passed".
 3. Write docs/campaign_prep/ORIGINAL_CAMPAIGN_RECORD.md: ORIG id, launch commit, start/end per phase, phase
    makespans, PPO-task counts and infra failures, mirror verification, any stops/resumes. These are facts
    only, taken from its manifest, phase_metrics.json, journal.jsonl and transcript.log.
@@ -167,7 +200,7 @@ generated file by hand and do not change any rule constant.
    Its LAUNCH CHECKS may only list "dirty working tree" at this point.
 5. Commit exactly: docs/campaign_prep/ext/{EXT_DECISIONS.json,EXT_DECISIONS.md,final_estimate_ext.json},
    evodevo/experiments/configs/campaign_ext.yaml and docs/campaign_prep/ORIGINAL_CAMPAIGN_RECORD.md, with message
-   "Extension decisions derived from preflight ext-<date>". Push to origin campaign-ext.
+   "Extension decisions derived from preflight ext-<date>". Push to origin main with a plain `git push origin main` (no force; if rejected, STOP and report).
 6. Re-run the dry run: LAUNCH CHECKS must now PASS. Report: the full EXT_DECISIONS.md, the dry-run PLAN,
    ESTIMATE/CALENDAR and DISK sections, and the commit hash.
 ```
@@ -180,7 +213,7 @@ generated file by hand and do not change any rule constant.
 Write an audit of the extension campaign's readiness to results/ext_prep/AUDIT_EXT.md and print it. Read-only:
 change nothing, start nothing. Every claim must cite a file:line, a command output or a JSON field.
 
-1. Provenance: HEAD hash, branch, `git status --short` (must be empty), origin/campaign-ext == HEAD, and the
+1. Provenance: HEAD hash, branch (main), `git status --short` (must be empty), origin/main == HEAD, and the
    commits since 7774f76. Confirm the pre-registration commit (PREREGISTRATION_EXT.md) is older than every
    timestamp in results/extension_preflight/<run-id>/ (compare the commit date with the first row's
    started_at in curves.jsonl and the bodies.json created_at).
