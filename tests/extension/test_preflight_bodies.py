@@ -23,7 +23,7 @@ def test_preflight_encoder_decodes_like_the_campaign_scheduler(arm):
 
 def test_production_parameters_are_the_registered_ones():
     params = Params.production()
-    assert (params.curve_max_timesteps, params.curve_eval_interval, params.noise_reps) == (2_000_000, 100_000, 3)
+    assert (params.curve_max_timesteps, params.curve_eval_interval, params.noise_reps) == (2_000_000, 100_000, 4)
     assert params.reference_timesteps == {"Walker-v0": 1_000_000, "UpStepper-v0": 1_200_000}
     assert params.is_production
     params.noise_reps = 2
@@ -34,8 +34,8 @@ def test_noise_stage_trains_every_body_on_every_task_plus_references():
     bodies = {"bodies": {spec.body_label(a, k): {"body": [[3] * 5] * 5} for a in spec.ARMS for k in spec.BODY_KINDS}}
     items = noise_items(bodies, {t: 1_000_000 for t in spec.TASK_ORDER}, Params.production())
     keys = [key for key, _meta, _task in items]
-    assert len(keys) == len(set(keys)) == 6 * 3 * 3 + 6 * 2
+    assert len(keys) == len(set(keys)) == 84 == 6 * 3 * 4 + 6 * 2
     reference = [task for key, meta, task in items if meta["stage"] == "reference"]
     assert {(t.task, t.timesteps) for t in reference} == {("Walker-v0", 1_000_000), ("UpStepper-v0", 1_200_000)}
     seeds = {(meta["task"], meta["body"], meta["rep"]): task.seed for _k, meta, task in items if meta["stage"] == "noise"}
-    assert len({seeds[(spec.TASK_ORDER[0], spec.body_label("direct", "evolved"), r)] for r in range(3)}) == 3
+    assert len({seeds[(spec.TASK_ORDER[0], spec.body_label("direct", "evolved"), r)] for r in range(4)}) == 4

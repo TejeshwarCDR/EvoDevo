@@ -27,13 +27,14 @@ REFERENCE_K = {"Walker-v0": 1, "UpStepper-v0": 2}
 # final best body ("evolved") and the first structurally valid random genome
 # drawn from the arm's campaign encoder ("random").
 BODY_KINDS = ("evolved", "random")
+EXPECTED_BODIES = len(ARMS) * len(BODY_KINDS)
 RANDOM_BODY_SEED = 20261015
 MAX_RANDOM_ATTEMPTS = 10_000
 
 # B4x: one training per (task, body) to 2M with a checkpoint every 100k.
 CURVE_SEED = 20261015
 # B5x: repeated trainings per (task, body) at the task's D6-ext budget.
-NOISE_REPS = 3
+NOISE_REPS = 4
 NOISE_SEED_BASE = 20261016
 
 # Pool safety timeouts (seconds) -- generous E-core bounds, not estimates.
@@ -50,3 +51,13 @@ PREFLIGHT_ROOT = REPO_ROOT / "results/extension_preflight"
 
 def body_label(arm: str, kind: str) -> str:
     return f"{arm}:{kind}"
+
+
+_BASE_METHOD_CONFIG = (Path(__file__).resolve().parents[2]
+                       / "evodevo/experiments/configs/direct/obstacletraverser.yaml")
+
+
+def campaign_eval_episodes() -> int:
+    """``ppo_eval_episodes`` the campaign's runs use (shared base config)."""
+    from evodevo.core.config import ExperimentConfig
+    return int(ExperimentConfig.from_method_yaml(str(_BASE_METHOD_CONFIG)).ppo_eval_episodes)

@@ -41,7 +41,7 @@ def make_preflight(root, label="PRODUCTION", noisy_task=None, cost=None):
                          "core_kind": "E" if i % 2 else "P"})
         for task in spec.TASK_ORDER:
             t = decisions[task]["ppo_timesteps"]
-            for rep in range(3):
+            for rep in range(4):
                 fitness = (1 + i) + (0.01 * rep)
                 if task == noisy_task and rep == 1 and i % 2 == 0:
                     fitness = 0.0

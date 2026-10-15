@@ -1,6 +1,7 @@
 """Pre-registered extension rules (evodevo/extension/rules.py) on synthetic inputs."""
 import math
 
+import numpy as np
 import pytest
 
 from evodevo.extension import rules
@@ -27,7 +28,7 @@ def test_constants_are_the_registered_values():
     assert rules.FALLBACK_FRACTION_OF_FINAL == 0.85
     assert rules.NOISE_RATIO_THRESHOLD == 0.33 and rules.MAX_OF_2_REQUIRED_IMPROVEMENT == 0.5
     assert rules.GUARD_THRESHOLD_H == 360.0 and rules.GUARD_TIMESTEP_CEILING == 1_200_000
-    assert rules.ESTIMATE_MIN_RELATIVE_ERROR == 0.10
+    assert rules.ESTIMATE_MIN_RELATIVE_ERROR == 0.10 and rules.MIN_REPS_FOR_MAX2 == 4
 
 
 def test_registered_knee_branch_rounds_to_the_checkpoint():
@@ -39,6 +40,7 @@ def test_registered_knee_branch_rounds_to_the_checkpoint():
     assert decision.ppo_timesteps == 800_000
     assert decision.ppo_timesteps % 100_000 == 0
     assert not decision.disclosed_floor and decision.clipped is None
+    assert decision.details["n_bodies_measured"] == 3 and decision.details["n_bodies_used"] == 3
 
 
 def test_early_knee_is_raised_to_the_floor():
@@ -95,11 +97,12 @@ def test_fallback_without_a_passing_candidate_is_a_capped_floor():
 
 def test_noise_rule_reproduces_both_original_d16_decisions():
     # Walker-like: within/between ~0.16 -> K=1.
-    walker = {"a": [1.0, 1.05, 0.98], "b": [2.0, 2.1, 1.95], "c": [3.0, 2.9, 3.1]}
+    walker = {"a": [1.0, 1.05, 0.98, 1.02], "b": [2.0, 2.1, 1.95, 2.03], "c": [3.0, 2.9, 3.1, 3.02]}
     assert rules.decide_seeds("W", walker).ppo_seeds == 1
     # UpStepper-like: occasional collapse dominates -> max-of-2 halves the ratio -> K=2.
-    up = {"a": [1.6, 0.14, 1.62], "b": [1.0, 1.02, 0.2], "c": [1.3, 1.31, 1.29]}
+    up = {"a": [1.6, 0.14, 1.62, 1.58], "b": [1.0, 1.02, 0.2, 0.99], "c": [1.3, 0.1, 1.29, 1.30]}
     decision = rules.decide_seeds("U", up)
+    assert decision.branch == "noise_rule"
     assert decision.details["ratio_single"] > 0.33
     assert decision.details["ratio_max_of_2"] <= 0.5 * decision.details["ratio_single"]
     assert decision.ppo_seeds == 2
@@ -107,14 +110,49 @@ def test_noise_rule_reproduces_both_original_d16_decisions():
 
 def test_noise_that_max_of_2_cannot_fix_stays_k1():
     # Symmetric noise: max-of-2 does not halve the ratio.
-    sym = {"a": [0.0, 2.0, 1.0], "b": [0.5, 2.5, 1.5], "c": [1.0, 3.0, 2.0]}
+    sym = {"a": [0.0, 2.0, 1.0, 1.5], "b": [0.5, 2.5, 1.5, 2.0], "c": [1.0, 3.0, 2.0, 2.5]}
     decision = rules.decide_seeds("S", sym)
     assert decision.details["ratio_single"] > 0.33 and decision.ppo_seeds == 1
 
 
 def test_indistinguishable_bodies_or_too_few_bodies_give_k1():
-    assert rules.decide_seeds("Z", {"a": [0.0, 0.0], "b": [0.0, 0.0], "c": [0.0, 0.0]}).branch == "insufficient_spread"
+    flat = {"a": [0.0] * 4, "b": [0.0] * 4, "c": [0.0] * 4}
+    assert rules.decide_seeds("Z", flat).branch == "insufficient_spread"
     assert rules.decide_seeds("Z", {"a": [1.0, 2.0], "b": [3.0]}).branch == "insufficient_bodies"
+
+
+def test_three_repeats_cannot_estimate_the_max_of_2_variance():
+    three = {"a": [1.6, 0.14, 1.62], "b": [1.0, 1.02, 0.2], "c": [1.3, 0.1, 1.29]}
+    decision = rules.decide_seeds("U", three)
+    assert decision.branch == "insufficient_repeats" and decision.ppo_seeds == 1
+    assert rules.MIN_REPS_FOR_MAX2 == 4
+
+
+def test_max2_variance_estimator_is_unbiased_for_gaussian_noise():
+    rng = np.random.default_rng(12345)
+    tuples = rng.normal(0.0, 1.0, size=(20_000, 4))
+    estimate = float(np.mean([rules._max2_variance_u(list(row)) for row in tuples]))
+    pairs = rng.normal(0.0, 1.0, size=(400_000, 2)).max(axis=1)
+    truth = float(np.var(pairs))
+    assert estimate == pytest.approx(truth, rel=0.03)
+
+
+def test_gaussian_noise_rarely_selects_k2():
+    rng = np.random.default_rng(2026)
+    means = 0.3 * np.arange(6)
+    chosen = 0
+    for _ in range(300):
+        repeats = {f"b{i}": list(rng.normal(means[i], 0.25, size=4)) for i in range(6)}
+        chosen += rules.decide_seeds("G", repeats).ppo_seeds == 2
+    assert chosen / 300 < 0.05
+
+
+def test_one_collapse_per_body_selects_k2():
+    repeats = {}
+    for i in range(6):
+        level = 1.0 + 0.3 * i
+        repeats[f"b{i}"] = [level, level + 0.02, 0.05, level - 0.02]
+    assert rules.decide_seeds("C", repeats).ppo_seeds == 2
 
 
 def test_projection_band_uses_the_larger_of_10pct_and_backtest_error():

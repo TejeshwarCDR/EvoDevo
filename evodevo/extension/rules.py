@@ -40,6 +40,7 @@ FALLBACK_FRACTION_OF_FINAL = 0.85     # same as the Walker-v0 fallback rule
 NOISE_RATIO_THRESHOLD = 0.33
 MAX_OF_2_REQUIRED_IMPROVEMENT = 0.5   # max-of-2 must at least halve the ratio
 MIN_NOISE_BODIES = 3
+MIN_REPS_FOR_MAX2 = 4                 # repeats per body for the unbiased max-of-2 variance
 MIN_SPREAD = 1e-9
 
 # --- GUARD-ext constants ----------------------------------------------------
@@ -116,6 +117,7 @@ def decide_budget(task: str, bodies: dict) -> BudgetDecision:
     excluded = sorted(set(bodies) - set(complete))
     qualifying = qualifying_bodies(complete)
     details = {"excluded_incomplete_bodies": excluded,
+               "n_bodies_measured": len(bodies), "n_bodies_used": len(complete),
                "final_fitness": {name: final_fitness(c) for name, c in complete.items()},
                "rule_text": SELECT_KNEE_RULE_TEXT}
     if len(qualifying) < MIN_QUALIFYING_BODIES:
@@ -163,25 +165,34 @@ def decide_budget(task: str, bodies: dict) -> BudgetDecision:
 class SeedsDecision:
     task: str
     ppo_seeds: int
-    branch: str                     # noise_rule | insufficient_spread | insufficient_bodies
+    branch: str                     # noise_rule | insufficient_spread | insufficient_bodies | insufficient_repeats
     details: dict = field(default_factory=dict)
 
 
-def _pooled_sd(groups: list) -> float | None:
-    numerator = denominator = 0.0
-    for values in groups:
-        if len(values) > 1:
-            numerator += (len(values) - 1) * statistics.variance(values)
-            denominator += len(values) - 1
-    return (numerator / denominator) ** 0.5 if denominator else None
+def _max2_variance_u(values: list) -> float:
+    """Unbiased estimate of Var(max of 2 iid draws) from n >= 4 repeats.
+
+    E[max^2] is the mean of max(a,b)^2 over all distinct pairs; E[max]^2 is
+    the mean of max(a,b)*max(c,d) over all pairs of pairs with four distinct
+    indices (so no draw is used twice in one product)."""
+    n = len(values)
+    if n < 4:
+        raise ValueError("the unbiased max-of-2 variance needs at least 4 repeats")
+    pairs = list(itertools.combinations(range(n), 2))
+    maxima = {pair: max(values[pair[0]], values[pair[1]]) for pair in pairs}
+    second_moment = statistics.fmean(m * m for m in maxima.values())
+    cross = [maxima[p] * maxima[q] for p, q in itertools.combinations(pairs, 2) if not set(p) & set(q)]
+    return second_moment - statistics.fmean(cross)
 
 
 def decide_seeds(task: str, repeats: dict) -> SeedsDecision:
-    """D16-ext. ``repeats`` maps a body label to the fitness values of its
-    repeated, independently seeded trainings at the task's chosen budget
-    (failed trainings already removed)."""
+    """D16-ext (Amendment 1). ``repeats`` maps a body label to the fitness
+    values of its repeated, independently seeded trainings at the task's
+    chosen budget (failed trainings already removed)."""
     usable = {name: list(values) for name, values in repeats.items() if len(values) >= 2}
-    details = {"bodies_used": sorted(usable), "bodies_excluded": sorted(set(repeats) - set(usable))}
+    full = {name: values for name, values in usable.items() if len(values) >= MIN_REPS_FOR_MAX2}
+    details = {"bodies_used": sorted(usable), "bodies_excluded": sorted(set(repeats) - set(usable)),
+               "bodies_with_max2_repeats": sorted(full)}
     if len(usable) < MIN_NOISE_BODIES:
         details["reason"] = f"{len(usable)} bodies with >= 2 completed repeats (< {MIN_NOISE_BODIES})"
         return SeedsDecision(task, 1, "insufficient_bodies", details)
@@ -191,13 +202,15 @@ def decide_seeds(task: str, repeats: dict) -> SeedsDecision:
     if between < MIN_SPREAD:
         details["reason"] = "bodies are indistinguishable at this budget; repeat noise cannot change a ranking"
         return SeedsDecision(task, 1, "insufficient_spread", details)
-    single = _pooled_sd(list(usable.values()))
-    max2 = _pooled_sd([[max(a, b) for a, b in itertools.combinations(values, 2)]
-                       for values in usable.values()])
+    if len(full) < MIN_NOISE_BODIES:
+        details["reason"] = (f"{len(full)} bodies with >= {MIN_REPS_FOR_MAX2} completed repeats "
+                             f"(< {MIN_NOISE_BODIES}); the max-of-2 variance cannot be estimated")
+        return SeedsDecision(task, 1, "insufficient_repeats", details)
+    single = statistics.fmean(statistics.variance(values) for values in usable.values()) ** 0.5
+    max2 = max(0.0, statistics.fmean(_max2_variance_u(values) for values in full.values())) ** 0.5
     ratio_single = single / between
-    ratio_max2 = max2 / between if max2 is not None else None
-    use_two = (ratio_single > NOISE_RATIO_THRESHOLD and ratio_max2 is not None
-               and ratio_max2 <= MAX_OF_2_REQUIRED_IMPROVEMENT * ratio_single)
+    ratio_max2 = max2 / between
+    use_two = ratio_single > NOISE_RATIO_THRESHOLD and ratio_max2 <= MAX_OF_2_REQUIRED_IMPROVEMENT * ratio_single
     details.update(pooled_within_sd_single=single, pooled_within_sd_max_of_2=max2,
                    ratio_single=ratio_single, ratio_max_of_2=ratio_max2,
                    threshold=NOISE_RATIO_THRESHOLD, required_improvement=MAX_OF_2_REQUIRED_IMPROVEMENT)
