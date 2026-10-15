@@ -14,11 +14,13 @@ def _curve(level, knee):
     return [[math.ceil((i + 1) * 1e5 / 2048) * 2048, level * min(1.0, (i + 1) * 1e5 / knee)] for i in range(20)]
 
 
-def make_preflight(root, label="PRODUCTION", noisy_task=None, cost=None):
+def make_preflight(root, label="PRODUCTION", noisy_task=None, cost=None, commits=None, drop_curve_row=False,
+                   fail_curve=False):
     run = root / "preflight"
     run.mkdir()
     (run / "preflight_manifest.json").write_text(json.dumps(
-        {"label": label, "git_commits": [{"git_commit": "abc123"}], "params": {}}))
+        {"label": label, "params": {},
+         "git_commits": commits or [{"git_commit": "abc123", "stage": "all", "dirty": False}]}))
     (run / "bodies.json").write_text(json.dumps({"bodies": {
         name: {"arm": name.split(":")[0], "kind": name.split(":")[1], "body": [[3] * 5] * 5,
                "body_hash": f"{index:064d}"} for index, name in enumerate(LABELS)}}))
@@ -30,13 +32,24 @@ def make_preflight(root, label="PRODUCTION", noisy_task=None, cost=None):
         curves = {name: _curve(1 + i, knee) for i, name in enumerate(LABELS)}
         decisions[task] = dataclasses.asdict(decide_budget(task, curves))
     (run / "budgets.json").write_text(json.dumps({"decisions": decisions}))
+    curve_rows = []
+    for task in spec.TASK_ORDER:
+        for name in LABELS:
+            bad = fail_curve and task == "Climber-v0" and name == LABELS[0]
+            curve_rows.append({"key": f"curve|{task}|{name}", "stage": "curves", "task": task, "body": name,
+                               "completed": not bad, "curve": [] if bad else _curve(1, 1e6),
+                               "reason": "simulation_instability: boom" if bad else None, "error": None})
+    if drop_curve_row:
+        curve_rows.pop()
+    (run / "curves.jsonl").write_text("".join(json.dumps(r) + "\n" for r in curve_rows))
     cost = cost or {"ObstacleTraverser-v1": 1.4, "Climber-v0": 1.3, "CaveCrawler-v0": 1.45}
     rows = []
     for i, name in enumerate(LABELS):
         base = 1000.0 + 50 * i
         for task, timesteps in spec.REFERENCE_TASKS.items():
             factor = 1.0 if task == "Walker-v0" else 1.15
-            rows.append({"stage": "reference", "task": task, "body": name, "rep": 0, "timesteps": timesteps,
+            rows.append({"key": f"reference|{task}|{name}", "reason": None, "error": None,
+                         "stage": "reference", "task": task, "body": name, "rep": 0, "timesteps": timesteps,
                          "completed": True, "fitness": 1.0, "wall_clock_s": base * factor * (2.3172 if i % 2 else 1),
                          "core_kind": "E" if i % 2 else "P"})
         for task in spec.TASK_ORDER:
@@ -45,7 +58,8 @@ def make_preflight(root, label="PRODUCTION", noisy_task=None, cost=None):
                 fitness = (1 + i) + (0.01 * rep)
                 if task == noisy_task and rep == 1 and i % 2 == 0:
                     fitness = 0.0
-                rows.append({"stage": "noise", "task": task, "body": name, "rep": rep, "timesteps": t,
+                rows.append({"key": f"noise|{task}|{name}|r{rep}", "reason": None, "error": None,
+                             "stage": "noise", "task": task, "body": name, "rep": rep, "timesteps": t,
                              "completed": True, "fitness": fitness,
                              "wall_clock_s": base * cost[task] * t / 1e6 * (2.3172 if (i + rep) % 2 else 1),
                              "core_kind": "E" if (i + rep) % 2 else "P"})
@@ -147,3 +161,56 @@ def test_written_artifacts_are_consistent_and_tamper_evident(tmp_path, isolated_
     spec.CAMPAIGN_YAML.write_text(text.replace("Climber-v0: 700000", "Climber-v0: 800000"))
     problems = derive_module.check(None, None)
     assert "campaign_ext.yaml is not the rendering of EXT_DECISIONS.json" in problems
+
+
+def _commits(*entries):
+    return [{"git_commit": sha, "stage": stage, "dirty": dirty} for sha, stage, dirty in entries]
+
+
+@pytest.mark.parametrize("commits, reason", [
+    (_commits(("a", "bodies", False), ("a", "curves", True)), "dirty working tree"),
+    (_commits(("a", "bodies", False), ("b", "curves", False)), "span 2 git commits"),
+])
+def test_dirty_or_multi_commit_runs_are_refused(tmp_path, isolated_outputs, commits, reason):
+    run, reference = make_preflight(tmp_path, commits=commits), make_reference(tmp_path)
+    with pytest.raises(ValueError, match=reason):
+        derive_module.derive(run, reference)
+    assert derive_module.derive(run, reference, allow_test=True)["record"]["preflight_git_commits"] == commits
+
+
+def test_missing_trainings_are_refused_and_failures_are_recorded(tmp_path, isolated_outputs):
+    reference = make_reference(tmp_path)
+    run = make_preflight(tmp_path, drop_curve_row=True)
+    with pytest.raises(ValueError, match="curves.jsonl has 17 recorded trainings, expected 18"):
+        derive_module.derive(run, reference)
+
+
+def test_failed_training_counts_as_recorded_and_is_reported(tmp_path, isolated_outputs):
+    reference = make_reference(tmp_path)
+    result = derive_module.derive(make_preflight(tmp_path, fail_curve=True), reference)
+    record = result["record"]
+    assert record["preflight_trainings"] == {"curves": 18, "noise": 84}
+    assert record["preflight_failed_trainings"] == [
+        f"curve|Climber-v0|{LABELS[0]}: simulation_instability: boom"]
+    report = derive_module.render_report(record, result["estimate"])
+    assert "## Preflight completeness" in report and "simulation_instability: boom" in report
+
+
+def test_check_is_byte_for_byte(tmp_path, isolated_outputs):
+    run, reference = make_preflight(tmp_path), make_reference(tmp_path)
+    derive_module.write(derive_module.derive(run, reference))
+    # (The plan-build check needs the real decision record under the real repo root.)
+    assert [p for p in derive_module.check(run, reference) if not p.startswith("plan does not build")] == []
+    # Whitespace-only hand edits of the JSON, the report and the YAML are all caught.
+    original = spec.ESTIMATE_JSON.read_text()
+    spec.ESTIMATE_JSON.write_text(original.replace('"method"', ' "method"', 1))
+    assert any("canonical dump" in p for p in derive_module.check(None, None))
+    spec.ESTIMATE_JSON.write_text(original)
+    report = spec.DECISIONS_MD.read_text()
+    spec.DECISIONS_MD.write_text(report + "\n")
+    assert any("EXT_DECISIONS.md" in p for p in derive_module.check(None, None))
+    spec.DECISIONS_MD.write_text(report)
+    # A re-derivation from different inputs differs.
+    (tmp_path / "x").mkdir()
+    other = make_preflight(tmp_path / "x", noisy_task="Climber-v0")
+    assert any("differs from a fresh derivation" in p for p in derive_module.check(other, reference))

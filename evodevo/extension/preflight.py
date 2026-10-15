@@ -38,16 +38,58 @@ def _now():
 
 
 def _append(path: Path, row: dict) -> None:
+    _repair_tail(path)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(row, sort_keys=True) + "\n")
         handle.flush()
         os.fsync(handle.fileno())
 
 
+def _repair_tail(path: Path) -> None:
+    """A kill mid-write can leave a last line without its newline. Drop it
+    (truncate to the last newline) so the next row starts on a clean line; a
+    complete row that only lost its newline is kept."""
+    if not path.is_file() or path.stat().st_size == 0:
+        return
+    data = path.read_bytes()
+    if data.endswith(b"\n"):
+        return
+    cut = data.rfind(b"\n") + 1
+    try:
+        json.loads(data[cut:].decode("utf-8"))
+    except ValueError:
+        with path.open("r+b") as handle:
+            handle.truncate(cut)
+            handle.flush()
+            os.fsync(handle.fileno())
+        print(f"[{_now()}] {path.name}: dropped a truncated last line ({len(data) - cut} bytes)", flush=True)
+    else:
+        with path.open("ab") as handle:
+            handle.write(b"\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+
+
 def _rows(path: Path) -> list:
+    """All complete rows. A malformed LAST line without a trailing newline (a
+    crash mid-write) is skipped with a notice; a malformed line anywhere else
+    raises."""
     if not path.is_file():
         return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    text = path.read_text(encoding="utf-8")
+    lines = text.split("\n")
+    rows = []
+    for number, line in enumerate(lines, 1):
+        if not line.strip():
+            continue
+        try:
+            rows.append(json.loads(line))
+        except ValueError as exc:
+            if number == len(lines) and not text.endswith("\n"):
+                print(f"[{_now()}] {path.name}: skipping a truncated last line (line {number})", flush=True)
+                continue
+            raise ValueError(f"{path}: malformed line {number}: {exc}") from exc
+    return rows
 
 
 def _write_json(path: Path, payload) -> None:
@@ -58,6 +100,18 @@ def _write_json(path: Path, payload) -> None:
 
 def _git(*args) -> str:
     return subprocess.check_output(["git", *args], cwd=spec.REPO_ROOT, text=True).strip()
+
+
+def run_label(commits: list, params: "Params", previous_label: str | None) -> str:
+    """PRODUCTION only for production parameters, a run never labelled TEST,
+    no stage run on a dirty tree, and a single git commit across all stages."""
+    if previous_label == "TEST" or not params.is_production or not commits:
+        return "TEST"
+    if any(entry.get("dirty") for entry in commits):
+        return "TEST"
+    if len({entry.get("git_commit") for entry in commits}) != 1:
+        return "TEST"
+    return "PRODUCTION"
 
 
 @dataclasses.dataclass
@@ -214,7 +268,7 @@ def _ppo_task(key, task_name, body, seed, timesteps, curve_interval=None):
     from evodevo.evaluation.ppo_runner import PPOTask
     body = np.asarray(body, dtype=int)
     return PPOTask(key, "extension_preflight", task_name, int(seed), 0, 0, 0, 0, body,
-                   get_full_connectivity(body), int(timesteps), 1, None,
+                   get_full_connectivity(body), int(timesteps), spec.campaign_eval_episodes(), None,
                    curve_eval_interval=curve_interval)
 
 
@@ -253,18 +307,28 @@ def noise_items(bodies: dict, budgets: dict, params: Params) -> list:
 
 
 def budgets_from_curves(run_dir: Path, params: Params) -> dict:
-    """D6-ext on the recorded curves. A curve-less (failed) training is excluded."""
+    """D6-ext on the recorded curves. A curve-less (failed) training is excluded,
+    reported in a WARNING, and recorded in the decision's details."""
     from .rules import decide_budget
     rows = _rows(run_dir / "curves.jsonl")
     decisions = {}
     for task_name in spec.TASK_ORDER:
         curves = {row["body"]: row["curve"] or [] for row in rows
                   if row["task"] == task_name and row["completed"]}
+        failed = [f"{row['key']}: {row.get('reason') or row.get('error') or 'unknown'}"
+                  for row in rows if row["task"] == task_name and not row["completed"]]
+        if failed:
+            print(f"[{_now()}] WARNING: {task_name}: {len(failed)} failed curve training(s) excluded from "
+                  f"D6-ext: {'; '.join(failed)}", flush=True)
         if params.budget_override is not None:
-            decisions[task_name] = {"ppo_timesteps": params.budget_override, "branch": "TEST_override"}
-            continue
-        decision = decide_budget(task_name, curves)
-        decisions[task_name] = dataclasses.asdict(decision)
+            decision = {"ppo_timesteps": params.budget_override, "branch": "TEST_override",
+                        "details": {"n_bodies_measured": len(curves), "n_bodies_used": len(curves)}}
+        else:
+            decision = dataclasses.asdict(decide_budget(task_name, curves))
+        used = decision["details"].get("n_bodies_used", len(curves))
+        decision["details"]["failed_trainings"] = failed
+        decision["details"]["reduced_body_set"] = used < spec.EXPECTED_BODIES
+        decisions[task_name] = decision
     _write_json(run_dir / "budgets.json", {"created_at": _now(), "params": dataclasses.asdict(params),
                                            "decisions": decisions})
     return {task: d["ppo_timesteps"] for task, d in decisions.items()}
@@ -328,11 +392,11 @@ def main(argv=None):
     recorded = manifest.get("params")
     if recorded and recorded != dataclasses.asdict(params):
         parser.error(f"run {run_dir} was started with different parameters {recorded}")
-    manifest.update({"params": dataclasses.asdict(params), "production_params": params.is_production,
-                     "label": "PRODUCTION" if params.is_production and not args.allow_dirty else "TEST",
-                     "cpu_profile": args.cpu_profile, "workers": args.workers})
     manifest.setdefault("git_commits", []).append({"git_commit": _git("rev-parse", "HEAD"), "at": _now(),
                                                    "stage": args.stage, "dirty": bool(dirty)})
+    manifest.update({"params": dataclasses.asdict(params), "production_params": params.is_production,
+                     "label": run_label(manifest["git_commits"], params, manifest.get("label")),
+                     "cpu_profile": args.cpu_profile, "workers": args.workers})
     _write_json(manifest_path, manifest)
 
     stages = ("bodies", "curves", "noise") if args.stage == "all" else (args.stage,)

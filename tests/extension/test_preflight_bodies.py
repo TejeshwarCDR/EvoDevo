@@ -6,7 +6,10 @@ from evodevo.campaign.plan import CampaignPlan
 from evodevo.campaign.scheduler import encoder_and_config_for
 from evodevo.experiments.benchmark import BenchmarkConfig
 from evodevo.extension import spec
-from evodevo.extension.preflight import Params, campaign_encoder, noise_items
+import json
+
+from evodevo.extension import preflight
+from evodevo.extension.preflight import Params, campaign_encoder, noise_items, run_label
 
 
 @pytest.mark.parametrize("arm", spec.ARMS)
@@ -39,3 +42,51 @@ def test_noise_stage_trains_every_body_on_every_task_plus_references():
     assert {(t.task, t.timesteps) for t in reference} == {("Walker-v0", 1_000_000), ("UpStepper-v0", 1_200_000)}
     seeds = {(meta["task"], meta["body"], meta["rep"]): task.seed for _k, meta, task in items if meta["stage"] == "noise"}
     assert len({seeds[(spec.TASK_ORDER[0], spec.body_label("direct", "evolved"), r)] for r in range(4)}) == 4
+
+
+def test_run_label_requires_production_params_one_clean_commit_and_never_recovers():
+    production = Params.production()
+    clean = [{"git_commit": "a", "dirty": False}, {"git_commit": "a", "dirty": False}]
+    assert run_label(clean, production, None) == "PRODUCTION"
+    assert run_label(clean, production, "PRODUCTION") == "PRODUCTION"
+    assert run_label(clean, production, "TEST") == "TEST"
+    assert run_label(clean + [{"git_commit": "a", "dirty": True}], production, None) == "TEST"
+    assert run_label(clean + [{"git_commit": "b", "dirty": False}], production, None) == "TEST"
+    shrunk = Params.production()
+    shrunk.noise_reps = 1
+    assert run_label(clean, shrunk, None) == "TEST"
+
+
+def test_resume_skips_a_truncated_last_line_and_repairs_it(tmp_path, capsys):
+    path = tmp_path / "noise.jsonl"
+    path.write_text(json.dumps({"key": "a"}) + "\n" + json.dumps({"key": "b"}) + "\n" + '{"key": "c", "fit')
+    assert [row["key"] for row in preflight._rows(path)] == ["a", "b"]
+    assert "truncated last line" in capsys.readouterr().out
+    preflight._append(path, {"key": "d"})
+    assert [row["key"] for row in preflight._rows(path)] == ["a", "b", "d"]
+    assert path.read_text().endswith("\n")
+
+
+def test_malformed_line_elsewhere_raises(tmp_path):
+    path = tmp_path / "noise.jsonl"
+    path.write_text(json.dumps({"key": "a"}) + "\n" + "{broken\n" + json.dumps({"key": "c"}) + "\n")
+    with pytest.raises(ValueError, match="malformed line 2"):
+        preflight._rows(path)
+    path.write_text(json.dumps({"key": "a"}) + "\n" + "{broken\n")   # newline-terminated: not a crash tail
+    with pytest.raises(ValueError, match="malformed line 2"):
+        preflight._rows(path)
+
+
+def test_complete_row_that_lost_only_its_newline_is_kept(tmp_path):
+    path = tmp_path / "noise.jsonl"
+    path.write_text(json.dumps({"key": "a"}))
+    assert [row["key"] for row in preflight._rows(path)] == ["a"]
+    preflight._append(path, {"key": "b"})
+    assert [row["key"] for row in preflight._rows(path)] == ["a", "b"]
+
+
+def test_preflight_training_uses_the_campaigns_eval_episodes():
+    assert spec.campaign_eval_episodes() == 1
+    bodies = {"bodies": {spec.body_label(a, k): {"body": [[3] * 5] * 5} for a in spec.ARMS for k in spec.BODY_KINDS}}
+    tasks = [task for _k, _m, task in noise_items(bodies, {t: 1_000_000 for t in spec.TASK_ORDER}, Params.production())]
+    assert {task.eval_episodes for task in tasks} == {spec.campaign_eval_episodes()}

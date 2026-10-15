@@ -14,9 +14,17 @@ phase), and GUARD-ext. It writes, and only writes:
   docs/campaign_prep/ext/final_estimate_ext.json  v2 estimate (priors, calendar, disk)
   evodevo/experiments/configs/campaign_ext.yaml   generated campaign config
 
-`check` re-derives everything from the same inputs and verifies that the
-committed artifacts are byte-for-byte what the rules produce, that the YAML
-builds a plan, and that the plan agrees with the decision record.
+`derive` refuses (unless --allow-test) a preflight run whose label is not
+PRODUCTION, any stage of which ran on a dirty tree, or whose stages span more
+than one git commit; and, always, a run whose curves.jsonl / noise.jsonl row
+counts differ from the design (a failed training still counts as recorded).
+
+`check` verifies, without inputs: campaign_ext.yaml == render_yaml(record);
+EXT_DECISIONS.md == render_report(record, estimate); and each JSON file's text
+== _dump(its parsed content) (catches hand edits); and that the YAML builds a
+plan that agrees with the decision record. With --run-id/--reference-campaign
+it also verifies that each JSON file's text == _dump(a fresh derivation of the
+same inputs), after copying the committed derived_at into the fresh record.
 """
 from __future__ import annotations
 
@@ -38,7 +46,30 @@ E_OVER_P = 2.3172
 def _rows(path: Path) -> list:
     if not path.is_file():
         raise FileNotFoundError(path)
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    from .preflight import _rows as read_rows
+    return read_rows(path)
+
+
+def provenance_problems(manifest: dict) -> list:
+    """Reasons a preflight run may not feed launch decisions."""
+    problems = []
+    if manifest.get("label") != "PRODUCTION":
+        problems.append(f"the run is a {manifest.get('label')} preflight run")
+    commits = manifest.get("git_commits") or []
+    dirty = [c.get("stage") for c in commits if c.get("dirty")]
+    if dirty:
+        problems.append(f"stage(s) {dirty} ran on a dirty working tree")
+    shas = sorted({c.get("git_commit") for c in commits})
+    if len(shas) > 1:
+        problems.append(f"the stages span {len(shas)} git commits: {shas}")
+    return problems
+
+
+def expected_counts(params: dict) -> dict:
+    tasks = len(spec.TASK_ORDER)
+    reps = int(params.get("noise_reps", spec.NOISE_REPS))
+    return {"curves": tasks * spec.EXPECTED_BODIES,
+            "noise": tasks * spec.EXPECTED_BODIES * reps + len(spec.REFERENCE_TASKS) * spec.EXPECTED_BODIES}
 
 
 def _p_equivalent(row: dict) -> float:
@@ -138,13 +169,22 @@ def derive(run_dir: Path, reference: Path, allow_test: bool = False) -> dict:
     from .rules import (BUDGET_CAP, GUARD_THRESHOLD_H, apply_guard, decide_seeds,
                         project_phase_band)
     manifest = json.loads((run_dir / "preflight_manifest.json").read_text())
-    if manifest.get("label") != "PRODUCTION" and not allow_test:
-        raise ValueError(f"{run_dir} is a {manifest.get('label')} preflight run; refusing to derive "
-                         "launch decisions from it (pass --allow-test for a rehearsal)")
+    problems = provenance_problems(manifest)
+    if problems and not allow_test:
+        raise ValueError(f"{run_dir}: {'; '.join(problems)}; refusing to derive launch decisions from it "
+                         "(pass --allow-test for a rehearsal)")
     budgets_doc = json.loads((run_dir / "budgets.json").read_text())
     budget_decisions = budgets_doc["decisions"]
     budgets = {task: budget_decisions[task]["ppo_timesteps"] for task in spec.TASK_ORDER}
+    curve_rows = _rows(run_dir / "curves.jsonl")
     noise_rows = _rows(run_dir / "noise.jsonl")
+    expected = expected_counts(manifest.get("params") or {})
+    for name, rows in (("curves", curve_rows), ("noise", noise_rows)):
+        if len(rows) != expected[name]:
+            raise ValueError(f"{run_dir}: {name}.jsonl has {len(rows)} recorded trainings, expected "
+                             f"{expected[name]}; finish the preflight (re-run the same command) before deriving")
+    failed = [f"{row['key']}: {row.get('reason') or row.get('error') or 'unknown'}"
+              for row in curve_rows + noise_rows if not row["completed"]]
     bodies = json.loads((run_dir / "bodies.json").read_text())
 
     seeds_decisions = {}
@@ -203,6 +243,9 @@ def derive(run_dir: Path, reference: Path, allow_test: bool = False) -> dict:
         "preflight_run": str(run_dir.relative_to(spec.REPO_ROOT) if run_dir.is_relative_to(spec.REPO_ROOT)
                              else run_dir),
         "preflight_git_commit": preflight_commit,
+        "preflight_git_commits": manifest.get("git_commits", []),
+        "preflight_trainings": {"curves": len(curve_rows), "noise": len(noise_rows)},
+        "preflight_failed_trainings": failed,
         "reference_campaign": {k: facts[k] for k in ("campaign", "campaign_id", "git_commit")},
         "task_order": list(spec.TASK_ORDER),
         "tiers": dict(spec.TIER),
@@ -310,9 +353,10 @@ def render_report(record: dict, estimate: dict) -> str:
               f"({100 * bt['relative_error']:+.1f}%); the band half-width is max(10%, |backtest error|).",
               "", "## Guard steps", ""]
     for step in record["guard"]["steps"]:
-        lines.append(f"- `{step['step']}`: p95 total {step['total_h']['p95']:.1f} h; design {json.dumps(step['design'])}")
+        lines.append(f"- `{step['step']}`: p95 total {step['total_h']['p95']:.1f} h; design {json.dumps(step['design'], sort_keys=True)}")
     lines += ["", "## Cost ratios (P-core-equivalent, same bodies, vs Walker-v0 at 1M)", ""]
-    for task, r in estimate["inputs"]["cost_ratios"].items():
+    for task in [*record["task_order"], "UpStepper-v0"]:
+        r = estimate["inputs"]["cost_ratios"][task]
         lines.append(f"- {task} at {r['measured_timesteps']:,}: {r['ratio']:.3f} (bodies: {', '.join(r['bodies'])})")
     observed = estimate["inputs"]["observed_e_over_p"]
     lines += ["", f"Observed E/P training-time ratio in the preflight batch: "
@@ -320,9 +364,28 @@ def render_report(record: dict, estimate: dict) -> str:
               "## Representative bodies", ""]
     for label, body in record["bodies"].items():
         lines.append(f"- `{label}` hash `{body['body_hash'][:12]}` ({body['kind']})")
+    lines += ["", "## Preflight completeness", "",
+              f"Recorded trainings: curves {record['preflight_trainings']['curves']}, "
+              f"noise (incl. references) {record['preflight_trainings']['noise']}.", ""]
+    failures = record["preflight_failed_trainings"]
+    lines += ([f"Failed trainings ({len(failures)}):"] + [f"- {item}" for item in failures]
+              if failures else ["Failed trainings: none."])
+    flags = []
+    for task in record["task_order"]:
+        d6 = record["tasks"][task]["d6_ext"].get("details", {})
+        d16 = record["tasks"][task]["d16_ext"]["details"]
+        if d6.get("reduced_body_set"):
+            flags.append(f"- {task}: D6-ext used {d6.get('n_bodies_used')} of {spec.EXPECTED_BODIES} bodies "
+                         "(reduced body set)")
+        if d16.get("bodies_excluded"):
+            flags.append(f"- {task}: D16-ext excluded bodies {d16['bodies_excluded']}")
+        if len(d16.get("bodies_with_max2_repeats", [])) < spec.EXPECTED_BODIES:
+            flags.append(f"- {task}: D16-ext max-of-2 term used {len(d16.get('bodies_with_max2_repeats', []))} "
+                         f"of {spec.EXPECTED_BODIES} bodies with >= 4 repeats")
+    lines += ["", "Tasks flagged:"] + (flags or ["- none"])
     lines += ["", "## Raw rule outputs", "", "```json",
               json.dumps({t: {"d6_ext": record['tasks'][t]['d6_ext'], "d16_ext": record['tasks'][t]['d16_ext']}
-                          for t in record["task_order"]}, indent=1, default=str), "```", ""]
+                          for t in record["task_order"]}, indent=1, sort_keys=True, default=str), "```", ""]
     return "\n".join(lines)
 
 
@@ -344,8 +407,7 @@ def write(result: dict) -> list:
 
 
 def check(run_dir: Path | None, reference: Path | None, allow_test: bool = False) -> list:
-    """Problems found (empty = consistent). Without inputs, checks only the
-    committed artifacts' internal consistency and that a plan builds."""
+    """Problems found (empty = consistent); see the module docstring."""
     problems = []
     from evodevo.campaign.plan import CampaignPlan
     from evodevo.experiments.benchmark import BenchmarkConfig
@@ -354,34 +416,40 @@ def check(run_dir: Path | None, reference: Path | None, allow_test: bool = False
             problems.append(f"missing {path.relative_to(spec.REPO_ROOT)}")
     if problems:
         return problems
-    record = json.loads(spec.DECISIONS_JSON.read_text())
-    if spec.CAMPAIGN_YAML.read_text() != render_yaml(record):
+    texts = {}
+    for path in (spec.DECISIONS_JSON, spec.ESTIMATE_JSON):
+        texts[path] = path.read_text(encoding="utf-8")
+        if texts[path] != _dump(json.loads(texts[path])):
+            problems.append(f"{path.name} is not the canonical dump of its content (hand edit?)")
+    record = json.loads(texts[spec.DECISIONS_JSON])
+    estimate = json.loads(texts[spec.ESTIMATE_JSON])
+    if spec.CAMPAIGN_YAML.read_text(encoding="utf-8") != render_yaml(record):
         problems.append("campaign_ext.yaml is not the rendering of EXT_DECISIONS.json")
+    if spec.DECISIONS_MD.read_text(encoding="utf-8") != render_report(record, estimate):
+        problems.append("EXT_DECISIONS.md is not the rendering of EXT_DECISIONS.json and final_estimate_ext.json")
+    plan = None
     try:
         plan = CampaignPlan.from_benchmark(BenchmarkConfig.from_yaml(str(spec.CAMPAIGN_YAML)))
     except Exception as exc:  # noqa: BLE001 -- reported, not raised
         problems.append(f"plan does not build: {type(exc).__name__}: {exc}")
-        return problems
-    if [p.task for p in plan.phases] != record["task_order"]:
-        problems.append("plan phase order != decision record")
-    for phase in plan.phases:
-        decided = record["tasks"][phase.task]
-        if (phase.ppo_timesteps, phase.ppo_seeds) != (decided["ppo_timesteps"], decided["ppo_seeds"]):
-            problems.append(f"{phase.task}: plan ({phase.ppo_timesteps}, K={phase.ppo_seeds}) != record")
-        if sorted({r.arm for r in phase.runs}) != sorted(spec.ARMS):
-            problems.append(f"{phase.task}: arms {sorted({r.arm for r in phase.runs})}")
-        if sorted({r.seed for r in phase.runs}) != list(spec.SEEDS):
-            problems.append(f"{phase.task}: seeds")
-        if not phase.timeout_s or phase.timeout_s <= 0:
-            problems.append(f"{phase.task}: no PPO-task timeout")
+    if plan is not None:
+        if [p.task for p in plan.phases] != record["task_order"]:
+            problems.append("plan phase order != decision record")
+        for phase in plan.phases:
+            decided = record["tasks"][phase.task]
+            if (phase.ppo_timesteps, phase.ppo_seeds) != (decided["ppo_timesteps"], decided["ppo_seeds"]):
+                problems.append(f"{phase.task}: plan ({phase.ppo_timesteps}, K={phase.ppo_seeds}) != record")
+            if sorted({r.arm for r in phase.runs}) != sorted(spec.ARMS):
+                problems.append(f"{phase.task}: arms {sorted({r.arm for r in phase.runs})}")
+            if sorted({r.seed for r in phase.runs}) != list(spec.SEEDS):
+                problems.append(f"{phase.task}: seeds")
+            if not phase.timeout_s or phase.timeout_s <= 0:
+                problems.append(f"{phase.task}: no PPO-task timeout")
     if run_dir is not None and reference is not None:
         fresh = derive(run_dir, reference, allow_test=allow_test)
+        fresh["record"]["derived_at"] = record.get("derived_at")
         for key, path in (("record", spec.DECISIONS_JSON), ("estimate", spec.ESTIMATE_JSON)):
-            committed = json.loads(path.read_text())
-            regenerated = json.loads(_dump(fresh[key]))
-            committed.pop("derived_at", None)
-            regenerated.pop("derived_at", None)
-            if committed != regenerated:
+            if texts[path] != _dump(fresh[key]):
                 problems.append(f"{path.name} differs from a fresh derivation of the same inputs")
     return problems
 
