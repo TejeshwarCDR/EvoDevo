@@ -30,6 +30,9 @@ REQUIRED = ("figures/fitness_curves.png", "figures/fitness_curves.pdf",
             "stats/rule_based_vs_monotone.csv", "MILESTONE_REPORT.md")
 
 
+ORIGINAL_TASKS = ("Walker-v0", "UpStepper-v0")
+
+
 def phase_ppo_seeds(manifest: dict, task: str) -> int:
     """K for ``task`` from the campaign plan. Without a plan (an old or
     hand-built manifest), the original campaign's UpStepper-v0 K=2."""
@@ -48,8 +51,8 @@ def sensitivity_files(k: int) -> tuple:
 def floor_effect_rows(data, finals, task):
     """Pre-registered floor-effect check (docs/campaign_prep/ext/PREREGISTRATION_EXT.md
     section 7.4): Q75 of valid generation-0 fitness pooled over arms and seeds,
-    against each arm's median final best-so-far fitness. Descriptive for the
-    original tasks; decisive for the extension tasks."""
+    against each arm's median final best-so-far fitness. Computed for the
+    extension tasks only; the original campaign's packages are unchanged."""
     gen0 = data[(data["generation"] == 0) & (data["valid"].astype(bool))]["fitness"].astype(float)
     q75 = float(np.quantile(gen0, 0.75)) if len(gen0) else float("nan")
     medians = {arm: float(np.median(values)) for arm, values in finals.items() if values}
@@ -347,7 +350,7 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
     _atomic_text(output / "stats/tables.md", (f"**{stamp}**\n\n" if stamp else "") + markdown + "\n")
     _atomic_text(output / "stats/tables.tex", primary.to_latex(index=False))
     generation_rows = _secondary_tables(data, output, finals, status, fraction)
-    floor_rows = floor_effect_rows(data, finals, task)
+    floor_rows = floor_effect_rows(data, finals, task) if task not in ORIGINAL_TASKS else []
     if floor_rows:
         _csv(output / "stats/floor_effect_check.csv", floor_rows, list(floor_rows[0]))
     import matplotlib

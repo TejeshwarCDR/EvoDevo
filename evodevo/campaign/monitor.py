@@ -10,7 +10,6 @@ from pathlib import Path
 
 from .alerts import AlertManager
 from .dashboard import collect, render
-from .dashboard import PRIOR_PATH
 from .milestone import REQUIRED, run_subprocess
 from .mirror import INTERVAL_S, sync
 
@@ -23,9 +22,9 @@ def slowest_ecore_p95_s(task, estimate_path=None):
     ``estimate_path`` is the campaign's own estimate (recorded in its
     manifest); the default is the original campaign's estimate.
     """
-    from .estimate import slowest_ecore_p95_s as from_estimate
-    data = json.loads(Path(estimate_path or PRIOR_PATH).read_text())
-    return from_estimate(data, task)
+    from . import estimate as estimates
+    data = json.loads(Path(estimate_path or estimates.LEGACY_ESTIMATE_PATH).read_text())
+    return estimates.slowest_ecore_p95_s(data, task)
 
 
 def monitor_once(root, alerts, *, now=None, p95_ecore_s=None, last_mirror=0,

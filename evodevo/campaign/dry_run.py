@@ -17,7 +17,7 @@ import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-FINAL_ESTIMATE = REPO_ROOT / "results/campaign_prep/final_estimate/final_estimate.json"
+from .estimate import LEGACY_ESTIMATE_PATH as FINAL_ESTIMATE
 DISK_ESTIMATE = REPO_ROOT / "results/campaign_prep/disk/disk_estimate.json"
 GUARD_H = 432.0
 
@@ -203,7 +203,6 @@ def _design_matches_v2(plan, estimate) -> tuple[bool, str]:
 
 def _render_v2(out, args, plan, estimate, estimate_file):
     applies, why = _design_matches_v2(plan, estimate)
-    production = production_projection_applies_v2(args)
     launch = dt.datetime.fromisoformat(args.launch_at) if args.launch_at else dt.datetime.now().replace(
         second=0, microsecond=0)
     result, guard = estimate.get("result", {}), estimate.get("guard", {})
@@ -215,7 +214,7 @@ def _render_v2(out, args, plan, estimate, estimate_file):
                f"p95 <= {guard.get('threshold_h', float('nan')):.0f} h -> outcome: {guard.get('outcome', 'n/a')})")
     if not applies:
         out.append(f"  NOT APPLICABLE to this plan ({why}); no calendar is shown.")
-    elif not production and estimate.get("workers") is not None and args.workers != estimate.get("workers"):
+    elif estimate.get("workers") is not None and args.workers != estimate.get("workers"):
         out.append(f"  NOT APPLICABLE: worker count {args.workers} != estimate's {estimate.get('workers')}; "
                    "no calendar is shown.")
     else:
@@ -237,11 +236,6 @@ def _render_v2(out, args, plan, estimate, estimate_file):
     return _render_tail(out, args, disk, applies, label)
 
 
-def production_projection_applies_v2(args) -> bool:
-    from .production import PROFILE, WORKER_CPUS
-    return args.workers == len(WORKER_CPUS) and args.cpu_profile == PROFILE
-
-
 def _render_tail(out, args, disk, disk_applies, disk_label):
     from evodevo.campaign.launch_checks import launch_refusals
     from evodevo.campaign.scheduler import cpu_placement
@@ -251,10 +245,9 @@ def _render_tail(out, args, disk, disk_applies, disk_label):
     refusals, record = launch_refusals(args)
     if not disk:
         disk = {"total_bytes": float("nan"), "three_x_total_bytes": float("nan")}
-    DISK_LABEL = disk_label
     need = disk["three_x_total_bytes"] / 1e9
     main_free = _free_gb(args.output_root)
-    out.append(f"DISK ({DISK_LABEL}): projected {disk['total_bytes'] / 1e9:.1f} GB; "
+    out.append(f"DISK ({disk_label}): projected {disk['total_bytes'] / 1e9:.1f} GB; "
                f"D10 3x margin requires {need:.1f} GB free"
                + ("" if disk_applies else " (projection is for the estimated design, not this plan)"))
     out.append(f"  main ({_existing(args.output_root)}): {main_free:.1f} GB free -> "

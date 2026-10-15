@@ -142,3 +142,64 @@ def test_milestone_writes_the_floor_effect_check(tmp_path):
     rows = list(csv.DictReader((folder / "stats/floor_effect_check.csv").open()))
     assert len(rows) == 3 and {r["task_floor_limited"] for r in rows} == {"False"}
     assert "Floor-effect check" in (folder / "MILESTONE_REPORT.md").read_text()
+
+
+# --- one source for the legacy estimate path ----------------------------------
+
+def test_legacy_estimate_path_has_one_definition():
+    from evodevo.campaign import dashboard, dry_run, estimate, plan
+    assert dashboard.PRIOR_PATH is estimate.LEGACY_ESTIMATE_PATH
+    assert plan.LEGACY_ESTIMATE_PATH is estimate.LEGACY_ESTIMATE_PATH
+    assert dry_run.FINAL_ESTIMATE is estimate.LEGACY_ESTIMATE_PATH
+
+
+def test_call_time_readers_honour_a_patched_legacy_path(tmp_path, monkeypatch):
+    from evodevo.campaign import dashboard, estimate, monitor, plan
+    from evodevo.experiments.benchmark import BenchmarkConfig
+    moved = tmp_path / "estimate.json"
+    moved.write_text(V2.read_text())
+    monkeypatch.setattr(estimate, "LEGACY_ESTIMATE_PATH", moved)
+    assert estimate.estimate_path_for_manifest({}) == moved
+    assert estimate.estimate_path_for_manifest(None) == moved
+    benchmark = BenchmarkConfig.from_yaml("evodevo/experiments/configs/benchmark.yaml")
+    assert plan.resolve_estimate_path(benchmark) == moved
+    assert is_v2(load(moved)) and dashboard._prior() == {}  # v2 file has no legacy row
+    assert monitor.slowest_ecore_p95_s("Climber-v0") == pytest.approx((1800 + 1.645 * 60) * 2.3172)
+
+
+# --- no silent fallback bands ---------------------------------------------------
+
+def _estimate_without(tmp_path, task):
+    estimate = json.loads(V2.read_text())
+    del estimate["result"]["phase_h"][task]
+    path = tmp_path / "estimate.json"
+    path.write_text(json.dumps(estimate))
+    return path
+
+
+def test_dashboard_refuses_a_v2_estimate_missing_a_phase_band(tmp_path):
+    _manifest(tmp_path, estimate=_estimate_without(tmp_path, "CaveCrawler-v0"))
+    with pytest.raises(ValueError, match="no phase band for task 'CaveCrawler-v0'"):
+        collect(str(tmp_path), now=1000, telemetry={})
+    _manifest(tmp_path, current="CaveCrawler-v0", estimate=_estimate_without(tmp_path, "CaveCrawler-v0"))
+    with pytest.raises(ValueError, match="no phase band"):
+        collect(str(tmp_path), now=1000, telemetry={})
+
+
+def test_plan_refuses_a_v2_estimate_missing_a_phase_band(tmp_path):
+    from evodevo.campaign.plan import CampaignPlan
+    from evodevo.experiments.benchmark import BenchmarkConfig
+    benchmark = BenchmarkConfig.from_yaml("evodevo/experiments/configs/campaign_ext_mini_validation.yaml")
+    path = _estimate_without(tmp_path, benchmark.tasks[-1])
+    with pytest.raises(ValueError, match="has no phase band"):
+        CampaignPlan.from_benchmark(benchmark, estimate_path=path)
+    assert CampaignPlan.from_benchmark(benchmark)  # its own estimate is complete
+
+
+def test_original_task_milestone_packages_have_no_floor_effect_output(tmp_path):
+    _runs(tmp_path, "Walker-v0", 1)
+    (tmp_path / "manifest.json").write_text(json.dumps({"plan": {"phases": [
+        {"task": "Walker-v0", "ppo_seeds": 1, "runs": [{"config": {"eval_budget": 1}}] * 6}]}}))
+    folder = Path(build(tmp_path, "Walker-v0")["output"])
+    assert not (folder / "stats/floor_effect_check.csv").exists()
+    assert "Floor-effect check" not in (folder / "MILESTONE_REPORT.md").read_text()

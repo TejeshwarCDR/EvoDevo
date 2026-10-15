@@ -13,8 +13,10 @@ from evodevo.experiments.benchmark import (CAMPAIGN, CAMPAIGN_VALIDATION,
 
 VALIDATION_STAMP = "VALIDATION - NOT A RESULT"
 REPO_ROOT = Path(__file__).resolve().parents[2]
-# The original campaign's capacity estimate (gitignored, lab host only).
-LEGACY_ESTIMATE_PATH = REPO_ROOT / "results/campaign_prep/final_estimate/final_estimate.json"
+# Alias of the single definition (the gitignored original-campaign estimate);
+# resolve_estimate_path reads ``estimate.LEGACY_ESTIMATE_PATH`` at call time.
+from . import estimate as _estimate_module
+from .estimate import LEGACY_ESTIMATE_PATH
 LEGACY_GUARD_OUTCOME = "all four approved campaign arms"
 # Validation-mode sleep scaling. The original two tasks keep their exact
 # values; any other task uses the slower UpStepper scale.
@@ -33,7 +35,7 @@ def resolve_estimate_path(benchmark) -> Path:
     resolve against the repository root, never the current directory)."""
     raw = getattr(benchmark, "estimate_path", None)
     if not raw:
-        return LEGACY_ESTIMATE_PATH
+        return _estimate_module.LEGACY_ESTIMATE_PATH
     path = Path(raw)
     return path if path.is_absolute() else REPO_ROOT / path
 
@@ -117,6 +119,11 @@ class CampaignPlan:
         resolved = resolve_configs(benchmark)
         estimate_path = Path(estimate_path) if estimate_path is not None else resolve_estimate_path(benchmark)
         estimate = json.loads(estimate_path.read_text())
+        if _estimate_module.is_v2(estimate):
+            for task in benchmark.tasks:
+                if task not in estimate.get("result", {}).get("phase_h", {}):
+                    raise ValueError(f"{estimate_path} has no phase band for task {task!r}; the campaign "
+                                     "dashboard and calendar cannot be built without one")
         t_ppo = estimate["inputs"]["t_ppo_mean_sd_at_b3_footing"]
         phases = []
         # D7 order is the order in the accepted campaign config, never a set.

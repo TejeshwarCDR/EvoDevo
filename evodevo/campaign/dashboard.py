@@ -15,7 +15,8 @@ from pathlib import Path
 import numpy as np
 from .status import CampaignStatus
 
-PRIOR_PATH = Path(__file__).resolve().parents[2] / "results/campaign_prep/final_estimate/final_estimate.json"
+# Alias of the single definition; readers use ``estimate.LEGACY_ESTIMATE_PATH`` at call time.
+from .estimate import LEGACY_ESTIMATE_PATH as PRIOR_PATH
 P2_MEAN_H = 403.2
 P2_P95_H = 406.0
 # Exact registered joint-total quantiles used by the initial dashboard prior.
@@ -67,8 +68,8 @@ def _rows(path):
 
 def _prior(path=None):
     """The legacy final-campaign row (kept for callers of the original API)."""
-    from .estimate import _legacy_result, load
-    return _legacy_result(load(PRIOR_PATH if path is None else path))
+    from . import estimate as estimates
+    return estimates._legacy_result(estimates.load(estimates.LEGACY_ESTIMATE_PATH if path is None else path))
 
 
 def _duration(seconds):
@@ -219,7 +220,15 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
     phase_utilization = worker_utilization(journal, worker_count, phase_started, now)
     last_hour_utilization = worker_utilization(journal, worker_count, max(phase_started, now - 3600), now)
     remaining_fraction = max(0.0, 1 - completed_phase / phase_total) if phase_total else 0.0
-    prior_band = estimates.phase_band(estimate, task)
+    def require_band(name):
+        # A v2 estimate states every phase's band; a missing one is an error,
+        # never a silent fall back to the original campaign's hours.
+        band = estimates.phase_band(estimate, name)
+        if v2 and name in {p["task"] for p in phases} and not {"p5", "p95"} <= set(band):
+            raise ValueError(f"the campaign's estimate has no phase band for task {name!r}")
+        return band
+
+    prior_band = require_band(task)
     prior_phase_low = float(prior_band.get("p5", 121.9 if task == "Walker-v0" else 277.8)) * 3600
     prior_phase_high = float(prior_band.get("p95", 124.1 if task == "Walker-v0" else 282.9)) * 3600
     if measured:
@@ -237,7 +246,7 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
     if current and phases.index(current) + 1 < len(phases):
         for phase in phases[phases.index(current) + 1:]:
             walker = phase["task"] == "Walker-v0"
-            band = estimates.phase_band(estimate, phase["task"])
+            band = require_band(phase["task"])
             future_low += float(band.get("p5", band.get("mean", 123 if walker else 280.2))) * 3600
             future_high += float(band.get("p95", band.get("mean", 123 if walker else 280.2))) * 3600
         # Preserve the P2 simulator's *joint* total distribution at campaign
