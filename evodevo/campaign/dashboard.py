@@ -298,7 +298,7 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
         "walker_milestone_reached": status.get("Walker-v0", {}).get("status") == "complete",
         "p2_mean_h": (round(float(estimates.total_band(estimate).get("mean", 0.0)), 1) if v2 else P2_MEAN_H),
         "p2_p95_h": (round(float(estimates.total_band(estimate).get("p95", 0.0)), 1) if v2 else P2_P95_H),
-        "guard_h": guard_h,
+        "guard_h": guard_h, "estimate_v2": v2,
         "projection_total_h": ((elapsed + campaign_eta[0]) / 3600,
                                (elapsed + campaign_eta[1]) / 3600),
         # Key name kept for compatibility; the threshold is the campaign's own guard.
@@ -346,7 +346,9 @@ def render(snapshot: dict, tty: bool = False, *, ascii_only: bool | None = None,
         f"Running {snapshot['tasks_running']} queued {snapshot['tasks_queued']} | PPO/h now {snapshot['throughput_now_per_h']:.1f}, average {snapshot['throughput_average_per_h']:.1f}",
         f"Worker utilization: {100 * snapshot.get('worker_utilization_last_hour', 0):.1f}% last 1 h; {100 * snapshot.get('worker_utilization_since_phase_start', 0):.1f}% since phase start",
         f"ETA ({snapshot['eta_source']}): phase {_duration(snapshot['phase_eta_s'][0])}–{_duration(snapshot['phase_eta_s'][1])}; campaign {_duration(snapshot['campaign_eta_s'][0])}–{_duration(snapshot['campaign_eta_s'][1])}" + (" (future phase: prior)" if snapshot.get("future_eta_source") else ""),
-        f"Walker milestone ({'reached' if snapshot.get('walker_milestone_reached') else 'latest'}): {_when(snapshot['walker_milestone_epoch'])}; P2 {snapshot['p2_mean_h']} h mean / {snapshot['p2_p95_h']} h p95; projected total {_hours_range(snapshot.get('projection_total_h'))}; >{snapshot.get('guard_h', GUARD_H):.0f} h: {snapshot['projection_exceeds_432h']}",
+        (f"Estimate {snapshot['p2_mean_h']} h mean / {snapshot['p2_p95_h']} h p95; projected total {_hours_range(snapshot.get('projection_total_h'))}; >{snapshot.get('guard_h', GUARD_H):.0f} h: {snapshot['projection_exceeds_432h']}"
+         if snapshot.get("estimate_v2") else
+         f"Walker milestone ({'reached' if snapshot.get('walker_milestone_reached') else 'latest'}): {_when(snapshot['walker_milestone_epoch'])}; P2 {snapshot['p2_mean_h']} h mean / {snapshot['p2_p95_h']} h p95; projected total {_hours_range(snapshot.get('projection_total_h'))}; >{snapshot.get('guard_h', GUARD_H):.0f} h: {snapshot['projection_exceeds_432h']}"),
         f"CPU {snapshot.get('cpu_percent', 'n/a')}% per-core {snapshot.get('per_core_percent', [])}; temp {snapshot.get('temperature_c', 'n/a')} °C; RAM {snapshot.get('ram_used_gb', 'n/a')} GB; swap {snapshot.get('swap_used_gb', 'n/a')} GB",
         f"Disk main {snapshot.get('main_disk_free_gb', 'n/a')} GB mirror {snapshot.get('mirror_disk_free_gb', 'n/a')} GB; last mirror {_when(snapshot.get('last_mirror_success'))}",
         f"Infra failures {snapshot['infra_failure_count']}; last error {snapshot['last_error'] or 'none'}; since task {_duration(snapshot['seconds_since_last_task'])}",
