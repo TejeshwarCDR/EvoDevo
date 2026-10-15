@@ -153,8 +153,29 @@ def make_pool(workers: int, cpu_profile: str):
     return pool, topology, affinity
 
 
+STOP = {"requested": False}
+STOP_GRACE_S = 30.0
+
+
+def _request_stop(signum, _frame):
+    if not STOP["requested"]:
+        print(f"[{_now()}] signal {signum}: stopping; in-flight trainings get {STOP_GRACE_S:.0f} s, "
+              "then workers are terminated. Re-run the same command to resume.", flush=True)
+    STOP["requested"] = True
+
+
+def _terminate_pool(pool) -> None:
+    executor = getattr(pool, "_executor", None)
+    if executor is not None:
+        for process in list(executor._processes.values()):
+            if process.is_alive():
+                process.terminate()
+    pool.shutdown(wait=False)
+
+
 def run_tasks(pool, items: list, out_path: Path, timeout_s: float, topology, stage: str) -> int:
-    """items: [(key, meta, PPOTask)]. Skips keys already in out_path."""
+    """items: [(key, meta, PPOTask)]. Skips keys already in out_path. Stops
+    cleanly (completed rows kept, workers terminated) on SIGINT/SIGTERM."""
     done = {row["key"] for row in _rows(out_path)}
     todo = [(key, meta, task) for key, meta, task in items if key not in done]
     if not todo:
@@ -168,7 +189,7 @@ def run_tasks(pool, items: list, out_path: Path, timeout_s: float, topology, sta
     finished = 0
     print(f"[{_now()}] {stage}: {len(todo)} trainings submitted ({len(done)} already complete)", flush=True)
     while True:
-        completed = pool.next_ppo_result()
+        completed = pool.next_ppo_result(should_stop=lambda: STOP["requested"], grace_s=STOP_GRACE_S)
         if completed is None:
             break
         task, result = completed
@@ -325,11 +346,17 @@ def main(argv=None):
     if stages == ("bodies",):
         print(status(run_dir))
         return 0
+    import signal
+    signal.signal(signal.SIGINT, _request_stop)
+    signal.signal(signal.SIGTERM, _request_stop)
     pool, topology, _affinity = make_pool(args.workers, args.cpu_profile)
     try:
         if "curves" in stages:
             run_tasks(pool, curve_items(bodies, params), run_dir / "curves.jsonl",
                       spec.CURVE_TIMEOUT_S, topology, "curves")
+            if STOP["requested"]:
+                print(status(run_dir))
+                return 130
             budgets = budgets_from_curves(run_dir, params)
             print(f"[{_now()}] D6-ext budgets: {budgets}", flush=True)
         if "noise" in stages:
@@ -339,7 +366,13 @@ def main(argv=None):
                        json.loads((run_dir / "budgets.json").read_text())["decisions"].items()}
             run_tasks(pool, noise_items(bodies, budgets, params), run_dir / "noise.jsonl",
                       spec.NOISE_TIMEOUT_S, topology, "noise")
+            if STOP["requested"]:
+                print(status(run_dir))
+                return 130
     finally:
-        pool.shutdown(wait=True)
+        if STOP["requested"]:
+            _terminate_pool(pool)
+        else:
+            pool.shutdown(wait=True)
     print(status(run_dir))
     return 0
