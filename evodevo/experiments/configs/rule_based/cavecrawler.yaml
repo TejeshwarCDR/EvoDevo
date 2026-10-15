@@ -1,0 +1,4 @@
+seed: 0
+encoder: rule_based
+task: CaveCrawler-v0
+output_dir: results/runs

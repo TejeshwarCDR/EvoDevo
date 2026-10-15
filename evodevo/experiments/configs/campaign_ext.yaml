@@ -1,0 +1,25 @@
+# Campaign extension (docs/campaign_prep/ext/PREREGISTRATION_EXT.md).
+# PRE-DERIVATION PLACEHOLDER -- NOT LAUNCHABLE.
+# The per-task ppo_timesteps / ppo_seeds are decided mechanically on the lab
+# host by `python -m evodevo.extension derive`, which REGENERATES this file.
+# Until then the plan refuses to build (no per-task PPO values, and the
+# decision record named below does not exist), so nothing can be launched
+# from it by accident. The arms, seeds, factors and D7 order below are final.
+profile: campaign
+encoders: [direct, nca, rule_based]
+tasks: [ObstacleTraverser-v1, Climber-v0, CaveCrawler-v0]
+seeds: [0, 1, 2, 3, 4]
+configs_root: evodevo/experiments/configs
+output_dir: results/runs
+surrogate: false
+factors:
+  dev_steps: 100
+  init_condition: center_seed
+estimate_path: docs/campaign_prep/ext/final_estimate_ext.json
+decisions_path: docs/campaign_prep/ext/EXT_DECISIONS.json
+guard_outcome: "extension: 3 core arms; GUARD-ext pending"
+profile_overrides:
+  population_size: 15
+  offspring_size: 15
+  eval_budget: 300
+  ppo_seed_aggregation: max

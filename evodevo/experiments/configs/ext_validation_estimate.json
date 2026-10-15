@@ -1,0 +1,86 @@
+{
+ "design": {
+  "tasks": {}
+ },
+ "disk": {
+  "three_x_total_bytes": 3000000000.0,
+  "total_bytes": 1000000000.0
+ },
+ "format": "evodevo-estimate-v2",
+ "guard": {
+  "outcome": "validation",
+  "threshold_h": 360.0
+ },
+ "inputs": {
+  "t_ppo_mean_sd_at_b3_footing": {
+   "direct|CaveCrawler-v0": [
+    1800.0,
+    60.0
+   ],
+   "direct|Climber-v0": [
+    1800.0,
+    60.0
+   ],
+   "direct|ObstacleTraverser-v1": [
+    1800.0,
+    60.0
+   ],
+   "nca|CaveCrawler-v0": [
+    1800.0,
+    60.0
+   ],
+   "nca|Climber-v0": [
+    1800.0,
+    60.0
+   ],
+   "nca|ObstacleTraverser-v1": [
+    1800.0,
+    60.0
+   ],
+   "rule_based|CaveCrawler-v0": [
+    1800.0,
+    60.0
+   ],
+   "rule_based|Climber-v0": [
+    1800.0,
+    60.0
+   ],
+   "rule_based|ObstacleTraverser-v1": [
+    1800.0,
+    60.0
+   ]
+  }
+ },
+ "label": "VALIDATION ONLY - synthetic priors for the extension rehearsal configs; never a scientific estimate",
+ "method": "synthetic",
+ "result": {
+  "phase_h": {
+   "CaveCrawler-v0": {
+    "mean": 1.5,
+    "p5": 1.0,
+    "p95": 2.0
+   },
+   "Climber-v0": {
+    "mean": 1.5,
+    "p5": 1.0,
+    "p95": 2.0
+   },
+   "ObstacleTraverser-v1": {
+    "mean": 1.5,
+    "p5": 1.0,
+    "p95": 2.0
+   }
+  },
+  "task_order": [
+   "ObstacleTraverser-v1",
+   "Climber-v0",
+   "CaveCrawler-v0"
+  ],
+  "total_h": {
+   "mean": 4.5,
+   "p5": 3.0,
+   "p95": 6.0
+  }
+ },
+ "workers": null
+}

@@ -1,0 +1,31 @@
+# Validation-only REAL-PPO rehearsal of the extension campaign: the exact
+# arms, task order, population geometry, factors and scheduler path of
+# campaign_ext.yaml, with evaluation count and PPO timesteps reduced to
+# pipeline-validation scale. K=2 on Climber-v0 exercises the multi-seed and
+# mean-of-K sensitivity path on a new task. Never a result: always launch
+# with --stamp "VALIDATION - NOT A RESULT".
+profile: campaign
+encoders: [direct, nca, rule_based]
+tasks: [ObstacleTraverser-v1, Climber-v0, CaveCrawler-v0]
+seeds: [0, 1]
+configs_root: evodevo/experiments/configs
+output_dir: results/runs
+surrogate: false
+factors:
+  dev_steps: 100
+  init_condition: center_seed
+estimate_path: evodevo/experiments/configs/ext_validation_estimate.json
+guard_outcome: "VALIDATION - NOT A RESULT"
+profile_overrides:
+  population_size: 15
+  offspring_size: 15
+  eval_budget: 30
+  ppo_seed_aggregation: max
+  ppo_timesteps:
+    ObstacleTraverser-v1: 2048
+    Climber-v0: 2048
+    CaveCrawler-v0: 2048
+  ppo_seeds:
+    ObstacleTraverser-v1: 1
+    Climber-v0: 2
+    CaveCrawler-v0: 1

@@ -1,0 +1,25 @@
+# Timed (sleeping-worker) validation of the full extension grid: exact arms,
+# seeds, task order, population and budget; PPO workers sleep for scaled
+# draws from the synthetic priors instead of training. Run only with
+# --mode validation --stamp "VALIDATION - NOT A RESULT".
+profile: campaign_validation
+encoders: [direct, nca, rule_based]
+tasks: [ObstacleTraverser-v1, Climber-v0, CaveCrawler-v0]
+seeds: [0, 1, 2, 3, 4]
+configs_root: evodevo/experiments/configs
+output_dir: results/runs
+surrogate: false
+factors:
+  dev_steps: 100
+  init_condition: center_seed
+estimate_path: evodevo/experiments/configs/ext_validation_estimate.json
+guard_outcome: "VALIDATION - NOT A RESULT"
+profile_overrides:
+  ppo_timesteps:
+    ObstacleTraverser-v1: 1000000
+    Climber-v0: 1000000
+    CaveCrawler-v0: 1000000
+  ppo_seeds:
+    ObstacleTraverser-v1: 1
+    Climber-v0: 2
+    CaveCrawler-v0: 1

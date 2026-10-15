@@ -1,0 +1,4 @@
+seed: 0
+encoder: rule_based
+task: ObstacleTraverser-v1
+output_dir: results/runs
