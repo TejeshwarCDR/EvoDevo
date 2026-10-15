@@ -98,7 +98,7 @@ b. `.venv/bin/python -m pytest -q -p no:cacheprovider tests/extension tests/camp
    tests/campaign/test_extension_generic.py` — must be all green.
 
 STEP 5 — REAL-LAUNCHER REHEARSAL OF THE EXTENSION GRID
-a. Dry run first: `sudo scripts/campaign/run_production_campaign.sh --dry-run --config
+a. `mkdir -p <BACKUP_MOUNT>/validation/ext-mini`, then a dry run: `sudo scripts/campaign/run_production_campaign.sh --dry-run --config
    evodevo/experiments/configs/campaign_ext_mini_validation.yaml --mirror-dir <BACKUP_MOUNT>/validation/ext-mini
    --local-config campaign.local.yaml`. Quote the PLAN and LAUNCH CHECKS sections.
 b. Launch: `sudo scripts/campaign/run_production_campaign.sh --campaign-id ext-mini-rehearsal --config
