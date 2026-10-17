@@ -111,10 +111,15 @@ def test_real_ppo_smoke():
 # PRE_REFACTOR_PPO_RUNNER_COMMIT is the parent of the (single) commit that
 # introduced _rollout_fitness, found via:
 #   git log --format=%H -S_rollout_fitness -- evodevo/evaluation/ppo_runner.py
-# (131350c98d806a9b155ce1f83e6917c15e4bf352, "Add evaluate_body_with_curve"),
+# (b6a71741af6ed0788137cb445f00ac9d74e54b29, "Add evaluate_body_with_curve"),
 # taking that commit's own parent so the reference predates the refactor
 # entirely. Confirmed to contain zero occurrences of "_rollout_fitness".
-PRE_REFACTOR_PPO_RUNNER_COMMIT = "9e877489a101a75b8b9195791a3a23e877fa8386"
+#
+# Both hashes were re-pinned after the 2026-10-17 history rewrite (they were
+# 131350c98d806a9b155ce1f83e6917c15e4bf352 and
+# 9e877489a101a75b8b9195791a3a23e877fa8386); the pinned file contents are
+# byte-identical. See docs/provenance/COMMIT_HASH_MAP.md.
+PRE_REFACTOR_PPO_RUNNER_COMMIT = "12fed7a9775cf6b216b63b97ec6471ae51103b38"
 
 DISCONNECTED_BODY = np.array(
     [

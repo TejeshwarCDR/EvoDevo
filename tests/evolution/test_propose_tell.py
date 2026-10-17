@@ -18,7 +18,11 @@ from evodevo.evolution.logging import RunLogger
 # The immediately preceding commit is deliberately pinned: this test compares
 # the refactor against the old implementation, not against a second copy that
 # can silently be edited to agree with it.
-PRE_PROPOSE_TELL_EA_COMMIT = "bfb913917b2603acef310f44fdfb491fea33564a"
+#
+# Re-pinned after the 2026-10-17 history rewrite (it was
+# bfb913917b2603acef310f44fdfb491fea33564a); the pinned file contents are
+# byte-identical. See docs/provenance/COMMIT_HASH_MAP.md.
+PRE_PROPOSE_TELL_EA_COMMIT = "716c984d31ff9c6e79891f7441341046f8aaa791"
 
 
 def _config(arm, seed=0, budget=300, **overrides):
