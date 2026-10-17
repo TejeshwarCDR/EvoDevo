@@ -10,7 +10,7 @@ any rebuilt worker import whatever code is on disk at that moment. Only Prompt 0
 | Prompt | When | Changes anything? |
 |---|---|---|
 | 0 | now, while the original campaign runs | no (writes one report under `results/ext_prep/`) |
-| 1 | after the original campaign is `complete` | fast-forwards `main`; runs the tests and a stamped rehearsal campaign |
+| 1 | after the original campaign is `complete` | reconciles `main` with the rewritten history (no pull or fast-forward); runs the tests and a stamped rehearsal campaign |
 | 2 | after prompt 1 passes | starts the extension preflight (~9–11 h, unattended) |
 | 3 | after the preflight finishes | derives decisions, commits them to `main` and pushes (no force) |
 | 4 | after prompt 3 | writes the audit report; launch only after an explicit GO |
