@@ -4,13 +4,13 @@ Authoritative sequence for the ObstacleTraverser-v1 → Climber-v0 → CaveCrawl
 Rules and analysis: [PREREGISTRATION_EXT.md](PREREGISTRATION_EXT.md). Branch: `main` (the extension is already merged).
 
 **Never pull, fetch-and-merge, check out or edit code on the lab host while the original campaign is running.**
-Its milestone subprocess and any rebuilt worker import whatever code is on disk at that moment. The first
-`git merge --ff-only origin/main` happens in Step 1, after the original campaign is `complete`.
+Its milestone subprocess and any rebuilt worker import whatever code is on disk at that moment. The history
+reconciliation (Step 1, below) happens only after the original campaign is `complete`.
 
 | Step | When | Duration | What |
 |---|---|---|---|
 | 0 | now (original campaign running) | 10 min | Read-only record of the original campaign; nothing changes |
-| 1 | original campaign `complete` | ~1.5 h | verify the original is complete, fast-forward `main`, tests, real-launcher mini rehearsal |
+| 1 | original campaign `complete` | ~1.5 h | verify the original is complete, reconcile `main` with the rewritten history, tests, real-launcher mini rehearsal |
 | 2 | after step 1 passes | ~9–11 h, unattended | extension preflight (B4x 18 curves, then B5x 72 noise trainings + 12 cost references = 84 rows; 4 repeats) under the production power controls |
 | 3 | after step 2 | 15 min | derive decisions, check, dry run, commit to `main`, push (no force) |
 | 4 | after step 3 | 15 min | audit report, then launch only on an explicit GO |
@@ -25,15 +25,26 @@ tmux ls                                   # the original 'evodevo-campaign' sess
 git branch --show-current                 # must be main
 git status --short                        # must be empty (results/ is ignored)
 pgrep -af evodevo                         # must show no campaign worker / scheduler
-git fetch origin && git merge --ff-only origin/main   # no checkout, no force, no stash
-git rev-parse HEAD                        # record the commit you ended on
+git fetch origin --prune
+git rev-parse origin/main                 # the current origin/main SHA: the commit to end on
+# HISTORY RECONCILIATION. The history of main was rewritten (same content and dates, new hashes), so
+# `git pull` / `git merge --ff-only origin/main` WILL FAIL on this checkout. Do this instead:
+git rev-parse HEAD; git status -sb; git stash list; git branch -vv    # record all four
+git branch backup/pre-rewrite-lab HEAD                                # safety ref of the old history
+git status --porcelain --untracked-files=no                           # must print nothing
+T=$(git rev-parse HEAD^{tree}); git log origin/main --format='%H %T %aI %s' | grep "$T"
+git log -1 --format='%aI %s' HEAD         # the one twin line above must have this author date and subject
+# Only if the tracked tree is clean AND exactly one twin matches (same tree, date, subject):
+git reset --hard origin/main              # safe: tracked content identical; results/ and .venv are ignored
+                                          # and untouched; the backup ref keeps the old history
+git rev-parse HEAD                        # must equal the origin/main SHA recorded above
 .venv/bin/python -m pytest -q -p no:cacheprovider tests/extension tests/campaign/test_extension_invariance.py \
     tests/campaign/test_extension_generic.py                          # required: 76 passed
 .venv/bin/python -m pytest -q -m "not slow" -p no:cacheprovider      # full suite: 0 failed on the lab
 ```
 
 The full suite needs the lab's `results/campaign_prep/final_estimate/final_estimate.json`, `psutil`, the Linux
-CPU layout, `tmux` and `setsid`; on a laptop 40 tests fail for exactly those reasons (identical at 7774f76).
+CPU layout, `tmux` and `setsid`; on a laptop 40 tests fail for exactly those reasons (identical at d51138e, the rewritten twin of the old 7774f76).
 
 Real-launcher rehearsal of the extension grid (real PPO at 2,048 timesteps, 30 genomes, 2 seeds, all three
 tasks; K=2 on Climber-v0 exercises the multi-seed path). Same wrapper, tmux, notifier and mirror as production.

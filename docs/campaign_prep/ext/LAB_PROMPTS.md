@@ -67,12 +67,13 @@ F. Anything inconsistent or surprising, one line each.
 
 ---
 
-## Prompt 1 — close out the original campaign, fast-forward `main`, test and rehearse
+## Prompt 1 — close out the original campaign, reconcile `main` with the rewritten history, test and rehearse
 
 ```
 The original campaign must be finished before anything here runs. Work through the steps in order and STOP
 at the first failure, reporting it. Write results/ext_prep/STEP1_REPORT.md as you go and print its path.
-Never use force, stash, reset, or a branch switch.
+Never use force, stash or a branch switch. The one permitted `git reset --hard` is the history reconciliation in
+STEP 2, and only after its proof (2c) passes.
 
 STEP 1 — PRECONDITIONS (stop if any fails; nothing is fetched or changed before all of them pass)
 a. ORIG = the campaign in results/campaign/ whose manifest has both Walker-v0 and UpStepper-v0. Its manifest
@@ -87,18 +88,36 @@ c. `git branch --show-current` is `main` and `git status --short` is empty.
 d. Verify the original campaign's mirror: run the repository's mirror verification for ORIG against its
    recorded mirror_dir (evodevo.campaign.mirror verify_mirror / verify_checksum_manifest) and report the
    result. If it is not verified, run one final sync with the same function and verify again.
-e. Fast-forward pre-check (only now, with the campaign complete): run
-   `git fetch origin && git status -sb && git log --oneline origin/main..HEAD`. The log must print nothing.
-   If it prints lab-only commits, STOP: push them from the lab first (plain push, no force) or report. A
-   `git merge --ff-only` cannot succeed with lab-only commits on main.
+e. `git fetch origin --prune` (this is the first fetch; it only reads). Record `git rev-parse origin/main`: this
+   is the current origin/main SHA used everywhere below.
 
-STEP 2 — FAST-FORWARD `main`
-Record `git rev-parse HEAD` (the pre-merge commit). Then `git fetch origin && git merge --ff-only origin/main`
-(on branch main; no checkout, no force, no stash). If the merge is not a fast-forward, STOP and report. Record
-the commit you end on (`git rev-parse HEAD`) and `git log --oneline <pre-merge>..HEAD`. Confirm these exist:
-evodevo/extension/{__main__,preflight,derive,rules,spec}.py,
-evodevo/experiments/configs/campaign_ext.yaml, campaign_ext_mini_validation.yaml, campaign_ext_validation.yaml,
-docs/campaign_prep/ext/{PREREGISTRATION_EXT,RUNBOOK_EXT,LAB_PROMPTS}.md, tests/extension/.
+STEP 2 — HISTORY RECONCILIATION (replaces any `git pull` / `git merge --ff-only`)
+The history of `main` on GitHub was rewritten after this checkout was made (same file contents and dates,
+new commit hashes, one author identity). This checkout is on the OLD history, so `git merge --ff-only
+origin/main` and `git pull` WILL FAIL; do not try them. Run this only now, with UpStepper-v0 complete (step 1a)
+and the working tree clean (step 1c). It deletes nothing the campaign needs.
+a. Record in the report: `git rev-parse HEAD`, `git status -sb`, `git stash list`, `git branch -vv`.
+b. Create a safety ref of the old state: `git branch backup/pre-rewrite-lab HEAD`.
+c. Prove this checkout holds no unique tracked work. All three must hold, otherwise STOP and report (the lab
+   has content that is not in the rewritten history) and do not reset:
+   - `git status --porcelain --untracked-files=no` prints nothing;
+   - `T=$(git rev-parse HEAD^{tree}); git log origin/main --format='%H %T %aI %s' | grep "$T"` prints a
+     rewritten twin whose author date (`git log -1 --format=%aI HEAD`) and subject
+     (`git log -1 --format=%s HEAD`) equal the lab HEAD's;
+   - if the twin is not exactly one line, STOP and report.
+d. Only if (c) passes: `git reset --hard origin/main`. This is safe because the tracked content is identical
+   (c); ignored files such as results/ and the .venv are untouched by reset; and `backup/pre-rewrite-lab`
+   preserves the old history. Without a passing (c), do not reset.
+e. Record the commit you end on (`git rev-parse HEAD`): it must equal the current origin/main SHA from 1e (no
+   "or later"; if origin/main moved since 1e, fetch again and use the new SHA). Confirm these exist:
+   evodevo/extension/{__main__,preflight,derive,rules,spec}.py,
+   evodevo/experiments/configs/campaign_ext.yaml, campaign_ext_mini_validation.yaml, campaign_ext_validation.yaml,
+   docs/campaign_prep/ext/{PREREGISTRATION_EXT,RUNBOOK_EXT,LAB_PROMPTS}.md, tests/extension/.
+f. Note for the record: the original campaign's manifest.json records an OLD git commit (pre-rewrite). The
+   old-to-new SHA map is held outside the repository (and as docs/provenance/commit_hash_map.tsv). The
+   extension's `derive` only records the preflight's `git_commit(s)` and does not require any commit to be an
+   ancestor of main (evodevo/extension/derive.py; evodevo/campaign/plan.py has no commit logic), so the old
+   recorded SHA is expected and is not an error.
 
 STEP 3 — PROOF THAT THE ORIGINAL CAMPAIGN IS UNCHANGED BY THE NEW CODE
 With the REAL results/campaign_prep/final_estimate/final_estimate.json, compute
@@ -112,11 +131,11 @@ a. Required, must be 100% green:
    tests/campaign/test_extension_generic.py`  (expected: 76 passed).
 b. Full suite: `.venv/bin/python -m pytest -q -m "not slow" -p no:cacheprovider`. Expected on the lab: 0 failed.
    The 40 tests that fail on a Mac for environment reasons only (missing final_estimate.json, no psutil,
-   no Linux CPU layout/sched_setaffinity, no setsid/tmux; identical failures at 7774f76) MUST pass here:
+   no Linux CPU layout/sched_setaffinity, no setsid/tmux; identical failures at d51138e, the rewritten twin of the old 7774f76) MUST pass here:
    tests/campaign/{test_dry_run,test_entry_point,test_equivalence_validator,test_mirror_disk,test_notifier,
    test_operations,test_production_launcher_lifecycle,test_validation_profile}.py,
    tests/parallel/test_worker_pool.py, tests/preflight/{test_b1_b2,test_cli,test_report,test_telemetry}.py.
-   Any failure is a STOP unless the same test ID fails identically at 7774f76 in a temporary `git worktree`
+   Any failure is a STOP unless the same test ID fails identically at d51138e in a temporary `git worktree`
    (run it with that worktree as cwd and PYTHONPATH, print `evodevo.__file__`, then remove the worktree).
    Report the summary line and every failure with its first error line.
 
@@ -218,7 +237,7 @@ Write an audit of the extension campaign's readiness to results/ext_prep/AUDIT_E
 change nothing, start nothing. Every claim must cite a file:line, a command output or a JSON field.
 
 1. Provenance: HEAD hash, branch (main), `git status --short` (must be empty), origin/main == HEAD, and the
-   commits since 7774f76. Confirm the pre-registration commit (PREREGISTRATION_EXT.md) is older than every
+   commits since d51138e (the rewritten twin of the old 7774f76). Confirm the pre-registration commit (PREREGISTRATION_EXT.md) is older than every
    timestamp in results/extension_preflight/<run-id>/ (compare the commit date with the first row's
    started_at in curves.jsonl and the bodies.json created_at).
 2. Rules applied as registered: for each task, quote EXT_DECISIONS.json d6_ext (branch, qualifying bodies,

@@ -38,3 +38,6 @@ results/thermal_worker_study/SELECTION_GATES_*
 
 # Extension preflight output (python -m evodevo.extension preflight): generated, not source.
 results/extension_preflight/
+
+# macOS
+.DS_Store
