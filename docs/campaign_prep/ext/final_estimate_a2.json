@@ -1,0 +1,280 @@
+{
+ "a2": {
+  "band_half_width": 0.1,
+  "p95_ecore_s": {
+   "ObstacleTraverser-v1:s0-4": 9844.416244756305,
+   "ObstacleTraverser-v1:s5-9": 9844.416244756305,
+   "UpStepper-v0:s5-9": 3779.7968604913035,
+   "Walker-v0:s5-9": 3253.4502319369217,
+   "reeval:ObstacleTraverser-v1:s0-4": 9844.416244756305,
+   "reeval:ObstacleTraverser-v1:s5-9": 9844.416244756305,
+   "reeval:UpStepper-v0:s0-9": 3779.7968604913035,
+   "reeval:Walker-v0:s0-9": 3253.4502319369217,
+   "robustness:ObstacleTraverser-v1": 19688.83248951261,
+   "robustness:UpStepper-v0": 7559.593720982607,
+   "robustness:Walker-v0": 6506.900463873843
+  },
+  "timeout_rule": "ObstacleTraverser-v1: 4 x p95 E-core duration from the preflight B5x timings scaled linearly to the budget; Walker-v0/UpStepper-v0: the original campaign's phase timeouts, scaled linearly to the budget",
+  "timeout_s": {
+   "ObstacleTraverser-v1:s0-4": 39377.66497902522,
+   "ObstacleTraverser-v1:s5-9": 39377.66497902522,
+   "UpStepper-v0:s5-9": 15119.187441965214,
+   "Walker-v0:s5-9": 13013.800927747687,
+   "reeval:ObstacleTraverser-v1:s0-4": 39377.66497902522,
+   "reeval:ObstacleTraverser-v1:s5-9": 39377.66497902522,
+   "reeval:UpStepper-v0:s0-9": 15119.187441965214,
+   "reeval:Walker-v0:s0-9": 13013.800927747687,
+   "robustness:ObstacleTraverser-v1": 78755.32995805044,
+   "robustness:UpStepper-v0": 30238.374883930428,
+   "robustness:Walker-v0": 26027.601855495373
+  }
+ },
+ "design": {
+  "units": {
+   "ObstacleTraverser-v1:s0-4": {
+    "arms": [
+     "direct",
+     "nca",
+     "rule_based"
+    ],
+    "eval_budget": 300,
+    "population_size": 15,
+    "ppo_seeds": 1,
+    "ppo_timesteps": 1500000,
+    "seeds": [
+     0,
+     1,
+     2,
+     3,
+     4
+    ]
+   },
+   "ObstacleTraverser-v1:s5-9": {
+    "arms": [
+     "direct",
+     "nca",
+     "rule_based"
+    ],
+    "eval_budget": 300,
+    "population_size": 15,
+    "ppo_seeds": 1,
+    "ppo_timesteps": 1500000,
+    "seeds": [
+     5,
+     6,
+     7,
+     8,
+     9
+    ]
+   },
+   "UpStepper-v0:s5-9": {
+    "arms": [
+     "direct",
+     "nca",
+     "rule_based"
+    ],
+    "eval_budget": 300,
+    "population_size": 15,
+    "ppo_seeds": 2,
+    "ppo_timesteps": 1200000,
+    "seeds": [
+     5,
+     6,
+     7,
+     8,
+     9
+    ]
+   },
+   "Walker-v0:s5-9": {
+    "arms": [
+     "direct",
+     "nca",
+     "rule_based"
+    ],
+    "eval_budget": 300,
+    "population_size": 15,
+    "ppo_seeds": 1,
+    "ppo_timesteps": 1000000,
+    "seeds": [
+     5,
+     6,
+     7,
+     8,
+     9
+    ]
+   },
+   "reeval:ObstacleTraverser-v1:s0-4": {
+    "budget": 1500000,
+    "n": 10,
+    "trainings": 150
+   },
+   "reeval:ObstacleTraverser-v1:s5-9": {
+    "budget": 1500000,
+    "n": 10,
+    "trainings": 150
+   },
+   "reeval:UpStepper-v0:s0-9": {
+    "budget": 1200000,
+    "n": 10,
+    "trainings": 300
+   },
+   "reeval:Walker-v0:s0-9": {
+    "budget": 1000000,
+    "n": 10,
+    "trainings": 300
+   },
+   "robustness:ObstacleTraverser-v1": {
+    "budget": 3000000,
+    "n": 3,
+    "trainings": 90
+   },
+   "robustness:UpStepper-v0": {
+    "budget": 2400000,
+    "n": 3,
+    "trainings": 90
+   },
+   "robustness:Walker-v0": {
+    "budget": 2000000,
+    "n": 3,
+    "trainings": 90
+   }
+  }
+ },
+ "disk": {
+  "bytes_per_training": 315200.6437774746,
+  "three_x_total_bytes": 15588247838.015007,
+  "total_bytes": 5196082612.671669
+ },
+ "format": "evodevo-estimate-v2",
+ "guard": {
+  "applies": false,
+  "outcome": "no guard (Amendment 2 (k)): the extension's 360 h cost guard does not apply; this projection is informational"
+ },
+ "inputs": {
+  "backtest_relative_error": 0.07995587219413802,
+  "busy_s_per_walker_training": 2526.6072555650812,
+  "core_arm_busy_share": 0.6909838038128308,
+  "cost_ratios": {
+   "ObstacleTraverser-v1": {
+    "bodies": [
+     "direct:evolved",
+     "direct:random",
+     "nca:evolved",
+     "nca:random",
+     "rule_based:evolved",
+     "rule_based:random"
+    ],
+    "measured_timesteps": 600000,
+    "ratio": 1.088637129778955
+   },
+   "UpStepper-v0": {
+    "bodies": [
+     "direct:evolved",
+     "direct:random",
+     "nca:evolved",
+     "nca:random",
+     "rule_based:evolved",
+     "rule_based:random"
+    ],
+    "measured_timesteps": 1200000,
+    "ratio": 1.2125324616602169
+   }
+  },
+  "preflight_estimate_inputs_sha256": "09a0ae21f639cf204349485cb8c29f76efab29b80424367a41ac65ccab62064f",
+  "t_ppo_mean_sd_at_b3_footing": {
+   "direct|ObstacleTraverser-v1": [
+    4072.1822505563896,
+    107.12948647462022
+   ],
+   "nca|ObstacleTraverser-v1": [
+    4072.1822505563896,
+    107.12948647462022
+   ],
+   "rule_based|ObstacleTraverser-v1": [
+    4072.1822505563896,
+    107.12948647462022
+   ]
+  },
+  "walker_makespan_h": 173.1823365686337,
+  "walker_utilization": 0.9980179247166342
+ },
+ "method": "Amendment 2: phases scaled from the original campaign's realised Walker-v0 phase (same 3 core arms) x measured cost ratio x K; re-training stages from pool throughput (mean pool-busy seconds per Walker-v0 1M training x cost ratio x budget / (workers x utilisation) + half a training for the tail); band +/- max(10%, |backtest error|)",
+ "result": {
+  "phase_h": {
+   "ObstacleTraverser-v1:s0-4": {
+    "mean": 325.68264314949715,
+    "p5": 293.11437883454744,
+    "p95": 358.2509074644469
+   },
+   "ObstacleTraverser-v1:s5-9": {
+    "mean": 325.68264314949715,
+    "p5": 293.11437883454744,
+    "p95": 358.2509074644469
+   },
+   "UpStepper-v0:s5-9": {
+    "mean": 290.1982790891943,
+    "p5": 261.17845118027486,
+    "p95": 319.21810699811374
+   },
+   "Walker-v0:s5-9": {
+    "mean": 119.66618967538841,
+    "p5": 107.69957070784957,
+    "p95": 131.63280864292727
+   },
+   "reeval:ObstacleTraverser-v1:s0-4": {
+    "mean": 16.90425127517599,
+    "p5": 15.213826147658391,
+    "p95": 18.59467640269359
+   },
+   "reeval:ObstacleTraverser-v1:s5-9": {
+    "mean": 16.90425127517599,
+    "p5": 15.213826147658391,
+    "p95": 18.59467640269359
+   },
+   "reeval:UpStepper-v0:s0-9": {
+    "mean": 14.636969661522842,
+    "p5": 13.173272695370558,
+    "p95": 16.10066662767513
+   },
+   "reeval:Walker-v0:s0-9": {
+    "mean": 12.071404374182029,
+    "p5": 10.864263936763827,
+    "p95": 13.278544811600232
+   },
+   "robustness:ObstacleTraverser-v1": {
+    "mean": 21.04914554987148,
+    "p5": 18.944230994884332,
+    "p95": 23.15406010485863
+   },
+   "robustness:UpStepper-v0": {
+    "mean": 9.377880497099046,
+    "p5": 8.44009244738914,
+    "p95": 10.31566854680895
+   },
+   "robustness:Walker-v0": {
+    "mean": 7.734127368646872,
+    "p5": 6.960714631782185,
+    "p95": 8.50754010551156
+   }
+  },
+  "task_order": [
+   "ObstacleTraverser-v1:s0-4",
+   "reeval:ObstacleTraverser-v1:s0-4",
+   "ObstacleTraverser-v1:s5-9",
+   "reeval:ObstacleTraverser-v1:s5-9",
+   "UpStepper-v0:s5-9",
+   "reeval:UpStepper-v0:s0-9",
+   "Walker-v0:s5-9",
+   "reeval:Walker-v0:s0-9",
+   "robustness:ObstacleTraverser-v1",
+   "robustness:UpStepper-v0",
+   "robustness:Walker-v0"
+  ],
+  "total_h": {
+   "mean": 1159.9077850652513,
+   "p5": 1043.9170065587261,
+   "p95": 1275.8985635717765
+  }
+ },
+ "workers": 18
+}

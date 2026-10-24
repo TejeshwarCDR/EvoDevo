@@ -1,0 +1,453 @@
+{
+ "amendment": "Amendment 2 (docs/campaign_prep/ext/PREREGISTRATION_EXT.md)",
+ "arms": [
+  "direct",
+  "nca",
+  "rule_based"
+ ],
+ "campaign_spec": {
+  "label": "PRODUCTION",
+  "original_campaign": "results/campaign/20260930T044002Z",
+  "phases": [
+   {
+    "arms": [
+     "direct",
+     "nca",
+     "rule_based"
+    ],
+    "config_source": "benchmark",
+    "id": "ObstacleTraverser-v1:s0-4",
+    "package": {
+     "label": "INTERIM",
+     "merge": [
+      {
+       "phase": "ObstacleTraverser-v1:s0-4"
+      }
+     ],
+     "monotone_contrast": false
+    },
+    "seeds": [
+     0,
+     1,
+     2,
+     3,
+     4
+    ],
+    "task": "ObstacleTraverser-v1"
+   },
+   {
+    "arms": [
+     "direct",
+     "nca",
+     "rule_based"
+    ],
+    "config_source": "benchmark",
+    "id": "ObstacleTraverser-v1:s5-9",
+    "package": {
+     "label": "FINAL",
+     "merge": [
+      {
+       "phase": "ObstacleTraverser-v1:s0-4"
+      },
+      {
+       "phase": "ObstacleTraverser-v1:s5-9"
+      }
+     ],
+     "monotone_contrast": false
+    },
+    "seeds": [
+     5,
+     6,
+     7,
+     8,
+     9
+    ],
+    "task": "ObstacleTraverser-v1"
+   },
+   {
+    "arms": [
+     "direct",
+     "nca",
+     "rule_based"
+    ],
+    "config_source": "original",
+    "id": "UpStepper-v0:s5-9",
+    "package": {
+     "label": "FINAL",
+     "merge": [
+      {
+       "arms": [
+        "direct",
+        "nca",
+        "rule_based"
+       ],
+       "original": true,
+       "seeds": [
+        0,
+        1,
+        2,
+        3,
+        4
+       ]
+      },
+      {
+       "phase": "UpStepper-v0:s5-9"
+      }
+     ],
+     "monotone_contrast": true
+    },
+    "seeds": [
+     5,
+     6,
+     7,
+     8,
+     9
+    ],
+    "task": "UpStepper-v0"
+   },
+   {
+    "arms": [
+     "direct",
+     "nca",
+     "rule_based"
+    ],
+    "config_source": "original",
+    "id": "Walker-v0:s5-9",
+    "package": {
+     "label": "FINAL",
+     "merge": [
+      {
+       "arms": [
+        "direct",
+        "nca",
+        "rule_based"
+       ],
+       "original": true,
+       "seeds": [
+        0,
+        1,
+        2,
+        3,
+        4
+       ]
+      },
+      {
+       "phase": "Walker-v0:s5-9"
+      }
+     ],
+     "monotone_contrast": true
+    },
+    "seeds": [
+     5,
+     6,
+     7,
+     8,
+     9
+    ],
+    "task": "Walker-v0"
+   }
+  ],
+  "recorded_versions": {
+   "cloudpickle": "3.1.2",
+   "evogym": "2.0.0",
+   "evogym_commit": "f63c649c688adda1accad5f86731aad96606388a",
+   "gymnasium": "1.3.0",
+   "numpy": "1.26.4",
+   "python": "3.10.20",
+   "stable-baselines3": "2.9.0",
+   "torch": "2.14.0+cpu"
+  },
+  "sequence": [
+   "ObstacleTraverser-v1:s0-4",
+   "reeval:ObstacleTraverser-v1:s0-4",
+   "ObstacleTraverser-v1:s5-9",
+   "reeval:ObstacleTraverser-v1:s5-9",
+   "UpStepper-v0:s5-9",
+   "reeval:UpStepper-v0:s0-9",
+   "Walker-v0:s5-9",
+   "reeval:Walker-v0:s0-9",
+   "robustness:ObstacleTraverser-v1",
+   "robustness:UpStepper-v0",
+   "robustness:Walker-v0"
+  ],
+  "stages": [
+   {
+    "budget": 1500000,
+    "id": "reeval:ObstacleTraverser-v1:s0-4",
+    "kind": "reeval",
+    "n": 10,
+    "seed_base": 20261101,
+    "sources": [
+     {
+      "phase": "ObstacleTraverser-v1:s0-4"
+     }
+    ],
+    "task": "ObstacleTraverser-v1"
+   },
+   {
+    "budget": 1500000,
+    "id": "reeval:ObstacleTraverser-v1:s5-9",
+    "kind": "reeval",
+    "n": 10,
+    "seed_base": 20261101,
+    "sources": [
+     {
+      "phase": "ObstacleTraverser-v1:s5-9"
+     }
+    ],
+    "task": "ObstacleTraverser-v1"
+   },
+   {
+    "budget": 1200000,
+    "id": "reeval:UpStepper-v0:s0-9",
+    "kind": "reeval",
+    "n": 10,
+    "seed_base": 20261101,
+    "sources": [
+     {
+      "arms": [
+       "direct",
+       "nca",
+       "rule_based"
+      ],
+      "original": true,
+      "seeds": [
+       0,
+       1,
+       2,
+       3,
+       4
+      ]
+     },
+     {
+      "phase": "UpStepper-v0:s5-9"
+     }
+    ],
+    "task": "UpStepper-v0"
+   },
+   {
+    "budget": 1000000,
+    "id": "reeval:Walker-v0:s0-9",
+    "kind": "reeval",
+    "n": 10,
+    "seed_base": 20261101,
+    "sources": [
+     {
+      "arms": [
+       "direct",
+       "nca",
+       "rule_based"
+      ],
+      "original": true,
+      "seeds": [
+       0,
+       1,
+       2,
+       3,
+       4
+      ]
+     },
+     {
+      "phase": "Walker-v0:s5-9"
+     }
+    ],
+    "task": "Walker-v0"
+   },
+   {
+    "budget": 3000000,
+    "id": "robustness:ObstacleTraverser-v1",
+    "kind": "robustness",
+    "n": 3,
+    "seed_base": 20261201,
+    "sources": [
+     {
+      "phase": "ObstacleTraverser-v1:s0-4"
+     },
+     {
+      "phase": "ObstacleTraverser-v1:s5-9"
+     }
+    ],
+    "task": "ObstacleTraverser-v1"
+   },
+   {
+    "budget": 2400000,
+    "id": "robustness:UpStepper-v0",
+    "kind": "robustness",
+    "n": 3,
+    "seed_base": 20261201,
+    "sources": [
+     {
+      "arms": [
+       "direct",
+       "nca",
+       "rule_based"
+      ],
+      "original": true,
+      "seeds": [
+       0,
+       1,
+       2,
+       3,
+       4
+      ]
+     },
+     {
+      "phase": "UpStepper-v0:s5-9"
+     }
+    ],
+    "task": "UpStepper-v0"
+   },
+   {
+    "budget": 2000000,
+    "id": "robustness:Walker-v0",
+    "kind": "robustness",
+    "n": 3,
+    "seed_base": 20261201,
+    "sources": [
+     {
+      "arms": [
+       "direct",
+       "nca",
+       "rule_based"
+      ],
+      "original": true,
+      "seeds": [
+       0,
+       1,
+       2,
+       3,
+       4
+      ]
+     },
+     {
+      "phase": "Walker-v0:s5-9"
+     }
+    ],
+    "task": "Walker-v0"
+   }
+  ]
+ },
+ "derived_at": "2026-10-24T20:00:25+00:00",
+ "format": "evodevo-a2-decisions-v1",
+ "gates": {
+  "R": {
+   "behavioural_code_hunks": 0,
+   "config_diff": "only the seed",
+   "library_versions": "identical, evogym f63c649c",
+   "outcome": "PASS",
+   "replayed_original_evaluations_bit_identical": "12/12 (including both K=2 trainings)"
+  },
+  "S": "saving possible yes: the worker already saves each policy with its optimizer state after the fitness rollout; no observation normaliser exists; learning rate constant 3e-4",
+  "T": {
+   "1000000": {
+    "fraction_ok": false,
+    "order_ok": false
+   },
+   "1200000": {
+    "fraction_ok": false,
+    "order_ok": false
+   },
+   "1500000": {
+    "fraction_ok": false,
+    "note": "registered cap; fails the test as well",
+    "order_ok": false
+   },
+   "2000000": {
+    "fraction_ok": true,
+    "note": "passes trivially (compared with itself)",
+    "order_ok": true
+   },
+   "rule": "registered D6-ext fallback test: every qualifying body >= 85% of its 2M fitness and rank order kept",
+   "t_obstacle": 1500000
+  }
+ },
+ "git_commit": "5895934d8168b2d7f75902082846bd12d4dd1cea",
+ "inputs": {
+  "gates_report": "docs/campaign_prep/ext/A2_GATES_REPORT.md",
+  "gates_report_first_line": "GATE T: 1500000 | GATE R: PASS | GATE S: saving possible yes",
+  "gates_report_sha256": "5ac40f6f02061f57a135bcb22dd741d92692aff70e97e12c1e98551646ae3dba",
+  "preflight_record": "docs/campaign_prep/ext/EXT_DECISIONS.json",
+  "preflight_record_sha256": "930213b12778c4e161e604078d64420107ebc8d07a3180d36273c7b933f44bc9",
+  "preflight_run": "results/extension_preflight/ext-20261023",
+  "reference_campaign": {
+   "config_hash": "e50111cbefae4089462d81b33d79f38c1b97e302d3c8f63eed4f3fd052a55cd0",
+   "git_commit": "7774f76c1473815ece05c488ab34c91cf84b8020",
+   "id": "20260930T044002Z",
+   "path": "results/campaign/20260930T044002Z"
+  },
+  "t_obstacle": 1500000
+ },
+ "label": "PRODUCTION",
+ "reevaluation": {
+  "budget": "the task's own PPO budget",
+  "n_per_champion": 10,
+  "seed_base": 20261101,
+  "trainings": {
+   "reeval:ObstacleTraverser-v1:s0-4": 150,
+   "reeval:ObstacleTraverser-v1:s5-9": 150,
+   "reeval:UpStepper-v0:s0-9": 300,
+   "reeval:Walker-v0:s0-9": 300
+  }
+ },
+ "robustness": {
+  "budgets": {
+   "ObstacleTraverser-v1": 3000000,
+   "UpStepper-v0": 2400000,
+   "Walker-v0": 2000000
+  },
+  "factor": 2,
+  "n_per_champion": 3,
+  "order": [
+   "ObstacleTraverser-v1",
+   "UpStepper-v0",
+   "Walker-v0"
+  ],
+  "seed_base": 20261201,
+  "trainings": 270
+ },
+ "seeds": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9
+ ],
+ "shared": {
+  "eval_budget": 300,
+  "offspring_size": 15,
+  "population_size": 15,
+  "ppo_seed_aggregation": "max"
+ },
+ "status": "FINAL",
+ "task_order": [
+  "ObstacleTraverser-v1",
+  "UpStepper-v0",
+  "Walker-v0"
+ ],
+ "tasks": {
+  "ObstacleTraverser-v1": {
+   "d6_ext_knee_timesteps": 600000,
+   "ppo_seeds": 1,
+   "ppo_seeds_source": "D16-ext (preflight record): max-of-2 reduced the noise ratio from 3.0 to 1.87, i.e. 38% < 50%, so K = 1",
+   "ppo_timesteps": 1500000,
+   "ppo_timesteps_source": "Gate T (A2_GATES_REPORT.md): the registered D6-ext fallback test failed at 1.0M and 1.2M, so the registered cap 1.5M applies"
+  },
+  "UpStepper-v0": {
+   "ppo_seeds": 2,
+   "ppo_seeds_source": "original campaign per-run configs, unchanged",
+   "ppo_timesteps": 1200000,
+   "ppo_timesteps_source": "original campaign per-run configs, unchanged (seeds 5-9 pool with seeds 0-4)"
+  },
+  "Walker-v0": {
+   "ppo_seeds": 1,
+   "ppo_seeds_source": "original campaign per-run configs, unchanged",
+   "ppo_timesteps": 1000000,
+   "ppo_timesteps_source": "original campaign per-run configs, unchanged (seeds 5-9 pool with seeds 0-4)"
+  }
+ }
+}
