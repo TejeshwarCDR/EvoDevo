@@ -1,0 +1,246 @@
+{
+ "backtest": {
+  "actual_upstepper_h": 388.88478739228515,
+  "actual_walker_h": 173.1823365686337,
+  "predicted_upstepper_h": 419.97840975126724,
+  "relative_error": 0.07995587219413802
+ },
+ "design": {
+  "tasks": {
+   "CaveCrawler-v0": {
+    "arms": [
+     "direct",
+     "nca",
+     "rule_based"
+    ],
+    "eval_budget": 300,
+    "population_size": 15,
+    "ppo_seeds": 1,
+    "ppo_timesteps": 500000,
+    "seeds": [
+     0,
+     1,
+     2,
+     3,
+     4
+    ]
+   },
+   "Climber-v0": {
+    "arms": [
+     "direct",
+     "nca",
+     "rule_based"
+    ],
+    "eval_budget": 300,
+    "population_size": 15,
+    "ppo_seeds": 1,
+    "ppo_timesteps": 1200000,
+    "seeds": [
+     0,
+     1,
+     2,
+     3,
+     4
+    ]
+   },
+   "ObstacleTraverser-v1": {
+    "arms": [
+     "direct",
+     "nca",
+     "rule_based"
+    ],
+    "eval_budget": 300,
+    "population_size": 15,
+    "ppo_seeds": 1,
+    "ppo_timesteps": 600000,
+    "seeds": [
+     0,
+     1,
+     2,
+     3,
+     4
+    ]
+   }
+  }
+ },
+ "disk": {
+  "bytes_per_training": 315200.6437774746,
+  "three_x_total_bytes": 8689136147.013641,
+  "total_bytes": 2896378715.671214
+ },
+ "format": "evodevo-estimate-v2",
+ "guard": {
+  "outcome": "over_guard_proceed_with_later_completion",
+  "threshold_h": 360.0
+ },
+ "inputs": {
+  "assumed_e_over_p": 2.3172,
+  "core_arm_busy_share": 0.6909838038128308,
+  "cost_ratios": {
+   "CaveCrawler-v0": {
+    "bodies": [
+     "direct:evolved",
+     "direct:random",
+     "nca:evolved",
+     "nca:random",
+     "rule_based:evolved",
+     "rule_based:random"
+    ],
+    "measured_timesteps": 500000,
+    "ratio": 0.9147110616044821
+   },
+   "Climber-v0": {
+    "bodies": [
+     "direct:evolved",
+     "direct:random",
+     "nca:evolved",
+     "nca:random",
+     "rule_based:evolved",
+     "rule_based:random"
+    ],
+    "measured_timesteps": 1500000,
+    "ratio": 2.5816139489382843
+   },
+   "ObstacleTraverser-v1": {
+    "bodies": [
+     "direct:evolved",
+     "direct:random",
+     "nca:evolved",
+     "nca:random",
+     "rule_based:evolved",
+     "rule_based:random"
+    ],
+    "measured_timesteps": 600000,
+    "ratio": 1.088637129778955
+   },
+   "UpStepper-v0": {
+    "bodies": [
+     "direct:evolved",
+     "direct:random",
+     "nca:evolved",
+     "nca:random",
+     "rule_based:evolved",
+     "rule_based:random"
+    ],
+    "measured_timesteps": 1200000,
+    "ratio": 1.2125324616602169
+   }
+  },
+  "observed_e_over_p": 2.143543554146445,
+  "reference": {
+   "busy_s": {
+    "direct|UpStepper-v0": 2273452.9546985626,
+    "direct|Walker-v0": 1029521.617351532,
+    "nca|UpStepper-v0": 7465946.90672946,
+    "nca|Walker-v0": 3315228.04950428,
+    "rule_based_monotone|UpStepper-v0": 7837205.703408241,
+    "rule_based_monotone|Walker-v0": 3460972.1941633224,
+    "rule_based|UpStepper-v0": 7588231.75578928,
+    "rule_based|Walker-v0": 3394248.356940031
+   },
+   "bytes_per_training": 315200.6437774746,
+   "campaign": "results/campaign/20260930T044002Z",
+   "campaign_id": "20260930T044002Z",
+   "git_commit": "7774f76c1473815ece05c488ab34c91cf84b8020",
+   "phases": {
+    "UpStepper-v0": {
+     "makespan_s": 1399985.2346122265,
+     "worker_busy_s": 25164841.116743088,
+     "worker_count": 18,
+     "worker_utilization": 0.9986153383218973
+    },
+    "Walker-v0": {
+     "makespan_s": 623456.4116470814,
+     "worker_busy_s": 11199972.133859396,
+     "worker_count": 18,
+     "worker_utilization": 0.9980179247166342
+    }
+   },
+   "run_bytes": 4158757294,
+   "trainings": {
+    "direct|UpStepper-v0": 814,
+    "direct|Walker-v0": 420,
+    "nca|UpStepper-v0": 2566,
+    "nca|Walker-v0": 1289,
+    "rule_based_monotone|UpStepper-v0": 2730,
+    "rule_based_monotone|Walker-v0": 1369,
+    "rule_based|UpStepper-v0": 2652,
+    "rule_based|Walker-v0": 1354
+   }
+  },
+  "t_ppo_footing": "P-core-equivalent seconds from B5x (E-core samples / 2.3172)",
+  "t_ppo_mean_sd_at_b3_footing": {
+   "direct|CaveCrawler-v0": [
+    1368.636085454734,
+    89.95132093686094
+   ],
+   "direct|Climber-v0": [
+    3090.1911281427256,
+    117.96523123052701
+   ],
+   "direct|ObstacleTraverser-v1": [
+    1628.872900222556,
+    42.85179458984809
+   ],
+   "nca|CaveCrawler-v0": [
+    1368.636085454734,
+    89.95132093686094
+   ],
+   "nca|Climber-v0": [
+    3090.1911281427256,
+    117.96523123052701
+   ],
+   "nca|ObstacleTraverser-v1": [
+    1628.872900222556,
+    42.85179458984809
+   ],
+   "rule_based|CaveCrawler-v0": [
+    1368.636085454734,
+    89.95132093686094
+   ],
+   "rule_based|Climber-v0": [
+    3090.1911281427256,
+    117.96523123052701
+   ],
+   "rule_based|ObstacleTraverser-v1": [
+    1628.872900222556,
+    42.85179458984809
+   ]
+  },
+  "walker_all_arm_busy_s": 11199970.217959166,
+  "walker_core_arm_busy_s": 7738998.023795843,
+  "walker_makespan_h": 173.1823365686337,
+  "walker_utilization": 0.9980179247166342
+ },
+ "method": "realised-phase scaling (original campaign Walker-v0, same 3 arms) x measured cost ratio x K",
+ "result": {
+  "phase_h": {
+   "CaveCrawler-v0": {
+    "mean": 109.45998739613785,
+    "p5": 98.51398865652406,
+    "p95": 120.40598613575165
+   },
+   "Climber-v0": {
+    "mean": 247.1455235858218,
+    "p5": 222.4309712272396,
+    "p95": 271.860075944404
+   },
+   "ObstacleTraverser-v1": {
+    "mean": 130.27305725979886,
+    "p5": 117.24575153381898,
+    "p95": 143.30036298577875
+   }
+  },
+  "task_order": [
+   "ObstacleTraverser-v1",
+   "Climber-v0",
+   "CaveCrawler-v0"
+  ],
+  "total_h": {
+   "mean": 486.87856824175856,
+   "p5": 438.1907114175827,
+   "p95": 535.5664250659344
+  }
+ },
+ "workers": 18
+}
