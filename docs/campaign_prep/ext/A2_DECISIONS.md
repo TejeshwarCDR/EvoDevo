@@ -1,6 +1,6 @@
 # Amendment 2 decisions (PRODUCTION)
 
-Derived 2026-10-24T20:00:25+00:00 at commit `5895934d8168b2d7f75902082846bd12d4dd1cea` from preflight run `results/extension_preflight/ext-20261023`, T_obstacle = 1,500,000 (Gate T), calibrated on campaign `20260930T044002Z`. Gate line: `GATE T: 1500000 | GATE R: PASS | GATE S: saving possible yes`. Rules: [PREREGISTRATION_EXT.md](PREREGISTRATION_EXT.md), Amendment 2.
+Derived 2026-10-24T20:09:29+00:00 at commit `94026ae145cd7cb45436acf57675bc8032e07112` from preflight run `results/extension_preflight/ext-20261023`, T_obstacle = 1,500,000 (Gate T), calibrated on campaign `20260930T044002Z`. Gate line: `GATE T: 1500000 | GATE R: PASS | GATE S: saving possible yes`. Rules: [PREREGISTRATION_EXT.md](PREREGISTRATION_EXT.md), Amendment 2.
 
 | Task | ppo_timesteps | K | source of ppo_timesteps |
 |---|---:|---:|---|
@@ -41,3 +41,8 @@ Re-evaluation: 10 trainings per champion, PPO seeds `ppo_seed(20261101, k)`, k =
 - Gates report `docs/campaign_prep/ext/A2_GATES_REPORT.md` sha256 `5ac40f6f02061f57a135bcb22dd741d92692aff70e97e12c1e98551646ae3dba`
 - Preflight record `docs/campaign_prep/ext/EXT_DECISIONS.json` sha256 `930213b12778c4e161e604078d64420107ebc8d07a3180d36273c7b933f44bc9` (superseded; evidence only)
 - Original campaign `results/campaign/20260930T044002Z` commit `7774f76c1473815ece05c488ab34c91cf84b8020` config hash `e50111cbefae4089462d81b33d79f38c1b97e302d3c8f63eed4f3fd052a55cd0`
+
+## Integrity (any edit of the two JSON files changes this report; `amend2 check` refuses it)
+
+- `A2_DECISIONS.json` sha256 `5f18e2528ab488d2e6eb5cec582a4692ca3a5185733b3d441b0a547d0a53cf68`
+- `final_estimate_a2.json` sha256 `7e5183137887874503ed444f19433c00fc9492ce19088cdb482f021020ae8193`

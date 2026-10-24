@@ -327,7 +327,7 @@
    }
   ]
  },
- "derived_at": "2026-10-24T20:00:25+00:00",
+ "derived_at": "2026-10-24T20:09:29+00:00",
  "format": "evodevo-a2-decisions-v1",
  "gates": {
   "R": {
@@ -361,7 +361,7 @@
    "t_obstacle": 1500000
   }
  },
- "git_commit": "5895934d8168b2d7f75902082846bd12d4dd1cea",
+ "git_commit": "94026ae145cd7cb45436acf57675bc8032e07112",
  "inputs": {
   "gates_report": "docs/campaign_prep/ext/A2_GATES_REPORT.md",
   "gates_report_first_line": "GATE T: 1500000 | GATE R: PASS | GATE S: saving possible yes",
