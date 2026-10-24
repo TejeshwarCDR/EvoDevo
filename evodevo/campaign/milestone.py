@@ -14,6 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
+from . import units as unit_keys
 from evodevo.analysis.aggregate import per_seed_finals, three_way_table
 from evodevo.analysis.budget_curves import plot_two_panel_comparison
 from evodevo.morphology.metrics import body_metrics
@@ -274,22 +275,41 @@ def _secondary_tables(data, output, finals, status, fraction):
 
 
 def build(campaign_root, task, *, snapshot=False, timestamp=None):
+    """Milestone package for a phase. ``task`` is the phase's status key: the
+    task name for a legacy plan, a phase id ("UpStepper-v0:s5-9") for an
+    Amendment 2 plan, whose re-training stages build their own packages."""
     # EvoGym's rendering path can change cwd as a side effect; every package
     # path must be absolute before the visualisation gate is exercised.
     root = Path(campaign_root).resolve()
-    runs = _run_dirs(root, task)
+    manifest = json.loads((root / "manifest.json").read_text()) if (root / "manifest.json").exists() else {}
+    plan = manifest.get("plan", {})
+    unit = unit_keys.unit_by_key(plan, task) if plan.get("amendment2") else None
+    if plan.get("amendment2") and (unit is None or unit["kind"] != unit_keys.PHASE):
+        from . import a2_report
+        return a2_report.build(root, task, manifest, snapshot=snapshot, timestamp=timestamp)
+    key = task
+    sources = None
+    if unit is not None:
+        from . import a2_report
+        sources = a2_report.phase_sources(root, plan, key)
+        task = unit["task"]
+        runs = [directory for directory, _provenance in sources["runs"]]
+    else:
+        runs = _run_dirs(root, task)
     if not runs:
         raise RuntimeError(f"no run logs for {task} under {root}")
+    name = unit_keys.slug(key)
     if snapshot:
         label = timestamp or time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
         output = root / "milestones" / "snapshots" / label
     else:
-        output = root / "milestones" / task
+        output = root / "milestones" / name
     output.mkdir(parents=True, exist_ok=True)
     # The existing analysis reader expects run_meta.json; scheduler records
     # are sufficient for this package even if metadata has not yet landed.
     frames = []
     import pandas as pd
+    provenance_of = dict(sources["runs"]) if sources else {}
     for directory in runs:
         records = [json.loads(line) for line in (directory / "run_log.jsonl").read_text().splitlines() if line]
         if not records:
@@ -298,19 +318,27 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
         frame["encoder"] = directory.parents[1].name
         frame["task"] = task
         frame["seed"] = int(directory.name.removeprefix("seed_"))
+        if sources:
+            frame["provenance"] = provenance_of[directory]["label"]
         frames.append(frame)
     if not frames:
         raise RuntimeError("run logs contain no evaluations")
     data = pd.concat(frames, ignore_index=True)
-    manifest = json.loads((root / "manifest.json").read_text()) if (root / "manifest.json").exists() else {}
-    planned = sum(int(r["config"]["eval_budget"]) for p in manifest.get("plan", {}).get("phases", [])
-                  if p["task"] == task for r in p["runs"])
+    if sources:
+        planned = sources["planned"]
+    else:
+        planned = sum(int(r["config"]["eval_budget"]) for p in manifest.get("plan", {}).get("phases", [])
+                      if p["task"] == task for r in p["runs"])
     fraction = len(data) / planned if planned else None
     status = "PARTIAL" if snapshot or fraction is None or fraction < 1 else "COMPLETE"
+    if status == "COMPLETE" and sources and sources["label"] == "INTERIM":
+        status = "INTERIM"
     # Validation runs carry an artifact stamp (e.g. "VALIDATION - NOT A
     # RESULT") into every title, the report, the tables and a STAMP.txt.
     stamp = manifest.get("artifact_stamp")
     mark = f" — {stamp}" if stamp else ""
+    if status == "INTERIM":
+        mark += f" — INTERIM ({sources['seed_summary']})"
     if stamp:
         _atomic_text(output / "STAMP.txt", stamp + "\n")
     for (_, _), indices in data.groupby(["encoder", "seed"]).groups.items():
@@ -332,6 +360,21 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
         fields += ["status", "completion_fraction", "n_a", "n_b"]
     _csv(output / "stats/pairwise.csv", pairwise, fields)
     contrast = [r for r in pairwise if {r["arm_a"], r["arm_b"]} == {"rule_based", "rule_based_monotone"}]
+    if sources and sources["contrast_runs"]:
+        # The monotone arm only ever ran at the original seeds 0-4, so the
+        # contrast uses rule_based and rule_based_monotone at those seeds alone.
+        contrast_frames = []
+        for directory, _provenance in sources["contrast_runs"]:
+            frame = pd.DataFrame([json.loads(line) for line in (directory / "run_log.jsonl").read_text().splitlines()
+                                  if line])
+            frame["encoder"] = directory.parents[1].name
+            frame["seed"] = int(directory.name.removeprefix("seed_"))
+            contrast_frames.append(frame)
+        contrast_finals = per_seed_finals(pd.concat(contrast_frames, ignore_index=True))
+        _omnibus, contrast_pairs = _stats(contrast_finals)
+        contrast = [{**r, "seeds": "original campaign seeds 0-4 only"}
+                    for r in contrast_pairs if {r["arm_a"], r["arm_b"]} == {"rule_based", "rule_based_monotone"}]
+        fields = fields + ["seeds"] if "seeds" not in fields else fields
     _csv(output / "stats/rule_based_vs_monotone.csv", contrast, fields)
     summary = three_way_table(data)
     if status == "PARTIAL":
@@ -350,6 +393,9 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
     _atomic_text(output / "stats/tables.md", (f"**{stamp}**\n\n" if stamp else "") + markdown + "\n")
     _atomic_text(output / "stats/tables.tex", primary.to_latex(index=False))
     generation_rows = _secondary_tables(data, output, finals, status, fraction)
+    if sources:
+        from . import a2_report
+        a2_report.write_provenance_tables(data, output, sources)
     floor_rows = floor_effect_rows(data, finals, task) if task not in ORIGINAL_TASKS else []
     if floor_rows:
         _csv(output / "stats/floor_effect_check.csv", floor_rows, list(floor_rows[0]))
@@ -468,13 +514,17 @@ def build(campaign_root, task, *, snapshot=False, timestamp=None):
         _csv(output / sensitivity_paths[2], mean_pairwise, fields)
         pd.DataFrame(_primary_summary(per_seed_finals(changed), status, fraction)).to_csv(
             output / sensitivity_paths[3], index=False)
-    report = (f"# {task} milestone report\n\n"
+    heading = f"{task} ({key})" if sources else task
+    report = (f"# {heading} milestone report\n\n"
               f"Status: {status}. Completion: {len(data)}/{planned or '?'} evaluations"
               f" ({fraction:.1%} of plan).\n\n" if fraction is not None else
-              f"# {task} milestone report\n\nStatus: {status}. Completion: {len(data)} evaluations; plan unavailable.\n\n")
+              f"# {heading} milestone report\n\nStatus: {status}. Completion: {len(data)} evaluations; plan unavailable.\n\n")
     if status == "PARTIAL":
         report += ("PARTIAL — monitoring and drafting only; do not cite without a completeness check. "
                    "Every table has n per arm or run and a completion-fraction column.\n\n")
+    if sources:
+        from . import a2_report
+        report += a2_report.provenance_paragraph(sources, status)
     report += ("The primary table contains median and IQR of final best-so-far fitness "
                "per independent run; its n_seeds column reports the available replicates. "
                "Kruskal-Wallis tests the arm distributions; pairwise Mann-Whitney U p-values "
@@ -541,13 +591,25 @@ def run_subprocess(campaign_root, task, alert_manager=None, *, snapshot=False):
         if alert_manager:
             alert_manager.milestone_failure(task, ["subprocess launch"], error)
         return {"ok": False, "missing": ["subprocess launch"], "error": error}
-    output = Path(campaign_root) / "milestones" / task
+    try:
+        manifest = json.loads((Path(campaign_root) / "manifest.json").read_text())
+    except (OSError, ValueError):
+        manifest = {}
+    plan = manifest.get("plan", {})
+    unit = unit_keys.unit_by_key(plan, task) if plan.get("amendment2") else None
+    stage_package = bool(plan.get("amendment2")) and (unit is None or unit["kind"] != unit_keys.PHASE)
+    output = Path(campaign_root) / "milestones" / unit_keys.slug(task)
     if snapshot and completed.returncode == 0:
         try:
             output = Path(json.loads(completed.stdout)["output"])
         except (ValueError, KeyError, TypeError):
             pass
-    missing = [name for name in REQUIRED if not (output / name).is_file()]
+    if stage_package:
+        from . import a2_report
+        required = a2_report.required_files(task)
+    else:
+        required = REQUIRED
+    missing = [name for name in required if not (output / name).is_file()]
     package_path = output / "package_manifest.json"
     package = None
     if not package_path.is_file():
@@ -560,14 +622,20 @@ def run_subprocess(campaign_root, task, alert_manager=None, *, snapshot=False):
             missing += [name for name in package.get("files", []) if not (output / name).is_file()]
         except (OSError, ValueError, TypeError):
             missing.append("valid package_manifest.json")
-    for arm in {directory.parents[1].name for directory in _run_dirs(Path(campaign_root), task)}:
+    if stage_package:
+        arms = set()
+        k_seeds = 1
+    else:
+        if unit is not None:
+            from . import a2_report
+            arms = {directory.parents[1].name
+                    for directory, _p in a2_report.phase_sources(Path(campaign_root), plan, task)["runs"]}
+        else:
+            arms = {directory.parents[1].name for directory in _run_dirs(Path(campaign_root), task)}
+        k_seeds = phase_ppo_seeds(manifest, unit["task"] if unit is not None else task)
+    for arm in arms:
         missing += [name for name in (f"best_bodies/{arm}.npz", f"best_bodies/{arm}.png")
                     if not (output / name).is_file()]
-    try:
-        manifest = json.loads((Path(campaign_root) / "manifest.json").read_text())
-    except (OSError, ValueError):
-        manifest = {}
-    k_seeds = phase_ppo_seeds(manifest, task)
     if k_seeds > 1:
         missing += [name for name in sensitivity_files(k_seeds) if not (output / name).is_file()]
     if completed.returncode or missing:

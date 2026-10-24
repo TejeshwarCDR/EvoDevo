@@ -1,0 +1,247 @@
+{
+ "a2": {
+  "p95_ecore_s": {
+   "ObstacleTraverser-v1:s0": 225.0,
+   "ObstacleTraverser-v1:s1": 225.0,
+   "UpStepper-v0:s5": 225.0,
+   "Walker-v0:s5": 225.0,
+   "reeval:ObstacleTraverser-v1:s0": 225.0,
+   "reeval:ObstacleTraverser-v1:s1": 225.0,
+   "reeval:UpStepper-v0:s0-5": 225.0,
+   "reeval:Walker-v0:s0-5": 225.0,
+   "robustness:ObstacleTraverser-v1": 225.0,
+   "robustness:UpStepper-v0": 225.0,
+   "robustness:Walker-v0": 225.0
+  },
+  "timeout_s": {
+   "ObstacleTraverser-v1:s0": 900.0,
+   "ObstacleTraverser-v1:s1": 900.0,
+   "UpStepper-v0:s5": 900.0,
+   "Walker-v0:s5": 900.0,
+   "reeval:ObstacleTraverser-v1:s0": 900.0,
+   "reeval:ObstacleTraverser-v1:s1": 900.0,
+   "reeval:UpStepper-v0:s0-5": 900.0,
+   "reeval:Walker-v0:s0-5": 900.0,
+   "robustness:ObstacleTraverser-v1": 900.0,
+   "robustness:UpStepper-v0": 900.0,
+   "robustness:Walker-v0": 900.0
+  }
+ },
+ "design": {
+  "units": {
+   "ObstacleTraverser-v1:s0": {
+    "arms": [
+     "direct",
+     "nca",
+     "rule_based"
+    ],
+    "eval_budget": 30,
+    "population_size": 15,
+    "ppo_seeds": 1,
+    "ppo_timesteps": 2048,
+    "seeds": [
+     0
+    ]
+   },
+   "ObstacleTraverser-v1:s1": {
+    "arms": [
+     "direct",
+     "nca",
+     "rule_based"
+    ],
+    "eval_budget": 30,
+    "population_size": 15,
+    "ppo_seeds": 1,
+    "ppo_timesteps": 2048,
+    "seeds": [
+     1
+    ]
+   },
+   "UpStepper-v0:s5": {
+    "arms": [
+     "direct",
+     "nca",
+     "rule_based"
+    ],
+    "eval_budget": 30,
+    "population_size": 15,
+    "ppo_seeds": 2,
+    "ppo_timesteps": 2048,
+    "seeds": [
+     5
+    ]
+   },
+   "Walker-v0:s5": {
+    "arms": [
+     "direct",
+     "nca",
+     "rule_based"
+    ],
+    "eval_budget": 30,
+    "population_size": 15,
+    "ppo_seeds": 1,
+    "ppo_timesteps": 2048,
+    "seeds": [
+     5
+    ]
+   },
+   "reeval:ObstacleTraverser-v1:s0": {
+    "budget": 2048,
+    "n": 2
+   },
+   "reeval:ObstacleTraverser-v1:s1": {
+    "budget": 2048,
+    "n": 2
+   },
+   "reeval:UpStepper-v0:s0-5": {
+    "budget": 2048,
+    "n": 2
+   },
+   "reeval:Walker-v0:s0-5": {
+    "budget": 2048,
+    "n": 2
+   },
+   "robustness:ObstacleTraverser-v1": {
+    "budget": 4096,
+    "n": 2
+   },
+   "robustness:UpStepper-v0": {
+    "budget": 4096,
+    "n": 2
+   },
+   "robustness:Walker-v0": {
+    "budget": 4096,
+    "n": 2
+   }
+  }
+ },
+ "disk": {
+  "three_x_total_bytes": 3000000000.0,
+  "total_bytes": 1000000000.0
+ },
+ "format": "evodevo-estimate-v2",
+ "guard": {
+  "applies": false,
+  "outcome": "TEST rehearsal: no guard"
+ },
+ "inputs": {
+  "t_ppo_mean_sd_at_b3_footing": {
+   "direct|ObstacleTraverser-v1": [
+    60.0,
+    10.0
+   ],
+   "direct|UpStepper-v0": [
+    60.0,
+    10.0
+   ],
+   "direct|Walker-v0": [
+    60.0,
+    10.0
+   ],
+   "nca|ObstacleTraverser-v1": [
+    60.0,
+    10.0
+   ],
+   "nca|UpStepper-v0": [
+    60.0,
+    10.0
+   ],
+   "nca|Walker-v0": [
+    60.0,
+    10.0
+   ],
+   "rule_based|ObstacleTraverser-v1": [
+    60.0,
+    10.0
+   ],
+   "rule_based|UpStepper-v0": [
+    60.0,
+    10.0
+   ],
+   "rule_based|Walker-v0": [
+    60.0,
+    10.0
+   ]
+  }
+ },
+ "label": "TEST - synthetic bands for the Amendment 2 rehearsal; never a scientific estimate",
+ "method": "synthetic",
+ "result": {
+  "phase_h": {
+   "ObstacleTraverser-v1:s0": {
+    "mean": 0.1,
+    "p5": 0.05,
+    "p95": 0.2
+   },
+   "ObstacleTraverser-v1:s1": {
+    "mean": 0.1,
+    "p5": 0.05,
+    "p95": 0.2
+   },
+   "UpStepper-v0:s5": {
+    "mean": 0.1,
+    "p5": 0.05,
+    "p95": 0.2
+   },
+   "Walker-v0:s5": {
+    "mean": 0.1,
+    "p5": 0.05,
+    "p95": 0.2
+   },
+   "reeval:ObstacleTraverser-v1:s0": {
+    "mean": 0.1,
+    "p5": 0.05,
+    "p95": 0.2
+   },
+   "reeval:ObstacleTraverser-v1:s1": {
+    "mean": 0.1,
+    "p5": 0.05,
+    "p95": 0.2
+   },
+   "reeval:UpStepper-v0:s0-5": {
+    "mean": 0.1,
+    "p5": 0.05,
+    "p95": 0.2
+   },
+   "reeval:Walker-v0:s0-5": {
+    "mean": 0.1,
+    "p5": 0.05,
+    "p95": 0.2
+   },
+   "robustness:ObstacleTraverser-v1": {
+    "mean": 0.1,
+    "p5": 0.05,
+    "p95": 0.2
+   },
+   "robustness:UpStepper-v0": {
+    "mean": 0.1,
+    "p5": 0.05,
+    "p95": 0.2
+   },
+   "robustness:Walker-v0": {
+    "mean": 0.1,
+    "p5": 0.05,
+    "p95": 0.2
+   }
+  },
+  "task_order": [
+   "ObstacleTraverser-v1:s0",
+   "reeval:ObstacleTraverser-v1:s0",
+   "ObstacleTraverser-v1:s1",
+   "reeval:ObstacleTraverser-v1:s1",
+   "UpStepper-v0:s5",
+   "reeval:UpStepper-v0:s0-5",
+   "Walker-v0:s5",
+   "reeval:Walker-v0:s0-5",
+   "robustness:ObstacleTraverser-v1",
+   "robustness:UpStepper-v0",
+   "robustness:Walker-v0"
+  ],
+  "total_h": {
+   "mean": 1.1,
+   "p5": 0.55,
+   "p95": 2.2
+  }
+ },
+ "workers": 18
+}

@@ -86,6 +86,8 @@ def total_band(estimate: dict) -> dict:
 
 
 def guard_threshold_h(estimate: dict) -> float:
+    if is_v2(estimate) and estimate.get("guard", {}).get("applies") is False:
+        return float("inf")  # Amendment 2 (k): no cost guard
     if is_v2(estimate):
         return float(estimate.get("guard", {}).get("threshold_h", LEGACY_GUARD_H))
     return LEGACY_GUARD_H
@@ -98,3 +100,13 @@ def slowest_ecore_p95_s(estimate: dict, task: str) -> float:
     if not values:
         raise ValueError(f"no measured t_PPO prior for {task}")
     return max(values) * E_CORE_FACTOR
+
+
+def unit_p95_ecore_s(estimate: dict, key: str) -> float:
+    """Slowest-E-core p95 PPO-task duration for a status key. An Amendment 2
+    estimate states it per phase/stage in ``a2.p95_ecore_s`` (budget-scaled);
+    any other estimate is read per task as before."""
+    stated = (estimate.get("a2") or {}).get("p95_ecore_s", {}) if isinstance(estimate, dict) else {}
+    if key in stated:
+        return float(stated[key])
+    return slowest_ecore_p95_s(estimate, key)

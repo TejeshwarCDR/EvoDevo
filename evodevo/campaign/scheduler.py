@@ -43,7 +43,8 @@ from .alerts import AlertManager
 from .journal import ResultJournal
 from .milestone import run_subprocess
 from .mirror import sync
-from .plan import CampaignPlan
+from . import amend2
+from .plan import CampaignPlan, DecisionRecordError, PhasePlan
 from .production import PROFILE as PRODUCTION_CPU_PROFILE, WORKER_CPUS as PRODUCTION_WORKER_CPUS
 from .production import contract as production_contract
 from .production import placement as production_placement
@@ -227,7 +228,7 @@ class CampaignScheduler:
         max_inflight = 0
         journaled = self.journal.indexed()
         core = DispatchCore(self.affinity_plan.n_workers, self.prefetch)
-        core.begin_phase(phase.task, (ctx[0].run_key for ctx in active))
+        core.begin_phase(phase.key, (ctx[0].run_key for ctx in active))
         by_run = {ctx[0].run_key: ctx for ctx in active}
         generations = {}
         barriers = deque()
@@ -287,7 +288,7 @@ class CampaignScheduler:
                     if (rp.run_key, candidate.eval_index, k) not in journaled:
                         work.append(DispatchItem(
                             task_id=(task.run_key, task.eval_index, task.ppo_k),
-                            phase=phase.task, run_key=rp.run_key,
+                            phase=phase.key, run_key=rp.run_key,
                             generation=candidate.generation,
                             tie_key=(arm_order[rp.arm], rp.seed, candidate.eval_index, k),
                             payload=(task, h),
@@ -356,7 +357,7 @@ class CampaignScheduler:
                     if core.inflight_count > self.affinity_plan.n_workers:
                         prefetched_submissions += 1
                     max_inflight = max(max_inflight, core.inflight_count)
-            self._dispatch_status(core.inflight_count, core.ready_count, phase.task,
+            self._dispatch_status(core.inflight_count, core.ready_count, phase.key,
                                   {key: ctx[3].generation for key, ctx in by_run.items()
                                    if not ctx[3].done}, pool.worker_pids if pool is not None else ())
             wall_finished = time.time()
@@ -440,6 +441,7 @@ class CampaignScheduler:
         steady_span = max(0.0, steady_end - steady_start)
         phase_metrics = {
             "task": phase.task,
+            **({"phase_id": phase.phase_id} if phase.phase_id else {}),
             "status": "complete" if core.phase_complete else "stopped",
             "started_at": phase_started_at, "ended_at": phase_finished_at,
             "makespan_s": makespan, "worker_count": worker_count,
@@ -460,19 +462,47 @@ class CampaignScheduler:
             "prefetched_submissions": prefetched_submissions,
             "tasks_started_while_scheduler_busy": starts_during_busy,
         }
+        self._record_phase_metrics(phase.key, phase_metrics)
+        return core.phase_complete
+
+    def _record_phase_metrics(self, key, phase_metrics):
         metrics_path = os.path.join(self.root, "phase_metrics.json")
         all_metrics = {}
         if os.path.isfile(metrics_path):
             with open(metrics_path, encoding="utf-8") as handle:
                 all_metrics = json.load(handle)
-        all_metrics[phase.task] = phase_metrics
+        all_metrics[key] = phase_metrics
         temporary = metrics_path + ".tmp"
         with open(temporary, "w", encoding="utf-8") as handle:
             json.dump(all_metrics, handle, indent=2, sort_keys=True)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, metrics_path)
-        return core.phase_complete
+
+    def _core_kinds(self):
+        return {core.logical_id: core.kind for core in self.topology.cores}
+
+    def _run_stage(self, stage, pool, started_at):
+        """One Amendment 2 re-training stage on the same pinned worker pool."""
+        plan = self.plan.to_dict()
+        stage_dict = dataclasses.asdict(stage)
+
+        def progress(running, queued):
+            self._dispatch_status(running, queued, stage.stage_id)
+
+        metrics = amend2.run_stage(
+            self.root, self.campaign_id, json.loads(json.dumps(plan)), json.loads(json.dumps(stage_dict)), pool,
+            workers=self.affinity_plan.n_workers, prefetch=self.prefetch,
+            stop_requested=lambda: self.stop_requested, grace_s=self.grace_s,
+            core_kinds=self._core_kinds(), eval_episodes=self._eval_episodes(), on_progress=progress)
+        metrics = {"task": stage.task, "stage_id": stage.stage_id, **metrics}
+        self._record_phase_metrics(stage.stage_id, metrics)
+        return metrics["status"] == "complete"
+
+    def _eval_episodes(self):
+        for phase in self.plan.phases:
+            return int(phase.runs[0].config.get("ppo_eval_episodes", 1))
+        return 1
 
     def run(self):
         prior = self._read_manifest() if os.path.isfile(os.path.join(self.root, "manifest.json")) else {}
@@ -488,38 +518,9 @@ class CampaignScheduler:
         pool = (EvaluationPool(self.affinity_plan.n_workers, self.affinity_plan, "real", max_retries=2,
                                ignore_sigint=True) if self.mode in {"real", "validation"} else None)
         try:
-            for phase in self.plan.phases:  # D7 barrier: no phase interleaving.
-                if phase_status.get(phase.task, {}).get("status") == "complete":
-                    continue
-                phase_start = phase_status.get(phase.task, {}).get("started_at", time.time())
-                phase_status[phase.task] = {"status": "running", "started_at": phase_start}
-                self._manifest(phase=phase.task, phase_status=phase_status)
-                self._notification_status()
-                self.alerts.phase_started(phase.task)
-                active = [(rp, *self._make_run(rp)) for rp in phase.runs]
-                phase_complete = self._run_phase(active, pool, phase, outputs,
-                                                 phase_started_at=phase_start)
-                if not phase_complete:
-                    for _rp, _encoder, _config, run, logger, _directory in active:
-                        if not run.done:
-                            logger.close()
-                    self._manifest(status="stopped", stopped_at=time.time())
+            for unit in self.plan.units():  # D7 barrier: no phase interleaving.
+                if not self._execute_unit(unit, pool, phase_status, outputs):
                     break
-                phase_status[phase.task] = {"status": "complete", "started_at": phase_start,
-                                        "ended_at": time.time()}
-                self._manifest(status="running", phase=phase.task, phase_status=phase_status)
-            # Package generation is isolated in a subprocess.  A report bug
-            # cannot roll back completed EvolutionRun checkpoints or logs.
-                self._notification_status()
-                self.alerts.phase_complete(phase.task)
-                milestone = run_subprocess(self.root, phase.task, self.alerts)
-                self._manifest(milestone_status={**self._read_manifest().get("milestone_status", {}),
-                                             phase.task: milestone})
-                if self.mirror_dir:
-                    result = sync(self.root, self.mirror_dir, alert_manager=self.alerts,
-                                  location_policy={"allow_same_disk": self.allow_same_disk_mirror})
-                    if result["ok"]:
-                        self._manifest(last_mirror_success=result["timestamp"])
             if not self.stop_requested:
                 self._manifest(status="complete", ended_at=time.time())
                 snapshot, status = self._notification_status()
@@ -551,6 +552,49 @@ class CampaignScheduler:
             signal.signal(signal.SIGTERM, old_term)
         return outputs
 
+    def _execute_unit(self, unit, pool, phase_status, outputs) -> bool:
+        """Run one phase or stage to completion; False when it was stopped."""
+        is_phase = isinstance(unit, PhasePlan)
+        key = unit.key if is_phase else unit.stage_id
+        if phase_status.get(key, {}).get("status") == "complete":
+            return True
+        phase_start = phase_status.get(key, {}).get("started_at", time.time())
+        phase_status[key] = {"status": "running", "started_at": phase_start}
+        self._manifest(phase=key, phase_status=phase_status)
+        self._notification_status()
+        self.alerts.phase_started(key)
+        if is_phase:
+            active = [(rp, *self._make_run(rp)) for rp in unit.runs]
+            complete = self._run_phase(active, pool, unit, outputs, phase_started_at=phase_start)
+            if not complete:
+                for _rp, _encoder, _config, run, logger, _directory in active:
+                    if not run.done:
+                        logger.close()
+        else:
+            complete = self._run_stage(unit, pool, phase_start)
+        if not complete:
+            self._manifest(status="stopped", stopped_at=time.time())
+            return False
+        phase_status[key] = {"status": "complete", "started_at": phase_start, "ended_at": time.time()}
+        self._manifest(status="running", phase=key, phase_status=phase_status)
+        # Package generation is isolated in a subprocess.  A report bug
+        # cannot roll back completed EvolutionRun checkpoints or logs.
+        self._notification_status()
+        self.alerts.phase_complete(key)
+        packages = [key]
+        if not is_phase and unit.kind == "robustness" and unit.stage_id == self.plan.units()[-1].stage_id:
+            packages.append("robustness:all")  # the final task-budget-versus-2x package
+        for package in packages:
+            milestone = run_subprocess(self.root, package, self.alerts)
+            self._manifest(milestone_status={**self._read_manifest().get("milestone_status", {}),
+                                             package: milestone})
+        if self.mirror_dir:
+            result = sync(self.root, self.mirror_dir, alert_manager=self.alerts,
+                          location_policy={"allow_same_disk": self.allow_same_disk_mirror})
+            if result["ok"]:
+                self._manifest(last_mirror_success=result["timestamp"])
+        return True
+
     def _read_manifest(self):
         with open(os.path.join(self.root, "manifest.json"), encoding="utf-8") as handle:
             return json.load(handle)
@@ -568,7 +612,7 @@ class CampaignScheduler:
         phases = self.plan.phases
         arms = sorted({run.arm for phase in phases for run in phase.runs})
         seeds = sorted({run.seed for phase in phases for run in phase.runs})
-        plan = [{"task": phase.task, "K_per_task": phase.runs[0].config.get("eval_budget") if phase.runs else 0,
+        plan = [{"task": phase.key, "K_per_task": phase.runs[0].config.get("eval_budget") if phase.runs else 0,
                  "ppo_timesteps": phase.ppo_timesteps} for phase in phases]
         low, mean, high = status.eta_range
         def calendar(value): return value.isoformat() if value else None
@@ -611,11 +655,23 @@ def resume_command(args, campaign_id):
         command.append("--no-notify")
     if getattr(args, "allow_same_disk_mirror", False):
         command.append("--allow-same-disk-mirror")
+    if getattr(args, "skip_config_equality_check", False):
+        command.append("--skip-config-equality-check")
     if getattr(args, "stamp", None):
         command.extend(["--stamp", args.stamp])
     if getattr(args, "local_config", None):
         command.extend(["--local-config", args.local_config])
     return shlex.join(command)
+
+
+def _plan_from_config(parser, path):
+    """The plan a config builds, or a clean launcher refusal naming why not
+    (a superseded or inconsistent decision record, a missing estimate...)."""
+    from evodevo.experiments.benchmark import BenchmarkConfig
+    try:
+        return CampaignPlan.from_benchmark(BenchmarkConfig.from_yaml(path))
+    except DecisionRecordError as exc:
+        parser.error(f"refusing to start: {exc}")
 
 
 def cli_main(argv=None, prog="python -m evodevo.campaign"):
@@ -648,6 +704,10 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
                         help=argparse.SUPPRESS)
     parser.add_argument("--stamp", help="label stamped on every artifact, e.g. 'VALIDATION - NOT A RESULT' "
                         "(manifest, STAMP.txt, milestone figures/report/tables); never result-affecting")
+    parser.add_argument("--skip-config-equality-check", action="store_true",
+                        help="Amendment 2 rehearsals only: skip the check that Walker-v0/UpStepper-v0 runs use "
+                             "the original campaign's configs. Accepted only for a TEST-labelled config; "
+                             "a PRODUCTION config refuses it")
     parser.add_argument("--dry-run", action="store_true",
                         help="print the plan, calendar estimate, disk projection and every launch "
                              "check; write nothing, start nothing")
@@ -678,7 +738,7 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
     if args.dry_run:
         from evodevo.experiments.benchmark import BenchmarkConfig
         from .dry_run import render
-        plan = CampaignPlan.from_benchmark(BenchmarkConfig.from_yaml(args.config))
+        plan = _plan_from_config(parser, args.config)
         campaign_id = args.resume or args.campaign_id or time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
         print(render(args, plan, campaign_id), end="", flush=True)
         return 0
@@ -701,7 +761,7 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
             manifest = json.load(handle)
         plan = CampaignPlan.from_dict(manifest["plan"])
         from evodevo.experiments.benchmark import BenchmarkConfig
-        current = CampaignPlan.from_benchmark(BenchmarkConfig.from_yaml(args.config))
+        current = _plan_from_config(parser, args.config)
         if current.config_hash != plan.config_hash or current.config_hash != manifest.get("config_hash"):
             parser.error("campaign config-hash mismatch")
         requested_slots, requested_scheduler_cpus = cpu_placement(
@@ -718,7 +778,7 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
         if os.path.isfile(manifest_path):
             parser.error(f"campaign {campaign_id} already exists; use --resume {campaign_id}")
         from evodevo.experiments.benchmark import BenchmarkConfig
-        plan = CampaignPlan.from_benchmark(BenchmarkConfig.from_yaml(args.config))
+        plan = _plan_from_config(parser, args.config)
     from .plan import VALIDATION_STAMP
     validation_plan = plan.validation_profile is not None
     if validation_plan != (args.mode == "validation"):
@@ -729,6 +789,11 @@ def cli_main(argv=None, prog="python -m evodevo.campaign"):
     from .launch_checks import launch_refusals
     more, launch_record = launch_refusals(args)
     refusals += more
+    from evodevo.experiments.benchmark import BenchmarkConfig as _Benchmark
+    more, a2_record = amend2.launch_problems(args, _Benchmark.from_yaml(args.config), plan)
+    refusals += more
+    if a2_record:
+        launch_record["amendment2"] = a2_record
     if refusals:
         parser.error("refusing to start:\n  - " + "\n  - ".join(refusals))
     if args.check_only:

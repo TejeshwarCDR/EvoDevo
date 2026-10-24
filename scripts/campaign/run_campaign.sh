@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: scripts/campaign/run_campaign.sh [--resume ID|latest] [--campaign-id ID] [--config FILE] [--local-config FILE] [--output-root DIR] [--mirror-dir DIR|--no-mirror] [--workers N] [--cpu-profile thermal-validated|standard|e-cores] [--mode real|surrogate|validation] [--grace-s SEC] [--prefetch N] [--no-notify] [--allow-same-disk-mirror] [--wait-for-campaign] [--dry-run [--launch-at ISO]] [--stamp TEXT]"
+  echo "Usage: scripts/campaign/run_campaign.sh [--resume ID|latest] [--campaign-id ID] [--config FILE] [--local-config FILE] [--output-root DIR] [--mirror-dir DIR|--no-mirror] [--workers N] [--cpu-profile thermal-validated|standard|e-cores] [--mode real|surrogate|validation] [--grace-s SEC] [--prefetch N] [--no-notify] [--allow-same-disk-mirror] [--skip-config-equality-check] [--wait-for-campaign] [--dry-run [--launch-at ISO]] [--stamp TEXT]"
 }
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -23,6 +23,7 @@ GRACE_S=120
 PREFETCH=4
 NO_NOTIFY=0
 ALLOW_SAME_DISK=0
+SKIP_CONFIG_EQUALITY=0
 DRY_RUN=0
 LAUNCH_AT=""
 STAMP=""
@@ -46,6 +47,7 @@ while [[ $# -gt 0 ]]; do
     --prefetch) PREFETCH="$2"; shift 2 ;;
     --no-notify) NO_NOTIFY=1; shift ;;
     --allow-same-disk-mirror) ALLOW_SAME_DISK=1; shift ;;
+    --skip-config-equality-check) SKIP_CONFIG_EQUALITY=1; shift ;;
     --wait-for-campaign) WAIT_FOR_CAMPAIGN=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     --launch-at) LAUNCH_AT="$2"; shift 2 ;;
@@ -65,6 +67,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   if [[ "$NO_MIRROR" -eq 1 ]]; then DRY+=(--no-mirror); elif [[ -n "$MIRROR_DIR" ]]; then DRY+=(--mirror-dir "$MIRROR_DIR"); fi
   if [[ "$NO_NOTIFY" -eq 1 ]]; then DRY+=(--no-notify); fi
   if [[ "$ALLOW_SAME_DISK" -eq 1 ]]; then DRY+=(--allow-same-disk-mirror); fi
+  if [[ "$SKIP_CONFIG_EQUALITY" -eq 1 ]]; then DRY+=(--skip-config-equality-check); fi
   if [[ -n "$LAUNCH_AT" ]]; then DRY+=(--launch-at "$LAUNCH_AT"); fi
   exec "${DRY[@]}"
 fi
@@ -146,6 +149,7 @@ if [[ -n "$RESUME" ]]; then CMD+=(--resume "$RESUME"); else CMD+=(--campaign-id 
 if [[ "$NO_MIRROR" -eq 1 ]]; then CMD+=(--no-mirror); else CMD+=(--mirror-dir "$MIRROR_DIR"); fi
 if [[ "$NO_NOTIFY" -eq 1 ]]; then CMD+=(--no-notify); fi
 if [[ "$ALLOW_SAME_DISK" -eq 1 ]]; then CMD+=(--allow-same-disk-mirror); fi
+if [[ "$SKIP_CONFIG_EQUALITY" -eq 1 ]]; then CMD+=(--skip-config-equality-check); fi
 if [[ -n "$STAMP" ]]; then CMD+=(--stamp "$STAMP"); fi
 # Every refusal (dirty tree, config-hash mismatch on resume, notifier, mirror
 # disk) is decided by the Python entry point itself; run it here, before any

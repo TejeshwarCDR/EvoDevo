@@ -9,6 +9,7 @@ launch-refusal check's current status.
 """
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import json
 import os
@@ -114,13 +115,29 @@ def render(args, plan, campaign_id) -> str:
         seeds = sorted({run.seed for run in phase.runs})
         cfg = phase.runs[0].config
         total_runs += len(phase.runs)
-        out.append(f"  phase {index}: {phase.task}: {len(phase.runs)} runs = {len(arms)} arms x "
+        out.append(f"  phase {index}: {phase.key}: {len(phase.runs)} runs = {len(arms)} arms x "
                    f"{len(seeds)} seeds {seeds}; ppo_timesteps={phase.ppo_timesteps:,}; "
                    f"K (ppo_seeds)={phase.ppo_seeds} aggregation={phase.aggregation}; "
                    f"population={cfg['population_size']} offspring={cfg['offspring_size']} "
                    f"eval_budget={cfg['eval_budget']} genomes; PPO-task timeout={phase.timeout_s:.0f} s")
         out.append(f"           arms: {', '.join(arms)}")
     out.append(f"  total runs: {total_runs}")
+    if plan.stages:
+        from . import amend2
+        plan_dict = plan.to_dict()
+        out.append("  champion re-training stages, in strict order with the phases (sequence below):")
+        trainings = {"reeval": 0, "robustness": 0}
+        for stage in plan.stages:
+            count = amend2.planned_trainings(dataclasses.asdict(stage), json.loads(json.dumps(plan_dict)))
+            trainings[stage.kind] += count
+            out.append(f"    {stage.stage_id}: {count} trainings = {amend2.champion_count(dataclasses.asdict(stage), json.loads(json.dumps(plan_dict)))}"
+                       f" champions x {stage.n}, {stage.budget:,} PPO steps, PPO seeds ppo_seed({stage.seed_base}, k), "
+                       f"timeout {stage.timeout_s:.0f} s")
+        out.append(f"  re-evaluation trainings: {trainings['reeval']}; robustness trainings: {trainings['robustness']}")
+        out.append("  sequence: " + " -> ".join(plan.amendment2["sequence"]))
+        out.append(f"  label: {plan.amendment2['label']}; original campaign (read-only): "
+                   f"{plan.amendment2['original_campaign']['path']} (config hash "
+                   f"{plan.amendment2['original_campaign']['config_hash'][:12]}...)")
     out.append("")
 
     from evodevo.experiments.benchmark import BenchmarkConfig
@@ -180,9 +197,32 @@ def render(args, plan, campaign_id) -> str:
     return _render_tail(out, args, disk, applies or production_applies, DISK_ESTIMATE.relative_to(REPO_ROOT))
 
 
+def _design_matches_a2(plan, estimate) -> tuple[bool, str]:
+    design = estimate.get("design", {}).get("units", {})
+    for phase in plan.phases:
+        modelled = design.get(phase.key)
+        if modelled is None:
+            return False, f"{phase.key} is not in the estimate"
+        cfg = phase.runs[0].config
+        actual = dict(arms=sorted({run.arm for run in phase.runs}), seeds=sorted({run.seed for run in phase.runs}),
+                      ppo_timesteps=phase.ppo_timesteps, ppo_seeds=phase.ppo_seeds,
+                      population_size=cfg["population_size"], eval_budget=cfg["eval_budget"])
+        if {key: modelled.get(key) for key in actual} != actual:
+            return False, f"{phase.key}: plan {actual} != estimated design"
+    for stage in plan.stages:
+        modelled = design.get(stage.stage_id)
+        if modelled is None or (modelled.get("n"), modelled.get("budget")) != (stage.n, stage.budget):
+            return False, f"{stage.stage_id}: plan (n={stage.n}, budget={stage.budget}) != estimated design"
+    if list(plan.amendment2["sequence"]) != list(estimate.get("result", {}).get("task_order", [])):
+        return False, "unit order differs from the estimate"
+    return True, "plan matches the estimated design exactly"
+
+
 def _design_matches_v2(plan, estimate) -> tuple[bool, str]:
     """A v2 estimate states the exact design it modelled; refuse to show a
     calendar for any other plan."""
+    if plan.amendment2:
+        return _design_matches_a2(plan, estimate)
     design = estimate.get("design", {})
     for phase in plan.phases:
         modelled = design.get("tasks", {}).get(phase.task)
@@ -210,8 +250,11 @@ def _render_v2(out, args, plan, estimate, estimate_file):
         label = estimate_file.relative_to(REPO_ROOT)
     except ValueError:
         label = estimate_file
-    out.append(f"ESTIMATE ({label}; {estimate.get('method', 'v2 estimate')}; pre-registered guard: "
-               f"p95 <= {guard.get('threshold_h', float('nan')):.0f} h -> outcome: {guard.get('outcome', 'n/a')})")
+    if guard.get("applies") is False:
+        out.append(f"ESTIMATE ({label}; {estimate.get('method', 'v2 estimate')}; {guard.get('outcome', 'no guard')})")
+    else:
+        out.append(f"ESTIMATE ({label}; {estimate.get('method', 'v2 estimate')}; pre-registered guard: "
+                   f"p95 <= {guard.get('threshold_h', float('nan')):.0f} h -> outcome: {guard.get('outcome', 'n/a')})")
     if not applies:
         out.append(f"  NOT APPLICABLE to this plan ({why}); no calendar is shown.")
     elif estimate.get("workers") is not None and args.workers != estimate.get("workers"):
@@ -219,30 +262,38 @@ def _render_v2(out, args, plan, estimate, estimate_file):
                    "no calendar is shown.")
     else:
         total = result["total_h"]
+        verdict = ("informational, no guard" if guard.get("applies") is False else
+                   f"{'within' if total['p95'] <= guard.get('threshold_h', float('inf')) else 'OVER'} the guard")
         out.append(f"  total: mean {total['mean']:.1f} h, p5 {total['p5']:.1f} h, p95 {total['p95']:.1f} h "
-                   f"({'within' if total['p95'] <= guard.get('threshold_h', float('inf')) else 'OVER'} the guard)")
+                   f"({verdict})")
         elapsed = {"p5": 0.0, "mean": 0.0, "p95": 0.0}
         out.append(f"  CALENDAR from launch {_stamp(launch)} (local time)")
-        out.append(f"    {'':<30} {'p5':<22}{'mean':<22}p95")
+        out.append(f"    {'':<44} {'p5':<22}{'mean':<22}p95")
         for task in result["task_order"]:
             band = result["phase_h"][task]
             for q in elapsed:
                 elapsed[q] += band[q]
-            out.append(f"    {task + ' (' + format(band['mean'], '.1f') + ' h)':<30} "
+            out.append(f"    {task + ' (' + format(band['mean'], '.1f') + ' h)':<44} "
                        + "".join(f"{_stamp(launch + dt.timedelta(hours=elapsed[q])):<22}" for q in ("p5", "mean"))
                        + _stamp(launch + dt.timedelta(hours=elapsed['p95'])))
     out.append("")
     disk = estimate.get("disk") or {}
-    return _render_tail(out, args, disk, applies, label)
+    return _render_tail(out, args, disk, applies, label, plan)
 
 
-def _render_tail(out, args, disk, disk_applies, disk_label):
+def _render_tail(out, args, disk, disk_applies, disk_label, plan=None):
     from evodevo.campaign.launch_checks import launch_refusals
     from evodevo.campaign.scheduler import cpu_placement
     from evodevo.parallel.topology import detect_topology
     from evodevo.preflight.dirty_check import dirty_paths_outside_results
     dirty = dirty_paths_outside_results(str(REPO_ROOT))
     refusals, record = launch_refusals(args)
+    a2_record = {}
+    if plan is not None and plan.amendment2:
+        from evodevo.campaign import amend2
+        from evodevo.experiments.benchmark import BenchmarkConfig
+        more, a2_record = amend2.launch_problems(args, BenchmarkConfig.from_yaml(args.config), plan)
+        refusals = refusals + more
     if not disk:
         disk = {"total_bytes": float("nan"), "three_x_total_bytes": float("nan")}
     need = disk["three_x_total_bytes"] / 1e9
@@ -266,6 +317,10 @@ def _render_tail(out, args, disk, disk_applies, disk_label):
                    f"{mirror.get('results_disks')}; mirror {mirror.get('mirror_source')} (mounted at "
                    f"{mirror.get('mirror_mount')}) on disk(s) {mirror.get('mirror_disks')}; "
                    f"same physical disk: {mirror.get('same_physical_disk')}")
+    if a2_record:
+        out.append(f"AMENDMENT 2 CHECKS: label {a2_record['label']}; library versions vs the original campaign: "
+                   f"{a2_record['version_check']}; per-run config equality vs the original manifest: "
+                   f"{a2_record['config_equality']}")
     notifier = record["notifier"]
     out.append(f"NOTIFIER: {notifier['config_path']}: "
                + (f"configured ({', '.join(notifier['channels'])}); prove delivery with "

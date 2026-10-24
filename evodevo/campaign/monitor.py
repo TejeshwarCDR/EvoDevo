@@ -24,7 +24,7 @@ def slowest_ecore_p95_s(task, estimate_path=None):
     """
     from . import estimate as estimates
     data = json.loads(Path(estimate_path or estimates.LEGACY_ESTIMATE_PATH).read_text())
-    return estimates.slowest_ecore_p95_s(data, task)
+    return estimates.unit_p95_ecore_s(data, task)
 
 
 def monitor_once(root, alerts, *, now=None, p95_ecore_s=None, last_mirror=0,
@@ -53,7 +53,10 @@ def monitor_once(root, alerts, *, now=None, p95_ecore_s=None, last_mirror=0,
             # concurrent manifest rewrites from losing phase transitions.
             (Path(root) / "mirror_status.json").write_text(json.dumps(
                 {"last_success": now, "destination": result["destination"]}))
-    if now - last_snapshot >= SNAPSHOT_S and phase_state.get("status") == "running":
+    from . import units as unit_keys
+    running_unit = unit_keys.unit_by_key(manifest.get("plan", {}), snapshot["phase"])
+    is_phase_unit = running_unit is None or running_unit["kind"] == unit_keys.PHASE
+    if now - last_snapshot >= SNAPSHOT_S and phase_state.get("status") == "running" and is_phase_unit:
         outcome = run_subprocess(root, snapshot["phase"], alerts, snapshot=True)
         if outcome["ok"]:
             last_snapshot = now

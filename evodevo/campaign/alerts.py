@@ -33,7 +33,14 @@ DEFAULT_UTILIZATION_FLOOR = min(UTILIZATION_FLOOR.values())
 
 
 def utilization_floor(task):
-    return UTILIZATION_FLOOR.get(task, DEFAULT_UTILIZATION_FLOOR) if task else None
+    """Floor for a task or an Amendment 2 phase/stage id that names one
+    ("UpStepper-v0:s5-9", "reeval:Walker-v0:s0-9")."""
+    if not task:
+        return None
+    for name, floor in UTILIZATION_FLOOR.items():
+        if name in task:
+            return floor
+    return DEFAULT_UTILIZATION_FLOOR
 
 
 def format_display_message(name, details, status, *, label="alert"):

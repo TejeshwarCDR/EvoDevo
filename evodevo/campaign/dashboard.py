@@ -13,6 +13,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 import numpy as np
+from . import units as unit_keys
 from .status import CampaignStatus
 
 # Alias of the single definition; readers use ``estimate.LEGACY_ESTIMATE_PATH`` at call time.
@@ -64,6 +65,31 @@ def _rows(path):
             return [json.loads(line) for line in handle if line.strip()]
     except (OSError, ValueError):
         return []
+
+
+RETRAIN_FILES = ("reeval.jsonl", "robustness.jsonl")
+
+
+def _retrain_rows(root):
+    """Amendment 2 re-training rows (reeval.jsonl, robustness.jsonl), shaped
+    like journal rows so utilisation, throughput and the stall clock count them."""
+    out = []
+    for name in RETRAIN_FILES:
+        for row in _rows(os.path.join(root, name)):
+            out.append({"run_key": f"{row.get('arm')}/{row.get('task')}/seed_{row.get('seed')}",
+                        "stage": row.get("stage"), "completed_at": row.get("completed_at", 0),
+                        "result": {"started_at": row.get("started_at"), "finished_at": row.get("finished_at"),
+                                   "wall_clock_s": row.get("wall_time_s"), "cpu_ids": row.get("cpu_ids") or [],
+                                   "completed": row.get("completed", True),
+                                   "error": None if row.get("completed", True) else row.get("reason")}})
+    return out
+
+
+def _settled_stage_rows(root, stage_id):
+    from .amend2 import OUTPUT_FILES, latest_rows, settled
+    kind = stage_id.split(":", 1)[0]
+    path = os.path.join(root, OUTPUT_FILES[kind])
+    return sum(1 for key, row in latest_rows(path).items() if key[0] == stage_id and settled(row))
 
 
 def _prior(path=None):
@@ -164,12 +190,17 @@ def _measured_phase_eta(runs, task, logged, journaled, durations, worker_slots, 
 def collect(root: str, now: float | None = None, telemetry: dict | None = None) -> dict:
     now = time.time() if now is None else now
     manifest = _json(os.path.join(root, "manifest.json"), {})
-    phases = manifest.get("plan", {}).get("phases", [])
+    plan = manifest.get("plan", {})
+    phases = plan.get("phases", [])
     status = manifest.get("phase_status", {})
-    current = next((p for p in phases if status.get(p["task"], {}).get("status") != "complete"), None)
-    if current is None and phases:
-        current = phases[-1]
-    task = current["task"] if current else manifest.get("phase", "unknown")
+    units = unit_keys.plan_units(plan) if (phases or plan.get("stages")) else []
+    current_unit = next((u for u in units if status.get(u["key"], {}).get("status") != "complete"), None)
+    if current_unit is None and units:
+        current_unit = units[-1]
+    key = current_unit["key"] if current_unit else manifest.get("phase", "unknown")
+    task = current_unit["task"] if current_unit else key
+    stage = current_unit["stage"] if current_unit and unit_keys.is_stage(current_unit) else None
+    current = current_unit.get("phase") if current_unit else None
     runs = current.get("runs", []) if current else []
     generation = {}
     logged = {}
@@ -182,11 +213,21 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
             path = os.path.join(root, "runs", run["arm"], phase["task"], f"seed_{run['seed']}", "run_log.jsonl")
             rows = _rows(path)
             completed_evals += len(rows)
-            if phase["task"] == task:
+            if unit_keys.phase_key(phase) == key:
                 generation[(run["arm"], run["seed"])] = max((r["generation"] for r in rows), default=0)
                 logged[(run["arm"], run["seed"])] = (len(rows), sum(bool(r.get("valid")) for r in rows))
+    stage_totals = {}
+    if plan.get("stages"):
+        from .amend2 import planned_trainings
+        for item in plan["stages"]:
+            stage_totals[item["stage_id"]] = (planned_trainings(item, plan),
+                                               _settled_stage_rows(root, item["stage_id"]))
+        total_evals += sum(total for total, _ in stage_totals.values())
+        completed_evals += sum(done for _, done in stage_totals.values())
     journal = _rows(os.path.join(root, "journal.jsonl"))
-    completed_ppo = len(journal)
+    retrain = _retrain_rows(root)
+    work = journal + retrain
+    completed_ppo = len(work)
     completed_by_pair = Counter((r.get("run_key", "").split("/")[0], r.get("run_key", "").split("/")[1])
                                 for r in journal if len(r.get("run_key", "").split("/")) >= 2)
     durations = defaultdict(list)
@@ -206,32 +247,42 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
                 core_class = cpu_kind.get(ids[0], "unknown") if ids else "unknown"
                 durations[(parts[0], parts[1], core_class)].append(duration)
     arms = {r["arm"] for r in runs}
-    measured = bool(runs) and all(completed_by_pair[(arm, task)] >= 50 for arm in arms)
+    measured = bool(runs) and stage is None and all(completed_by_pair[(arm, task)] >= 50 for arm in arms)
     from . import estimate as estimates
     estimate = estimates.load(estimates.estimate_path_for_manifest(manifest))
     v2 = estimates.is_v2(estimate)
     guard_h = estimates.guard_threshold_h(estimate)
     elapsed = max(0.0, now - float(manifest.get("started_at", now)))
-    completed_phase = sum(len(_rows(os.path.join(root, "runs", r["arm"], task,
-                                            f"seed_{r['seed']}", "run_log.jsonl"))) for r in runs)
-    phase_total = sum(int(r["config"]["eval_budget"]) for r in runs)
+    if stage is not None:
+        phase_total, completed_phase = stage_totals[stage["stage_id"]]
+    else:
+        completed_phase = sum(len(_rows(os.path.join(root, "runs", r["arm"], task,
+                                                f"seed_{r['seed']}", "run_log.jsonl"))) for r in runs)
+        phase_total = sum(int(r["config"]["eval_budget"]) for r in runs)
     worker_count = len(manifest.get("worker_slots", {}).get("slots", []))
-    phase_started = float(status.get(task, {}).get("started_at", manifest.get("started_at", now)))
-    phase_utilization = worker_utilization(journal, worker_count, phase_started, now)
-    last_hour_utilization = worker_utilization(journal, worker_count, max(phase_started, now - 3600), now)
+    phase_started = float(status.get(key, {}).get("started_at", manifest.get("started_at", now)))
+    phase_utilization = worker_utilization(work, worker_count, phase_started, now)
+    last_hour_utilization = worker_utilization(work, worker_count, max(phase_started, now - 3600), now)
     remaining_fraction = max(0.0, 1 - completed_phase / phase_total) if phase_total else 0.0
     def require_band(name):
         # A v2 estimate states every phase's band; a missing one is an error,
         # never a silent fall back to the original campaign's hours.
         band = estimates.phase_band(estimate, name)
-        if v2 and name in {p["task"] for p in phases} and not {"p5", "p95"} <= set(band):
+        if v2 and name in {u["key"] for u in units} and not {"p5", "p95"} <= set(band):
             raise ValueError(f"the campaign's estimate has no phase band for task {name!r}")
         return band
 
-    prior_band = require_band(task)
+    prior_band = require_band(key)
     prior_phase_low = float(prior_band.get("p5", 121.9 if task == "Walker-v0" else 277.8)) * 3600
     prior_phase_high = float(prior_band.get("p95", 124.1 if task == "Walker-v0" else 282.9)) * 3600
-    if measured:
+    stage_rows = [r for r in retrain if r.get("stage") == key]
+    if stage is not None and len(stage_rows) >= 20 and phase_total:
+        # Re-trainings are independent: the stage's own completion rate is the estimate.
+        rate = len(stage_rows) / max(1.0, now - phase_started)
+        remaining = max(0.0, (phase_total - completed_phase) / rate)
+        phase_eta = (0.9 * remaining, 1.1 * remaining)
+        eta_source = "measured"
+    elif measured:
         phase_eta = _measured_phase_eta(runs, task, logged, journaled_by_run, durations,
             manifest.get("worker_slots", {}).get("slots", []), cpu_kind)
         if phase_eta is None:
@@ -243,25 +294,30 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
         phase_eta = (remaining_fraction * prior_phase_low, remaining_fraction * prior_phase_high)
         eta_source = "prior"
     future_low = future_high = 0.0
-    if current and phases.index(current) + 1 < len(phases):
-        for phase in phases[phases.index(current) + 1:]:
+    if current_unit and units.index(current_unit) + 1 < len(units):
+        for later in units[units.index(current_unit) + 1:]:
+            phase = {"task": later["task"], "key": later["key"]}
             walker = phase["task"] == "Walker-v0"
-            band = require_band(phase["task"])
+            band = require_band(phase["key"])
             future_low += float(band.get("p5", band.get("mean", 123 if walker else 280.2))) * 3600
             future_high += float(band.get("p95", band.get("mean", 123 if walker else 280.2))) * 3600
         # Preserve the P2 simulator's *joint* total distribution at campaign
         # start. Summing marginal phase quantiles would discard its observed
         # phase correlation and misstate the registered 400.6–406.0 h band.
         # (Original campaign only; a v2 estimate's phases are summed.)
-        if not v2 and eta_source == "prior" and task == "Walker-v0":
+        if not v2 and eta_source == "prior" and key == "Walker-v0":
             future_low = P2_TOTAL_P5_H * 3600 - prior_phase_low
             future_high = P2_TOTAL_P95_H * 3600 - prior_phase_high
     campaign_eta = (phase_eta[0] + future_low, phase_eta[1] + future_high)
-    last_task = max((r.get("completed_at", r.get("timestamp", 0)) for r in journal), default=None)
+    last_task = max((r.get("completed_at", r.get("timestamp", 0)) for r in work), default=None)
     if last_task is None and manifest.get("status") == "running":
-        last_task = status.get(task, {}).get("started_at", manifest.get("started_at"))
-    recent = sum(1 for r in journal if r.get("completed_at", r.get("timestamp", 0)) >= now - 3600)
-    hourly_rates = [sum(1 for r in journal if now - (hour + 1) * 3600 <=
+        last_task = status.get(key, {}).get("started_at", manifest.get("started_at"))
+    if last_task is not None and stage is not None:
+        # A stage's clock starts when the stage does, not at the previous
+        # phase's last evolutionary result.
+        last_task = max(last_task, phase_started)
+    recent = sum(1 for r in work if r.get("completed_at", r.get("timestamp", 0)) >= now - 3600)
+    hourly_rates = [sum(1 for r in work if now - (hour + 1) * 3600 <=
                          r.get("completed_at", r.get("timestamp", 0)) < now - hour * 3600)
                     for hour in range(min(24, max(1, math.ceil(elapsed / 3600))))]
     alerts = _rows(os.path.join(root, "alerts.jsonl"))
@@ -270,7 +326,7 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
         if alert.get("condition"):
             alert_states[alert["condition"]] = alert.get("status")
     dispatch = _json(os.path.join(root, "dispatch_status.json"), {})
-    if dispatch.get("task") == task:
+    if dispatch.get("task") == key:
         for run_key, proposed_generation in dispatch.get("run_generations", {}).items():
             parts = run_key.split("/")
             if len(parts) == 3 and parts[1] == task:
@@ -282,12 +338,13 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
                     generation[key] = max(generation[key], int(proposed_generation))
     else:
         dispatch = {}
-    failures = sum(1 for r in journal if not r.get("result", {}).get("completed", True))
+    failures = sum(1 for r in work if not r.get("result", {}).get("completed", True))
     mirror = manifest.get("mirror_dir")
     mirror_status = _json(os.path.join(root, "mirror_status.json"), {})
     info = telemetry if telemetry is not None else _telemetry(root, mirror)
     snapshot = {
-        "campaign_id": manifest.get("campaign_id", os.path.basename(root)), "phase": task,
+        "campaign_id": manifest.get("campaign_id", os.path.basename(root)), "phase": key,
+        "unit_kind": current_unit["kind"] if current_unit else "phase", "task": task,
         "elapsed_s": elapsed, "phase_completed": completed_phase, "phase_total": phase_total,
         "generation": generation, "tasks_running": dispatch.get("tasks_running", 0),
         "tasks_queued": dispatch.get("tasks_queued", 0), "completed_evaluations": completed_evals,
@@ -302,7 +359,7 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
         "phase_started_at": phase_started,
         "future_eta_source": "prior" if future_high else None,
         # Latest-bound ETA while Walker-v0 runs; the actual time once reached.
-        "walker_milestone_epoch": (now + phase_eta[1] if task == "Walker-v0"
+        "walker_milestone_epoch": (now + phase_eta[1] if key == "Walker-v0"
                                    else status.get("Walker-v0", {}).get("ended_at")),
         "walker_milestone_reached": status.get("Walker-v0", {}).get("status") == "complete",
         "p2_mean_h": (round(float(estimates.total_band(estimate).get("mean", 0.0)), 1) if v2 else P2_MEAN_H),
@@ -324,7 +381,7 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
         "as_of_epoch": now,
         "campaign_status": manifest.get("status"),
         "campaign_complete": manifest.get("status") == "complete",
-        "phase_transitioning": bool(status.get(task, {}).get("status") == "complete" and
+        "phase_transitioning": bool(status.get(key, {}).get("status") == "complete" and
                                     manifest.get("status") != "complete"),
         **info,
     }
@@ -346,7 +403,9 @@ def render(snapshot: dict, tty: bool = False, *, ascii_only: bool | None = None,
              f"Elapsed: {status.elapsed} | utilization now: {100 * (status.worker_utilization_now or 0):.1f}% | target: {100 * (status.worker_utilization_steady_state_target or 0):.1f}%",
              f"As of {status.as_of.strftime('%Y-%m-%d %H:%M:%S %Z')} ({age}s ago)", rule * 72,
              f"Campaign {snapshot['campaign_id']} | phase {snapshot['phase']} | elapsed {_duration(snapshot['elapsed_s'])}",
-             f"Phase {snapshot['phase_completed']}/{snapshot['phase_total']} evaluations; total {snapshot['completed_evaluations']}/{snapshot['total_evaluations']}; PPO {snapshot['completed_ppo']}"]
+             f"Phase {snapshot['phase_completed']}/{snapshot['phase_total']} "
+             f"{'evaluations' if snapshot.get('unit_kind', 'phase') == 'phase' else 're-trainings'}; "
+             f"total {snapshot['completed_evaluations']}/{snapshot['total_evaluations']}; PPO {snapshot['completed_ppo']}"]
     grid = snapshot.get("generation", {})
     for arm in sorted({a for a, _ in grid}):
         cells = "  ".join(f"s{seed}:g{grid[(arm, seed)]}" for seed in sorted(s for a, s in grid if a == arm))
@@ -355,7 +414,9 @@ def render(snapshot: dict, tty: bool = False, *, ascii_only: bool | None = None,
         f"Running {snapshot['tasks_running']} queued {snapshot['tasks_queued']} | PPO/h now {snapshot['throughput_now_per_h']:.1f}, average {snapshot['throughput_average_per_h']:.1f}",
         f"Worker utilization: {100 * snapshot.get('worker_utilization_last_hour', 0):.1f}% last 1 h; {100 * snapshot.get('worker_utilization_since_phase_start', 0):.1f}% since phase start",
         f"ETA ({snapshot['eta_source']}): phase {_duration(snapshot['phase_eta_s'][0])}–{_duration(snapshot['phase_eta_s'][1])}; campaign {_duration(snapshot['campaign_eta_s'][0])}–{_duration(snapshot['campaign_eta_s'][1])}" + (" (future phase: prior)" if snapshot.get("future_eta_source") else ""),
-        (f"Estimate {snapshot['p2_mean_h']} h mean / {snapshot['p2_p95_h']} h p95; projected total {_hours_range(snapshot.get('projection_total_h'))}; >{snapshot.get('guard_h', GUARD_H):.0f} h: {snapshot['projection_exceeds_432h']}"
+        (f"Estimate {snapshot['p2_mean_h']} h mean / {snapshot['p2_p95_h']} h p95; projected total {_hours_range(snapshot.get('projection_total_h'))}; "
+         + (f">{snapshot.get('guard_h', GUARD_H):.0f} h: {snapshot['projection_exceeds_432h']}"
+            if snapshot.get('guard_h', GUARD_H) != float('inf') else "no cost guard")
          if snapshot.get("estimate_v2") else
          f"Walker milestone ({'reached' if snapshot.get('walker_milestone_reached') else 'latest'}): {_when(snapshot['walker_milestone_epoch'])}; P2 {snapshot['p2_mean_h']} h mean / {snapshot['p2_p95_h']} h p95; projected total {_hours_range(snapshot.get('projection_total_h'))}; >{snapshot.get('guard_h', GUARD_H):.0f} h: {snapshot['projection_exceeds_432h']}"),
         f"CPU {snapshot.get('cpu_percent', 'n/a')}% per-core {snapshot.get('per_core_percent', [])}; temp {snapshot.get('temperature_c', 'n/a')} °C; RAM {snapshot.get('ram_used_gb', 'n/a')} GB; swap {snapshot.get('swap_used_gb', 'n/a')} GB",
