@@ -39,6 +39,7 @@ import sys  # noqa: E402
 USAGE = """usage:
   python -m evodevo.campaign [scheduler options]        run / resume a campaign
   python -m evodevo.campaign status --campaign ID [--output-root DIR]
+  python -m evodevo.campaign replay --output-dir DIR   re-run recorded original evaluations bit-for-bit
 run `python -m evodevo.campaign --help` for scheduler options."""
 
 
@@ -49,6 +50,9 @@ def main(argv=None):
     if argv and argv[0] == "status":
         from evodevo.campaign.dashboard import main as dashboard_main
         return dashboard_main(argv[1:])
+    if argv and argv[0] == "replay":
+        from evodevo.campaign.replay_check import main as replay_main
+        return replay_main(argv[1:])
     from evodevo.campaign.scheduler import cli_main
     return cli_main(argv)
 

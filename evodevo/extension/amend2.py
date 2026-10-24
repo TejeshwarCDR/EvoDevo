@@ -73,6 +73,11 @@ GATE_R_FACTS = {
 }
 
 
+def _rel(path) -> str:
+    path = Path(path)
+    return str(path.relative_to(spec.REPO_ROOT)) if path.is_relative_to(spec.REPO_ROOT) else str(path)
+
+
 def _sha256(path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
@@ -462,7 +467,10 @@ def render_report(record: dict, estimate: dict) -> str:
               f"`{record['inputs']['preflight_record_sha256']}` (superseded; evidence only)",
               f"- Original campaign `{record['inputs']['reference_campaign']['path']}` commit "
               f"`{record['inputs']['reference_campaign']['git_commit']}` config hash "
-              f"`{record['inputs']['reference_campaign']['config_hash']}`", ""]
+              f"`{record['inputs']['reference_campaign']['config_hash']}`", "",
+              "## Integrity (any edit of the two JSON files changes this report; `amend2 check` refuses it)", "",
+              f"- `A2_DECISIONS.json` sha256 `{hashlib.sha256(_dump(record).encode()).hexdigest()}`",
+              f"- `final_estimate_a2.json` sha256 `{hashlib.sha256(_dump(estimate).encode()).hexdigest()}`", ""]
     return "\n".join(lines)
 
 
@@ -580,7 +588,7 @@ def check(run_dir: Path | None, reference: Path | None, t_obstacle: int | None =
     from evodevo.experiments.benchmark import BenchmarkConfig
     for path in (DECISIONS_JSON, ESTIMATE_JSON, DECISIONS_MD, CAMPAIGN_YAML, GATES_REPORT, SUPERSEDED):
         if not path.is_file():
-            problems.append(f"missing {path.relative_to(spec.REPO_ROOT)}")
+            problems.append(f"missing {_rel(path)}")
     if problems:
         return problems
     texts = {}

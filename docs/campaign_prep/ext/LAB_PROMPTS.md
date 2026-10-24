@@ -11,9 +11,9 @@ any rebuilt worker import whatever code is on disk at that moment. Only Prompt 0
 |---|---|---|
 | 0 | now, while the original campaign runs | no (writes one report under `results/ext_prep/`) |
 | 1 | after the original campaign is `complete` | reconciles `main` with the rewritten history (no pull or fast-forward); runs the tests and a stamped rehearsal campaign |
-| 2 | after prompt 1 passes | starts the extension preflight (~9–11 h, unattended) |
-| 3 | after the preflight finishes | derives decisions, commits them to `main` and pushes (no force) |
-| 4 | after prompt 3 | writes the audit report; launch only after an explicit GO |
+| 2 | after prompt 1 passes | **superseded by Amendment 2** (the preflight `ext-20261023` was run; do not repeat) — starts the extension preflight (~9–11 h, unattended) |
+| 3 | after the preflight finishes | **superseded by Amendment 2** — derives decisions, commits them to `main` and pushes (no force) |
+| 4 | after prompt 3 | **superseded by Amendment 2** — writes the audit report; launch only after an explicit GO |
 
 ---
 
@@ -172,6 +172,8 @@ d. Close the rehearsal's tmux session once it shows CAMPAIGN COMPLETE. Leave `gi
 
 ## Prompt 2 — start the extension preflight
 
+> **SUPERSEDED BY AMENDMENT 2 (2026-10-25).** This prompt belongs to the 3-task design (ObstacleTraverser-v1, Climber-v0, CaveCrawler-v0), which Amendment 2 of [PREREGISTRATION_EXT.md](PREREGISTRATION_EXT.md) retired. Do not run it. Prompts 0 and 1 and the extension preflight (Prompt 2, already run as `ext-20261023`) stand as history; the campaign is now `campaign_a2.yaml` — see the Amendment 2 section of [RUNBOOK_EXT.md](RUNBOOK_EXT.md).
+
 ```
 Start the extension preflight. It runs unattended for about 9–11 hours (84 B5x-stage rows + 18 curves, 4 repeats).
 Do not modify code or configuration and never pass --allow-dirty or any --test-* flag.
@@ -203,6 +205,8 @@ Do not modify code or configuration and never pass --allow-dirty or any --test-*
 
 ## Prompt 3 — derive the decisions
 
+> **SUPERSEDED BY AMENDMENT 2 (2026-10-25).** This prompt belongs to the 3-task design (ObstacleTraverser-v1, Climber-v0, CaveCrawler-v0), which Amendment 2 of [PREREGISTRATION_EXT.md](PREREGISTRATION_EXT.md) retired. Do not run it. Prompts 0 and 1 and the extension preflight (Prompt 2, already run as `ext-20261023`) stand as history; the campaign is now `campaign_a2.yaml` — see the Amendment 2 section of [RUNBOOK_EXT.md](RUNBOOK_EXT.md).
+
 ```
 The extension preflight has finished. Apply the pre-registered rules and prepare the launch. Do not edit any
 generated file by hand and do not change any rule constant.
@@ -231,6 +235,8 @@ generated file by hand and do not change any rule constant.
 ---
 
 ## Prompt 4 — audit report
+
+> **SUPERSEDED BY AMENDMENT 2 (2026-10-25).** This prompt belongs to the 3-task design (ObstacleTraverser-v1, Climber-v0, CaveCrawler-v0), which Amendment 2 of [PREREGISTRATION_EXT.md](PREREGISTRATION_EXT.md) retired. Do not run it. Prompts 0 and 1 and the extension preflight (Prompt 2, already run as `ext-20261023`) stand as history; the campaign is now `campaign_a2.yaml` — see the Amendment 2 section of [RUNBOOK_EXT.md](RUNBOOK_EXT.md).
 
 ```
 Write an audit of the extension campaign's readiness to results/ext_prep/AUDIT_EXT.md and print it. Read-only:

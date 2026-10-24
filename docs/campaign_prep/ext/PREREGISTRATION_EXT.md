@@ -111,3 +111,92 @@ No extension preflight measurement exists at the time of this amendment. Constan
 3. **"Bodies with ≥ 4 repeats" replaces "≥ 2"** for the max-of-2 term (the single-training term still uses bodies with ≥ 2 repeats). Fewer than 3 bodies with ≥ 4 repeats gives K = 1 (branch `insufficient_repeats`).
 4. **`derive` refuses unfinished, dirty or multi-commit preflight runs.** It requires a PRODUCTION label (production parameters, never TEST), no stage run on a dirty tree, a single git commit across all stages, and exactly the expected number of recorded trainings (failed trainings count as recorded and are listed in the decision report).
 5. **The floor-effect check applies to the extension tasks only.** The original campaign's milestone packages are unchanged.
+
+## Amendment 2 (2026-10-25, after the extension preflight ext-20261023 and before any campaign data for ObstacleTraverser-v1 or for seeds 5-9)
+
+The extension preflight `ext-20261023` has been run and its records are committed unchanged
+(`EXT_DECISIONS.json`, `EXT_DECISIONS.md`, `final_estimate_ext.json`, `campaign_ext.yaml`). No campaign data exist for
+ObstacleTraverser-v1, and none for Walker-v0 or UpStepper-v0 at seeds 5-9. The 3-task design of this document is retired:
+`SUPERSEDED_BY_AMENDMENT_2.json` holds the sha256 of `EXT_DECISIONS.json`, and the plan builder and the launcher refuse a
+campaign whose `decisions_path` is that record. Constants and rules not named here are unchanged. The generated record of
+this amendment is `A2_DECISIONS.json` (with `A2_DECISIONS.md`, `final_estimate_a2.json` and
+`campaign_a2.yaml`, all produced by `python -m evodevo.extension amend2 derive` and verified byte for byte by
+`amend2 check`). The gate evidence is [A2_GATES_REPORT.md](A2_GATES_REPORT.md).
+
+**(a) Tasks.** Walker-v0, UpStepper-v0 and ObstacleTraverser-v1.
+
+- **Climber-v0 is excluded for a floor effect.** The preflight found no learning signal: the median fitness over the six
+  bodies lies between -0.003 and 0.134 at every one of the 20 checkpoints from 100k to 2M steps (0.042 at 2M), and the
+  six bodies' fitness at 2M lies between -0.011 (nca:random) and 0.189 (direct:random). D6-ext found no knee and fell back
+  to its registered fallback (disclosed floor); no budget makes the arms distinguishable. `EXT_DECISIONS.md` has the
+  table and the curves.
+- **CaveCrawler-v0 is excluded for saturation.** The median fitness over the six bodies is 1.66 at 100k and 1.87 at 200k,
+  and 1.85-1.91 at every later checkpoint to 2M; D6-ext found its knee at 200k (clipped to the 500k floor). At 2M five of
+  six bodies lie between 1.72 and 1.94 (direct:evolved 1.89, direct:random 1.92, nca:random 1.72, rule_based:evolved
+  1.88, rule_based:random 1.94; nca:evolved 0.72 is the exception), so the task leaves little room for an arm
+  difference.
+- All three preflight results (ObstacleTraverser-v1, Climber-v0, CaveCrawler-v0) are reported in the paper's appendix,
+  with their numbers and curves.
+
+**(b) Seeds and arms.** Seeds 0-9 per task for the arms direct, nca and rule_based. The monotone variant
+(rule_based_monotone) stays at its original seeds 0-4 on Walker-v0 and UpStepper-v0 and is a secondary contrast only.
+
+**(c) ObstacleTraverser-v1 PPO budget = 1,500,000 steps, K = 1.** Gate T applied the registered D6-ext fallback test (every
+qualifying body reaches at least 85% of its 2M fitness, and the rank order of the bodies is kept) at 1.0M and 1.2M. Both
+failed, so the rule fell through to the registered cap, 1.5M. We disclose plainly:
+
+- 1.5M fails the same test as well (direct:evolved reaches 58% of its 2M fitness, direct:random 22%, rule_based:evolved
+  38%, and the rank order differs). Only 2M passes, trivially, because it is compared with itself. 1.5M is the cap, not a
+  budget at which training has converged.
+- The test compares each body with a single noisy 2M value (one training per body, six bodies), and single-checkpoint
+  fitness is itself noisy: direct:random is 0.26 at 1.5M against 0.69 at 1.4M and 1.14 at 1.8M, and nca:random is 0.24 at
+  1.8M against 1.07-1.13 at its neighbouring checkpoints.
+- The preflight shows genuine slow learners. direct:evolved reaches 0.21 at 1.0M, 0.63 at 1.2M and 1.09 at 2M.
+  rule_based:evolved sits on a plateau near 1.15-1.2 with jumps (1.68 at 1.2M, 1.74 at 1.4M and 1.8M) and ends at 3.10 at
+  2M, a single observation that one training per body cannot separate from seed noise.
+- Not every body has converged at 1.5M. The Spearman correlation between the bodies' fitness at 1.5M and at 2M is 0.54
+  (Kendall tau-b 0.33), with n = 6.
+- The D6-ext knee (600k steps, where the median marginal improvement falls below 1% for three windows) is reported. It is
+  not used.
+- K = 1 per D16-ext: the single-training noise ratio is 3.01 and max-of-2 reduces it to 1.87, a 38% reduction, short of
+  the required 50%.
+
+**(d) Walker-v0 and UpStepper-v0 seeds 5-9** use the original per-run configurations unchanged (Walker-v0 1.0M steps with
+K = 1; UpStepper-v0 1.2M steps with K = 2) and pool with seeds 0-4. Gate R evidence (A2_GATES_REPORT.md): the config
+differs only in the seed; the library versions are identical, including evogym f63c649c; no behavioural code hunk exists
+between the original campaign's commit and the current code; and 12 of 12 replayed original evaluations are bit-identical,
+including both K = 2 trainings. The launch refuses if any config field other than the seed differs from the original
+campaign's, or if any recorded library version (python, torch, stable-baselines3, gymnasium, numpy, cloudpickle, evogym
+and its commit) differs from the installed one.
+
+**(e) One campaign, strict phase order.** P1 ObstacleTraverser-v1 seeds 0-4, P2 ObstacleTraverser-v1 seeds 5-9, P3
+UpStepper-v0 seeds 5-9, P4 Walker-v0 seeds 5-9 (phase ids `ObstacleTraverser-v1:s0-4`, `ObstacleTraverser-v1:s5-9`,
+`UpStepper-v0:s5-9`, `Walker-v0:s5-9`; 15 runs each, 60 in all). Every phase is committed unconditionally. The P1 package
+is INTERIM (five seeds, with its re-evaluation) and cannot stop or change later phases.
+
+**(f) Primary endpoint unchanged:** each run's recorded best fitness (best-so-far at evaluation 300).
+
+**(g) Secondary endpoint: champion re-evaluation.** After each phase, each run's champion (the milestone definition: the
+evaluation with the maximum recorded fitness, ties to the lowest evaluation index) is re-trained 10 times, each a single
+training at the task's budget, with PPO seeds `ppo_seed(20261101, k)`, k = 0..9. The mean and spread are reported. There
+are 30 champions per task; the Walker-v0 and UpStepper-v0 champions of seeds 0-4 are read from the original campaign,
+read-only. The stages are, in order: after P1 (150 trainings), after P2 (150), after P3 for UpStepper-v0 seeds 0-9
+(300), after P4 for Walker-v0 seeds 0-9 (300).
+
+**(h) Robustness at 2x each task's budget.** Every champion (90) is re-trained 3 times with `ppo_seed(20261201, k)`,
+k = 0..2, at 3,000,000 (ObstacleTraverser-v1), 2,400,000 (UpStepper-v0) and 2,000,000 (Walker-v0) steps,
+ObstacleTraverser-v1 first (270 trainings). Arm rankings and A12 are reported at the task budget and at 2x.
+
+**(i) PPO state.** The worker already saves each trained policy with its optimizer state after the fitness rollout, which
+draws from no random stream. No observation normaliser exists, and the learning rate is constant (3e-4). Re-trainings are
+saved the same way, each under a unique path per (task, arm, seed, champion evaluation index, stage, k).
+
+**(j) Analysis per task, no pooling.** Kruskal-Wallis across the three arms, pairwise Mann-Whitney U Holm-corrected over
+the 3 pairs, Vargha-Delaney A12 with bootstrap 95% intervals, and the floor-effect check on ObstacleTraverser-v1.
+Walker-v0 and UpStepper-v0 merge seeds 0-4 and 5-9 with a provenance column; the monotone contrast uses the original
+seeds 0-4 only. Cross-task results are descriptive only.
+
+**(k) No cost guard.** The extension's 360 h guard does not apply to this campaign. The projected timeline (about 1,160 h
+mean, p5-p95 1,044-1,276 h, from the planned launch on 2026-10-26 12:00 IST) is informational.
+
+**(l) Any fourth task** gets its own pre-registration and preflight, outside this campaign.
