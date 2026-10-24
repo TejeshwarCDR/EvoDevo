@@ -432,8 +432,10 @@ def check(run_dir: Path | None, reference: Path | None, allow_test: bool = False
         problems.append("EXT_DECISIONS.md is not the rendering of EXT_DECISIONS.json and final_estimate_ext.json")
     plan = None
     try:
+        # The record is the (superseded) preflight evidence: check verifies it
+        # is internally consistent, which launching it never may.
         plan = CampaignPlan.from_benchmark(BenchmarkConfig.from_yaml(str(spec.CAMPAIGN_YAML)),
-                                           allow_test_record=allow_test)
+                                           allow_test_record=allow_test, allow_superseded=True)
     except Exception as exc:  # noqa: BLE001 -- reported, not raised
         problems.append(f"plan does not build: {type(exc).__name__}: {exc}")
     if plan is not None:

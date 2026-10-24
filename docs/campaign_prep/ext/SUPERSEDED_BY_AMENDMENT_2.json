@@ -1,0 +1,7 @@
+{
+ "message": "The 3-task extension design (ObstacleTraverser-v1, Climber-v0, CaveCrawler-v0) was retired by Amendment 2 of docs/campaign_prep/ext/PREREGISTRATION_EXT.md. EXT_DECISIONS.json is kept unchanged as the preflight record (ext-20261023) and can never be used to plan or launch a campaign; launch evodevo/experiments/configs/campaign_a2.yaml instead.",
+ "sha256": "930213b12778c4e161e604078d64420107ebc8d07a3180d36273c7b933f44bc9",
+ "superseded": "docs/campaign_prep/ext/EXT_DECISIONS.json",
+ "superseded_by": "Amendment 2",
+ "superseded_path": "docs/campaign_prep/ext/EXT_DECISIONS.json"
+}

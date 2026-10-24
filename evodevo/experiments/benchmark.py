@@ -371,6 +371,11 @@ class BenchmarkConfig:
     estimate_path: Optional[str] = None
     decisions_path: Optional[str] = None
     guard_outcome: Optional[str] = None
+    # Amendment 2 (docs/campaign_prep/ext/PREREGISTRATION_EXT.md): phases are
+    # (task, seed block) pairs, followed by champion re-training stages. The
+    # block is generated from the decision record (python -m evodevo.extension
+    # amend2 derive); None reproduces every earlier campaign exactly.
+    amendment2: Optional[dict] = None
 
     @classmethod
     def from_yaml(cls, path: str) -> "BenchmarkConfig":
