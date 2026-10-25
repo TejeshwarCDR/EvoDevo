@@ -41,13 +41,15 @@ def test_champion_ties_go_to_the_lowest_evaluation_index_whatever_the_row_order(
     assert select_champion(list(reversed(rows)))["eval_index"] == 1
 
 
-def test_champion_ignores_invalid_sentinel_rows_unless_everything_is_invalid(tmp_path):
+def test_champion_ignores_invalid_sentinel_rows_and_preserves_an_all_invalid_outcome(tmp_path):
     write_run_log(tmp_path / "run", [None, 0.2, None, None, None, None])
     champion = amend2._champion_from_run(tmp_path / "run", "Walker-v0", "nca", 0, 6, "c", "x", "campaign", "p")
     assert champion.eval_index == 1 and champion.fitness == 0.2
     write_run_log(tmp_path / "bad", [None] * 6)
-    with pytest.raises(ChampionError, match="not a valid body"):
-        amend2._champion_from_run(tmp_path / "bad", "Walker-v0", "direct", 0, 6, "c", "x", "campaign", "p")
+    champion = amend2._champion_from_run(
+        tmp_path / "bad", "Walker-v0", "direct", 0, 6, "c", "x", "campaign", "p")
+    assert champion.eval_index == 0 and champion.fitness == -10.0
+    assert champion.valid is False
 
 
 def test_champion_is_read_only_from_a_completed_run(tmp_path):
@@ -148,6 +150,25 @@ def test_rerunning_a_finished_stage_adds_nothing(tmp_path):
     metrics = run_stage(root, "this-id", _plan_dict(plan), stage, None, workers=2)
     assert (root / "robustness.jsonl").read_bytes() == before
     assert metrics["trainings_skipped_as_done"] == 8 and metrics["completed_timed_tasks"] == 0
+
+
+def test_all_invalid_champion_is_journaled_as_sentinel_without_ppo_dispatch(tmp_path):
+    original, plan, root = _world(tmp_path)
+    bad = root / "runs/nca/Walker-v0/seed_5"
+    write_run_log(bad, [None] * EVALS)
+    stage = _stage(plan, "robustness:Walker-v0")
+    pool = FakePool()
+    metrics = run_stage(root, "this-id", _plan_dict(plan), stage, pool, workers=2)
+    rows = [r for r in _rows(root, "robustness.jsonl") if r["run_key"] == "nca/Walker-v0/seed_5"]
+    assert metrics["status"] == "complete" and len(rows) == stage["n"]
+    assert not any(task.run_key == "nca/Walker-v0/seed_5" for task, _timeout in pool.submitted)
+    assert all(r["fitness"] == -10.0 and not r["completed"] for r in rows)
+    assert all(r["champion_valid"] is False and r["training_attempted"] is False for r in rows)
+    assert all(r["reason"].startswith("invalid_champion:") for r in rows)
+    before = (root / "robustness.jsonl").read_bytes()
+    rerun = run_stage(root, "this-id", _plan_dict(plan), stage, pool, workers=2)
+    assert (root / "robustness.jsonl").read_bytes() == before
+    assert rerun["completed_timed_tasks"] == 0
 
 
 def test_a_stopped_stage_resumes_without_repeating_or_losing_trainings(tmp_path):

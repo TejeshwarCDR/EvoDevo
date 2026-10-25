@@ -125,6 +125,18 @@ def test_reeval_package_tables_and_interim_label(campaign):
     assert len(trainings) == 8 and {r["stage"] for r in trainings} == {"reeval:UpStepper-v0:s0-5"}
 
 
+def test_invalid_champion_sentinel_is_included_in_secondary_endpoint():
+    rows = [{"arm": "direct", "task": "UpStepper-v0", "seed": 5,
+             "source_kind": "campaign", "source_campaign": "test", "source_commit": "a" * 40,
+             "champion_eval_index": 0, "champion_fitness": -10.0, "k": k,
+             "fitness": -10.0, "completed": False,
+             "reason": "invalid_champion: no structurally valid body; PPO training not attempted"}
+            for k in range(2)]
+    champions = a2_report.per_champion(rows)
+    assert len(champions) == 1
+    assert champions[0]["n_trainings"] == 2 and champions[0]["mean"] == -10.0
+
+
 def test_robustness_packages_compare_the_task_budget_with_two_times(campaign):
     _, _, packages = campaign
     final = packages["robustness:all"]

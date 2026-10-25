@@ -122,10 +122,17 @@ def provenance_paragraph(sources: dict, status: str) -> str:
 # --- re-training stages -------------------------------------------------------------
 
 def _champion_rows(rows: list) -> dict:
-    """{(arm, task, seed): [completed training rows]}"""
+    """{(arm, task, seed): [usable secondary-endpoint rows]}.
+
+    Successful PPO trainings contribute their measured fitness.  A champion
+    from an all-invalid evolutionary run contributes its preregistered
+    sentinel once per planned training seed: excluding it would bias the
+    comparison toward encodings that more often find a valid body.
+    """
     out = {}
     for row in rows:
-        if row.get("completed") and row.get("fitness") is not None:
+        invalid_champion = str(row.get("reason") or "").startswith("invalid_champion:")
+        if row.get("fitness") is not None and (row.get("completed") or invalid_champion):
             out.setdefault((row["arm"], row["task"], row["seed"]), []).append(row)
     return out
 

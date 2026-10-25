@@ -85,6 +85,8 @@ class Champion:
     source_commit: str
     source_kind: str   # "campaign" (this campaign) or "original" (read-only)
     phase_id: str
+    valid: bool = True
+    invalid_reason: str | None = None
 
     @property
     def run_key(self) -> str:
@@ -118,11 +120,12 @@ def _champion_from_run(run_dir: Path, task: str, arm: str, seed: int, expected_e
         raise ChampionError(f"{label}: {len(rows)} logged evaluations, expected {expected_evals}; "
                             "a champion is only read from a completed run")
     best = select_champion(rows)
-    if not best.get("valid") or best.get("body") is None:
-        raise ChampionError(f"{label}: best recorded evaluation {best['eval_index']} is not a valid body")
+    if best.get("body") is None:
+        raise ChampionError(f"{label}: best recorded evaluation {best['eval_index']} has no recorded body")
+    valid = bool(best.get("valid"))
     return Champion(task, arm, seed, int(best["eval_index"]), float(best["fitness"]),
                     tuple(tuple(int(v) for v in row) for row in best["body"]), best["body_hash"],
-                    campaign, commit, kind, phase_id)
+                    campaign, commit, kind, phase_id, valid, None if valid else best.get("reason"))
 
 
 def resolve_repo_path(path) -> Path:
@@ -205,6 +208,14 @@ def stage_trainings(stage: dict, champions: list, root, eval_episodes: int = 1) 
     for k in range(stage["n"]):
         seed = retrain_seed(stage["seed_base"], k)
         for champion in champions:
+            # An all-invalid evolutionary run is a real sentinel-dominated
+            # outcome under the preregistered invalid-genome policy.  It has
+            # no structurally valid body that PPO can safely train.  Keep a
+            # placeholder in the planned sequence so run_stage can journal a
+            # durable sentinel outcome without dispatching it to EvoGym.
+            if not champion.valid:
+                items.append((champion, k, seed, None))
+                continue
             body = np.array(champion.body, dtype=int)
             directory = retrain_artifact_dir(root, stage["stage_id"], champion.task, champion.arm,
                                              champion.seed, champion.eval_index)
@@ -243,6 +254,7 @@ def result_row(campaign_id: str, stage: dict, champion: Champion, k: int, seed: 
             "source_kind": champion.source_kind, "phase_id": champion.phase_id,
             "champion_eval_index": champion.eval_index, "champion_fitness": champion.fitness,
             "body_hash": champion.body_hash, "budget": int(stage["budget"]), "k": k, "ppo_seed": seed,
+            "champion_valid": champion.valid, "training_attempted": task is not None,
             "fitness": result.fitness, "completed": bool(result.completed), "reason": result.reason,
             "wall_time_s": result.wall_clock_s, "core_kind": kind, "cpu_ids": cpu_ids,
             "started_at": result.started_at, "finished_at": result.finished_at,
@@ -305,11 +317,30 @@ def run_stage(root, campaign_id: str, plan: dict, stage: dict, pool, *, workers:
         if on_progress:
             on_progress(len(inflight), len(pending))
 
+    def record_invalid_champion(champion, k, seed):
+        """Settle an impossible PPO training without hiding the failed seed.
+
+        The sentinel fitness remains in the secondary endpoint, matching the
+        campaign's invalid-genome policy, while ``training_attempted`` and the
+        reason make clear that no policy or training log can exist.
+        """
+        from evodevo.evaluation.ppo_runner import PPOTaskResult
+        now = time.time()
+        reason = "invalid_champion: no structurally valid body; PPO training not attempted"
+        if champion.invalid_reason:
+            reason += f" ({champion.invalid_reason})"
+        record(champion, k, seed, None, PPOTaskResult(
+            champion.fitness, False, reason, 0.0, None, None, [], None, None, None, None,
+            started_at=now, finished_at=now))
+
     if pool is None:
         from evodevo.evaluation.ppo_runner import PPOTaskResult, evaluate_body_surrogate
         import numpy as np
         while pending and not stop_requested():
             champion, k, seed, task = pending.popleft()
+            if task is None:
+                record_invalid_champion(champion, k, seed)
+                continue
             surrogate = evaluate_body_surrogate(np.array(champion.body, dtype=int), task=champion.task, seed=seed)
             now = time.time()
             record(champion, k, seed, task, PPOTaskResult(
@@ -320,6 +351,9 @@ def run_stage(root, campaign_id: str, plan: dict, stage: dict, pool, *, workers:
         while pending or inflight:
             while pending and len(inflight) < window and not stop_requested():
                 item = pending.popleft()
+                if item[3] is None:
+                    record_invalid_champion(item[0], item[1], item[2])
+                    continue
                 key = (item[3].run_key, item[3].eval_index, item[3].ppo_k)
                 inflight[key] = item
                 pool.submit_ppo_task(item[3], timeout_s=stage["timeout_s"])
