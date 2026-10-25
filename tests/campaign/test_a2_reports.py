@@ -212,6 +212,26 @@ def test_the_stall_clock_counts_re_training_rows_and_starts_with_the_stage(runni
     assert snapshot["completed_ppo"] == 2 and snapshot["throughput_now_per_h"] == 2
 
 
+def test_invalid_champion_is_not_counted_as_an_infrastructure_failure(running):
+    root, _, _ = running
+    path = root / "reeval.jsonl"
+    rows = [
+        {"stage": "reeval:ObstacleTraverser-v1:s0", "arm": "direct", "task": "ObstacleTraverser-v1",
+         "seed": 0, "run_key": "direct/ObstacleTraverser-v1/seed_0", "k": 0,
+         "champion_eval_index": 0, "completed": False, "fitness": -10.0,
+         "reason": "invalid_champion: no structurally valid body; PPO training not attempted",
+         "completed_at": 2116},
+        {"stage": "reeval:ObstacleTraverser-v1:s0", "arm": "nca", "task": "ObstacleTraverser-v1",
+         "seed": 0, "run_key": "nca/ObstacleTraverser-v1/seed_0", "k": 0,
+         "champion_eval_index": 1, "completed": False, "fitness": None,
+         "reason": "infra_failure: worker lost", "completed_at": 2117},
+    ]
+    with path.open("a") as handle:
+        handle.writelines(json.dumps(row) + "\n" for row in rows)
+    snapshot = collect(str(root), now=2200, telemetry={})
+    assert snapshot["infra_failure_count"] == 1
+
+
 def test_overall_progress_includes_the_re_training_stages(running):
     root, plan, _ = running
     snapshot = collect(str(root), now=2200, telemetry={})

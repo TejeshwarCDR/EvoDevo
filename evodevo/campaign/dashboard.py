@@ -81,6 +81,7 @@ def _retrain_rows(root):
                         "result": {"started_at": row.get("started_at"), "finished_at": row.get("finished_at"),
                                    "wall_clock_s": row.get("wall_time_s"), "cpu_ids": row.get("cpu_ids") or [],
                                    "completed": row.get("completed", True),
+                                   "reason": row.get("reason"),
                                    "error": None if row.get("completed", True) else row.get("reason")}})
     return out
 
@@ -338,7 +339,13 @@ def collect(root: str, now: float | None = None, telemetry: dict | None = None) 
                     generation[key] = max(generation[key], int(proposed_generation))
     else:
         dispatch = {}
-    failures = sum(1 for r in work if not r.get("result", {}).get("completed", True))
+    # Only worker/dispatch failures are infrastructure failures.  A settled
+    # scientific outcome can also have completed=False: notably Amendment 2's
+    # explicit invalid_champion sentinel, for which no PPO training is safe or
+    # possible.  Counting it here creates a false alert and corrupts the final
+    # infrastructure-failure rate.
+    failures = sum(str(r.get("result", {}).get("reason") or "").startswith("infra_failure:")
+                   for r in work)
     mirror = manifest.get("mirror_dir")
     mirror_status = _json(os.path.join(root, "mirror_status.json"), {})
     info = telemetry if telemetry is not None else _telemetry(root, mirror)
